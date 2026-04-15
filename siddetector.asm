@@ -2565,8 +2565,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 77
-.const README_MAX_SCROLL = 56    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 78
+.const README_MAX_SCROLL = 57    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -6192,15 +6192,21 @@ sfx_pop_s2_type_ok:
                 sta sptr_zp             // secondary base address for sfx_probe_skpico
                 lda sidfx_sec_hi,y
                 sta sptr_zp+1
-                // Probe secondary SID for SIDKick Pico (Phase 1 only).
-                // Only attempt for D5xx-D7xx: D4xx conflicts with SID1 bus decode;
-                // DE/DF is SIDFX cartridge I/O — probe cannot reach the chip there.
+                // Probe secondary SID for SIDKick Pico.
+                // sfx_probe_skpico (config mode via base+$1F) does NOT work at D420:
+                // SIDKick Pico firmware only triggers config mode via CS1 (D400).
+                // Instead, at D420 we use the D41D direct echo: in normal mode SIDKick Pico
+                // latches writes to reg $1D and echoes them on read, unlike real 6581/8580
+                // (write-only, no echo) and ARMSID (echoes to D41B, not D41D directly).
+                // sfx_probe_dis_echo reads base+$1B (OSC3 mirror) → bus conflict → D4xx only.
+                // DE/DF is SIDFX cartridge I/O — no probe possible there.
                 lda sptr_zp+1
-                cmp #$D4; beq sfx_pop_s2_add    // D420: D4xx bus conflict → skip
-                cmp #$DE; beq sfx_pop_s2_add    // DE00: SIDFX cartridge I/O → skip
-                cmp #$DF; beq sfx_pop_s2_add    // DF00: SIDFX cartridge I/O → skip
-                jsr sfx_probe_skpico    // C=1: SIDKick Pico found; C=0: not found
-                bcc sfx_pop_try_dis
+                cmp #$DE; beq sfx_pop_s2_add    // DE00: SIDFX cartridge I/O → skip all
+                cmp #$DF; beq sfx_pop_s2_add    // DF00: SIDFX cartridge I/O → skip all
+                cmp #$D4; beq sfx_pop_d4_echo   // D420: use D41D echo method
+                jsr sfx_probe_skpico    // D5xx+: C=1: SIDKick Pico found; C=0: not found
+                bcc sfx_pop_skp_miss
+sfx_skp_s2_match:
                 // SIDKick Pico confirmed at secondary: remap type code
                 lda buf_zp
                 cmp #$01                // 6581 mode?
@@ -6210,6 +6216,27 @@ sfx_pop_s2_type_ok:
 sfx_skp_s2_8580:
                 lda #$0B                // SIDKick Pico 8580 (or UNKN → default 8580)
                 bne sfx_pop_s2_save     // always taken (A=$0B ≠ 0)
+sfx_pop_d4_echo:
+                // D420: SIDKick Pico detection via base+$1D direct write echo.
+                // Write $B5 to base+$1D; read back — SIDKick Pico echoes the write,
+                // real SIDs return 0 (write-only), ARMSID echoes to +$1B not +$1D,
+                // KungFuSID returns bitwise complement ($4A ≠ $B5).
+                lda #$B5
+                ldy #$1D
+                sta (sptr_zp),y         // write $B5 to base+$1D
+                ldx #$08                // ~30 cycle delay
+sfx_d4_echo_wait:
+                dex
+                bne sfx_d4_echo_wait
+                lda (sptr_zp),y         // read base+$1D
+                cmp #$B5
+                bne sfx_pop_s2_add      // no echo → use SIDFX-reported type
+                beq sfx_skp_s2_match    // echo confirmed → SIDKick Pico (always taken)
+sfx_pop_skp_miss:
+                // sfx_probe_dis_echo reads base+$1B (OSC3 mirror) → bus conflict at D420.
+                lda sptr_zp+1
+                cmp #$D4
+                beq sfx_pop_s2_add      // (unreachable: D4xx handled by sfx_pop_d4_echo above)
 sfx_pop_try_dis:
                 jsr sfx_probe_dis_echo  // A = echo byte from base+$1B after DIS sequence
                 cmp #$53                // 'S' = SwinSID Ultimate
@@ -7388,7 +7415,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.82 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.83 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7724,7 +7751,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.82"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.83"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8489,7 +8516,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.82 README"
+    .text "SIDDETECTOR V1.3.83 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8650,6 +8677,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.83 SIDKICK-PICO D420 SIDFX DETECTION"
     .byte 13
     .byte $9E
     .text "  V1.3.82 RETRY INDICATOR ON MAIN SCREEN"
