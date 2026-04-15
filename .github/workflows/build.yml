@@ -77,9 +77,14 @@ jobs:
 
           rm -f tests/ci_result.bin
 
+          # VICE 3.6.1 on Linux can't auto-create a temp D64 for PRG autostart
+          # ("No idea what disk image format to use").  Pre-create it with c1541.
+          c1541 -format "testsuite,01" d64 tests/test_suite.d64 \
+            -write tests/test_suite.prg test_suite
+
           # Launch VICE in background
           x64sc \
-            -autostart tests/test_suite.prg \
+            -autostart tests/test_suite.d64 \
             -remotemonitor \
             -remotemonitoraddress "ip4://127.0.0.1:${MONITOR_PORT}" \
             +confirmonexit \
