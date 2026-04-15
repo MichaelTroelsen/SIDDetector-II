@@ -2561,8 +2561,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 75
-.const README_MAX_SCROLL = 54    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 76
+.const README_MAX_SCROLL = 55    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -2924,6 +2924,9 @@ snd_clr:
            jsr print_hex
            lda #$00
            jsr print_hex
+           // Ensure st_soundtest is patched for D400
+           lda #$D4
+           jsr snd_patch_page
            // Silence all SID voices before test
            lda #$00
            ldx #$18
@@ -2931,9 +2934,9 @@ snd_init:
            sta $D400,x
            dex
            bpl snd_init
-           // Run the sound test
+           // Run the sound test on D400
            jsr st_soundtest
-           // Silence SID after test
+           // Silence D400 after test
            lda #$00
            ldx #$18
 snd_mute:
@@ -2941,7 +2944,7 @@ snd_mute:
            dex
            bpl snd_mute
            // Cycle through additional detected SIDs (slots 2..sidnum_zp).
-           // For each: print "NOW TESTING: Dxxx", play a triangle-wave note.
+           // For each: patch st_soundtest for that page, print label, play full melody.
            lda sidnum_zp
            cmp #$02               // need at least 2 SIDs
            bcc snd_extra_done
@@ -2949,10 +2952,10 @@ snd_mute:
            sta buf_zp             // buf_zp = current slot index
 snd_extra_loop:
            lda buf_zp
-           cmp sidnum_zp          // slot > last? (BCS: slot >= last → still iterate if equal)
-           beq snd_extra_body     // slot == sidnum_zp → process (last)
-           bcc snd_extra_body     // slot < sidnum_zp → process
-           jmp snd_extra_done     // slot > sidnum_zp → all done
+           cmp sidnum_zp
+           beq snd_extra_body     // slot == last → process
+           bcc snd_extra_body     // slot < last → process
+           jmp snd_extra_done     // slot > last → all done
 snd_extra_body:
            lda #<snd_now_testing
            sta $FE
@@ -2965,19 +2968,27 @@ snd_extra_body:
            ldx buf_zp
            lda sid_list_l,x       // print address low byte
            jsr print_hex
+           // Patch st_soundtest for this SID page
+           ldx buf_zp
+           lda sid_list_h,x
+           jsr snd_patch_page
+           // Set sptr_zp for mute operations
            ldx buf_zp
            lda sid_list_l,x
-           sta sptr_zp             // set up sptr_zp for indirect SID access
+           sta sptr_zp
            lda sid_list_h,x
            sta sptr_zp+1
-           ldy #$18               // silence this SID
+           // Silence this SID
+           ldy #$18
            lda #$00
 snd_ex_mute1:
            sta (sptr_zp),y
            dey
            bpl snd_ex_mute1
-           jsr snd_play_tone      // play triangle-wave note
-           ldy #$18               // mute after note
+           // Play full melody on this SID
+           jsr st_soundtest
+           // Silence this SID after melody
+           ldy #$18
            lda #$00
 snd_ex_mute2:
            sta (sptr_zp),y
@@ -2986,6 +2997,9 @@ snd_ex_mute2:
            inc buf_zp
            jmp snd_extra_loop
 snd_extra_done:
+           // Restore st_soundtest to D400 for next T-press
+           lda #$D4
+           jsr snd_patch_page
            // Print "DONE - PRESS SPACE"
            lda #<snd_done
            sta $FE
@@ -3009,144 +3023,148 @@ snd_kbdloop:
 snd_done_space:
            jmp start
 
-// ---- snd_play_tone: short triangle-wave test note on SID at sptr_zp ----
-// Plays a single ~440 Hz note on voice 1, ~0.5s sustain + brief release.
-// sptr_zp must point to the SID base address before calling.
-// Trashes A, Y.  Preserves X (rp_delay saves/restores X internally).
-snd_play_tone:
-           lda #$3e
-           ldy #$05
-           sta (sptr_zp),y       // V1 ATK_DEC
-           lda #$ca
-           ldy #$06
-           sta (sptr_zp),y       // V1 SUS_REL
-           lda #$0f
-           ldy #$18
-           sta (sptr_zp),y       // FILTER_VOL: max volume
-           lda #$1d              // ~440 Hz freq hi
-           ldy #$01
-           sta (sptr_zp),y       // V1 FREQ HI
-           lda #$41              // ~440 Hz freq lo
-           ldy #$00
-           sta (sptr_zp),y       // V1 FREQ LO
-           lda #$11              // triangle waveform + gate on
-           ldy #$04
-           sta (sptr_zp),y       // V1 CTRL
-           lda #$d0              // ~200ms per call; 3 calls ≈ 0.6s sustain
-           jsr rp_delay
-           lda #$d0
-           jsr rp_delay
-           lda #$d0
-           jsr rp_delay
-           lda #$10              // gate off (keep triangle)
-           ldy #$04
-           sta (sptr_zp),y       // V1 CTRL
-           lda #$60              // ~75ms release
-           jsr rp_delay
+// ---- snd_patch_page: patch the SID page byte in all 31 sta $D4xx ----
+// instructions inside st_soundtest to point at a different SID page.
+// A = page byte (e.g. $D4 for D400, $D5 for D500, $D6 for D600).
+// Trashes nothing — uses sta abs to write A to each instruction's hi-byte.
+snd_patch_page:
+           sta st_p1+2
+           sta st_p2+2
+           sta st_p3+2
+           sta st_p4+2
+           sta st_p5+2
+           sta st_p6+2
+           sta st_p7+2
+           sta st_p8+2
+           sta st_p9+2
+           sta st_p10+2
+           sta st_p11+2
+           sta st_p12+2
+           sta st_p13+2
+           sta st_p14+2
+           sta st_p15+2
+           sta st_p16+2
+           sta st_p17+2
+           sta st_p18+2
+           sta st_p19+2
+           sta st_p20+2
+           sta st_p21+2
+           sta st_p22+2
+           sta st_p23+2
+           sta st_p24+2
+           sta st_p25+2
+           sta st_p26+2
+           sta st_p27+2
+           sta st_p28+2
+           sta st_p29+2
+           sta st_p30+2
+           sta st_p31+2
            rts
 
 // ---- st_soundtest: the 3-voice test melody ----
 // Adapted from Dead Test sound_test.asm.  rp_delay used for timing.
+// Each sta $D4xx has a st_pN: label so snd_patch_page can relocate
+// the melody to any SID page by writing a new high byte at st_pN+2.
 st_soundtest:
            lda #$14
-           sta $D418               // FILTER_VOL: vol=4, no filter
+st_p1:     sta $D418               // FILTER_VOL: vol=4, no filter
            lda #$00
-           sta $D417               // FILTER_RES_ROUT = 0
+st_p2:     sta $D417               // FILTER_RES_ROUT = 0
            lda #$3e
-           sta $D405               // VOICE_1_ATK_DEC
+st_p3:     sta $D405               // VOICE_1_ATK_DEC
            lda #$ca
-           sta $D406               // VOICE_1_SUS_VOL_REL
+st_p4:     sta $D406               // VOICE_1_SUS_VOL_REL
            lda #$00
-           sta $D412               // VOICE_3_CTRL = 0
+st_p5:     sta $D412               // VOICE_3_CTRL = 0
            lda #$03                // outer iteration counter (3=saw, 2=tri, 1=pulse, 0=noise)
 st_mainloop:
            pha                     // save outer counter
            ldx #$06                // inner: 7 notes (X=6..0)
 st_loopA:
            lda st_sound1,x
-           sta $D401               // Voice1 Freq Hi
+st_p6:     sta $D401               // Voice1 Freq Hi
            lda st_sound2,x
-           sta $D400               // Voice1 Freq Lo
+st_p7:     sta $D400               // Voice1 Freq Lo
            pla
            tay
            lda st_sound8,y
-           sta $D402               // Voice1 Pulse Lo
+st_p8:     sta $D402               // Voice1 Pulse Lo
            lda st_sound9,y
-           sta $D403               // Voice1 Pulse Hi
+st_p9:     sta $D403               // Voice1 Pulse Hi
            lda st_sound7,y
-           sta $D404               // Voice1 Ctrl (waveform + gate)
+st_p10:    sta $D404               // Voice1 Ctrl (waveform + gate)
            tya
            pha
            lda #$6a
            jsr rp_delay            // note duration (~81 ms)
            lda #$00
-           sta $D404               // gate off
+st_p11:    sta $D404               // gate off
            lda #$00
            jsr rp_delay            // zero: returns immediately
            dex
            bne st_loopA
            // --- Voice 2 ---
            lda #$00
-           sta $D417
+st_p12:    sta $D417
            lda #$18
-           sta $D418
+st_p13:    sta $D418
            lda #$3e
-           sta $D40C               // VOICE_2_ATK_DEC
+st_p14:    sta $D40C               // VOICE_2_ATK_DEC
            lda #$ca
-           sta $D40D               // VOICE_2_SUS_VOL_REL
+st_p15:    sta $D40D               // VOICE_2_SUS_VOL_REL
            ldx #$06
 st_loopB:
            lda st_sound3,x
-           sta $D408               // Voice2 Freq Hi
+st_p16:    sta $D408               // Voice2 Freq Hi
            lda st_sound4,x
-           sta $D407               // Voice2 Freq Lo
+st_p17:    sta $D407               // Voice2 Freq Lo
            pla
            tay
            lda st_sound8,y
-           sta $D409               // Voice2 Pulse Lo
+st_p18:    sta $D409               // Voice2 Pulse Lo
            lda st_sound9,y
-           sta $D40A               // Voice2 Pulse Hi
+st_p19:    sta $D40A               // Voice2 Pulse Hi
            lda st_sound7,y
-           sta $D40B               // Voice2 Ctrl
+st_p20:    sta $D40B               // Voice2 Ctrl
            tya
            pha
            lda #$6a
            jsr rp_delay
            lda #$00
-           sta $D40B               // gate off
+st_p21:    sta $D40B               // gate off
            lda #$00
            jsr rp_delay
            dex
            bne st_loopB
            // --- Voice 3 ---
            lda #$00
-           sta $D417
+st_p22:    sta $D417
            lda #$1f
-           sta $D418
+st_p23:    sta $D418
            lda #$3e
-           sta $D413               // VOICE_3_ATK_DEC
+st_p24:    sta $D413               // VOICE_3_ATK_DEC
            lda #$ca
-           sta $D414               // VOICE_3_SUS_VOL_REL
+st_p25:    sta $D414               // VOICE_3_SUS_VOL_REL
            ldx #$06
 st_loopC:
            lda st_sound5,x
-           sta $D40F               // Voice3 Freq Hi
+st_p26:    sta $D40F               // Voice3 Freq Hi
            lda st_sound6,x
-           sta $D40E               // Voice3 Freq Lo
+st_p27:    sta $D40E               // Voice3 Freq Lo
            pla
            tay
            lda st_sound8,y
-           sta $D410               // Voice3 Pulse Lo
+st_p28:    sta $D410               // Voice3 Pulse Lo
            lda st_sound9,y
-           sta $D411               // Voice3 Pulse Hi
+st_p29:    sta $D411               // Voice3 Pulse Hi
            lda st_sound7,y
-           sta $D412               // Voice3 Ctrl
+st_p30:    sta $D412               // Voice3 Ctrl
            tya
            pha
            lda #$6a
            jsr rp_delay
            lda #$00
-           sta $D412               // gate off
+st_p31:    sta $D412               // gate off
            lda #$00
            jsr rp_delay
            dex
@@ -7349,7 +7367,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.80 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.81 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7685,7 +7703,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.80"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.81"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8450,7 +8468,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.80 README"
+    .text "SIDDETECTOR V1.3.81 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8611,6 +8629,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.81 MULTI-SID FULL MELODY SOUND TEST"
     .byte 13
     .byte $9E
     .text "  V1.3.80 ARMSID+SWINSID STEREO D5XX FIX"
