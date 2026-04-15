@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-15  
 **Build:** `$2400–$57D0` (code) `$6000–$8CFE` (data)  
-**Version:** V1.3.78  
+**Version:** V1.3.84  
 Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 
 ---
@@ -102,7 +102,7 @@ Legend: 🟢 OK · 🔴 FAIL · ⬜ not tested · ⚠️ known limitation
 
 ### SIDFX — cartridge adds second SID; address set by SW1 (CTR=D500, LFT=D420, RGT=DE00)
 
-Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed in order: (1) SIDKick Pico (sfx_probe_skpico, 'S'+'K' echo at +$1D); (2) SwinSID Ultimate / ARMSID (sfx_probe_dis_echo, DIS sequence via (sptr_zp),y, reads +$1B: 'S'→SwinsidU, 'N'→ARMSID); (3) BackSID (checkbacksid via (sptr_zp),y for D41B, unlock $02/$01/$B5/$1D, poll D41F for $01); (4) KungFuSID (inline (sptr_zp),y: $A5→+$1D, read back: $5A new-FW / $A5 old-FW). All probes D5xx–D7xx only: D4xx skipped (SID1 actively drives D43B osc3, masking SID2 echo), DE/DF skipped (SIDFX cartridge I/O). BackSID only responds to unlock protocol once per power cycle; detected on cold boot only.
+Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed in order: (1) SIDKick Pico (sfx_probe_skpico, 'S'+'K' echo at +$1D); (2) SwinSID Ultimate / ARMSID (sfx_probe_dis_echo, DIS sequence via (sptr_zp),y, reads +$1B: 'S'→SwinsidU, 'N'→ARMSID); (3) BackSID (checkbacksid via (sptr_zp),y for D41B, unlock $02/$01/$B5/$1D, poll D41F for $01); (4) KungFuSID (inline (sptr_zp),y: $A5→+$1D, read back: $5A new-FW / $A5 old-FW). Probes run for D5xx–D7xx; D4xx (LFT slot) skipped for SIDKick Pico (sfx_probe_skpico needs CS1) and for ARMSID primary (primary ARMSID snoops CS2 DIS writes and drives $4E aggressively on all D4xx data-bus reads, contaminating D43B=OSC3). Non-ARMSID primaries (6581/8580 real) allow the DIS probe at D420 to run safely. DE/DF skipped (SIDFX cartridge I/O). BackSID only responds to unlock protocol once per power cycle; detected on cold boot only.
 
 | # | D400 (socket) | Secondary (SIDFX) | SW1 | Expected | Result | Notes |
 |---|--------------|------------------|-----|----------|--------|-------|
@@ -110,7 +110,7 @@ Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed i
 | C32 | 6581 | PD SID (8580) | CTR→D500 | `SIDFX` + `6581` at D400 + `8580` at D500 | 🟢 | V1.3.59: sidstereostart early-return for SIDFX prevents PDsid mirror overflow. Baseline: $D400 6581($01) $D500 8580($02). hw_test 9/9 |
 | C33 | 6581 | SwinSID Ultimate | CTR→D500 | `SIDFX` + `6581` at D400 + `SWINSID-U` at D500 | 🟢 | V1.3.61: sfx_probe_dis_echo 'S' echo confirmed. Baseline: $D400 6581($01) $D500 SwinSID-U($04). hw_test 9/9 |
 | C34 | 6581 | ARMSID | CTR→D500 | `SIDFX` + `6581` at D400 + `ARMSID` at D500 | 🟢 | V1.3.61: sfx_probe_dis_echo 'N' echo confirmed. Baseline: $D400 6581($01) $D500 ARMSID/ARM2SID($05). hw_test 9/9 |
-| C34a | 6581 | SwinSID Ultimate | LFT→D420 | `SIDFX` + `6581` at D400 + `8580` at D420 | ⚠️ | D4xx bus conflict: SID1 drives D43B (osc3), masking SwinSID U echo. Shows SIDFX-reported type (8580). hw_test 9/9 |
+| C34a | 6581 | SwinSID Ultimate | LFT→D420 | `SIDFX` + `6581` at D400 + `SWINSID-U` at D420 | ⚠️ | WONTFIX: 6581 primary drives D43B (OSC3, mapped reg), contaminating DIS echo. Shows SIDFX-reported type (8580). hw_test 9/9 V1.3.84 |
 | C34b | 6581 | BackSID | CTR→D500 | `SIDFX` + `6581` at D400 + `BACKSID` at D500 | 🟢 | V1.3.63: checkbacksid via (sptr_zp),y. Cold boot: BackSID($0A) ✓. Restarts: 8580($02) — BackSID one-shot protocol per power cycle. hw_test 0/9 (restart fails expected) |
 | C34c | 6581 | KungFuSID (new FW) | CTR→D500 | `SIDFX` + `6581` at D400 + `KUNGFUSID` at D500 | 🟢 | V1.3.64/65: new FW ($5A ACK) detected. hw_test 9/9 |
 | C34d | 6581 | KungFuSID (old FW) | CTR→D500 | `SIDFX` + `6581` at D400 + `KUNGFUSID` at D500 | ⚠️ | Old FW echoes $A5 — indistinguishable from SIDFX secondary bus latch (any chip echoes last write). Shows as 8580. Not fixable in software. hw_test 9/9 (shows 8580) |
@@ -129,8 +129,8 @@ Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed i
 | C40 | 6581 | SIDKick Pico 8580 | RGT→DE00 | `SIDFX` + `6581` at D400 + `8580` at DE00 | 🟢 | V1.3.58: shows 8580 (probe skipped — DE00 is SIDFX cartridge I/O); hw_test 9/9 |
 | C41 | ARMSID | 8580 | CTR→D500 | `SIDFX` + `ARMSID` at D400 + `8580` at D500 | 🟢 | Covered by C34f (confirmed V1.3.67) |
 | C42 | SIDKick Pico | 8580 | CTR→D500 | `SIDFX` + `SIDKICK-PICO` at D400 + `8580` at D500 | 🟢 | Covered by C34g (confirmed V1.3.68) |
-| C44 | 6581 | ARMSID | LFT→D420 | `SIDFX` + `6581` at D400 + `ARMSID` at D420 | ⬜ | D4xx bus conflict — ARMSID DIS echo blocked by SID1; currently shows 8580; investigate D41B ACK technique |
-| C45 | 6581 | SIDKick Pico | LFT→D420 | `SIDFX` + `6581` at D400 + `SIDKICK-PICO` at D420 | ⬜ | D4xx bus conflict — SIDKick Pico 'S'+'K' echo blocked by SID1; currently shows 8580 |
+| C44 | 6581 | ARMSID | LFT→D420 | `SIDFX` + `6581` at D400 + `8580` at D420 | ⚠️ | WONTFIX: ARMSID firmware responds to DIS only via CS1 slot. At D420 (CS2), DIS writes produce no echo at D43B or D41B. SIDFX reports ARMSID as 8580; falls back to SIDFX-reported type. hw_test V1.3.84 confirmed. |
+| C45 | 6581 | SIDKick Pico | LFT→D420 | `SIDFX` + `6581` at D400 + `8580` at D420 | ⚠️ | WONTFIX: sfx_probe_skpico needs CS1 (config mode). SIDFX write-buffer caches +$1D writes for any chip (artifact). DIS contaminated by 6581 driving D43B. Falls back to SIDFX-reported type. hw_test V1.3.84 confirmed (shows 8580). |
 | C43 | FPGASID 8580 | 8580 | CTR→D500 | `SIDFX` + `8580` at D400 + `8580` at D500 | ⬜ | |
 | C43a | FPGASID 8580 (SID1) | SIDKick Pico 8580 | CTR→D500 | `SIDFX` + `FPGASID-8580` at D400 + `SIDKICK-PICO` at D500 | ⚠️ | V1.3.70: FPGASID at SIDFX SID1 undetectable. SIDFX drives D419/D41A (POT) overriding FPGASID identify-mode readback. SIDFX reports SID1=UNKN; probe chain runs but returns $F0. Shows as Unknown/NoSID. Accepted hw limitation. |
 
@@ -148,7 +148,7 @@ Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed i
 
 ## Unit Tests (`make ci`)
 
-Last result: **23 / 23** ✅ (2026-04-14 — `$17` at `$07E8` via `make ci`)
+Last result: **27 / 27** ✅ (2026-04-15 — `$1B` at `$07E8` via `make ci`)
 
 | # | Test | Input | Expected | Result |
 |---|------|-------|----------|--------|
@@ -175,8 +175,12 @@ Last result: **23 / 23** ✅ (2026-04-14 — `$17` at `$07E8` via `make ci`)
 | U21 | ArithMean (4 vals) | `mean(100,50,75,25)` | 62 | 🟢 |
 | U22 | ArithMean (empty) | `mean([])` | 0 | 🟢 |
 | U23 | FPGA stereo entry | `$D500, sidnum=0` | sid_list[1] correct | 🟢 |
+| U24 | PDsid dispatch | `data1=$09` | PD SID | 🟢 |
+| U25 | BackSID dispatch | `data1=$0A` | BACKSID | 🟢 |
+| U26 | SIDKick-pico dispatch | `data1=$0B` | SIDKICK-PICO | 🟢 |
+| U27 | KungFuSID dispatch | `data1=$0C` | KUNGFUSID | 🟢 |
 
-> All 23 unit tests pass as of 2026-04-06. Run `make ci` to verify.
+> All 27 unit tests pass as of 2026-04-15. Run `make ci` to verify.
 
 ---
 
