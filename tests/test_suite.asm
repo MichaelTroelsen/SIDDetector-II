@@ -1,5 +1,5 @@
 // =============================================================================
-// test_suite.asm — Full SID Detector unit test suite  (23 tests)
+// test_suite.asm — Full SID Detector unit test suite  (27 tests)
 // =============================================================================
 // Covers every detection dispatch scenario in the sequential detection chain.
 // Each test presets the relevant zero-page inputs, calls an embedded copy of
@@ -15,9 +15,10 @@
 //   S6  Second SID    (T17–T18)  data1=$10/$F0 → second SID / no sound
 //   S7  ArithMean     (T19–T22)  pure arithmetic unit tests
 //   S8  FPGA Stereo   (T23)      data1=$06 at $D500 → recorded in sid_list
+//   S9  New chips     (T24–T27)  PDsid/$09 / BackSID/$0A / SKpico/$0B / KungFu/$0C
 //
-// Pass count written to $0600 on completion.
-// 23 = all tests passed.
+// Pass count written to $07E8 on completion.
+// 27 = all tests passed.
 // =============================================================================
 
 .encoding "petscii_upper"
@@ -48,6 +49,10 @@
 .const RES_SID_8580   = $0C
 .const RES_SECOND_SID = $0D
 .const RES_NO_SOUND   = $0E
+.const RES_PDSID      = $0F
+.const RES_BACKSID    = $10
+.const RES_SIDKPIC    = $11
+.const RES_KUNGFU     = $12
 
 * = $0801
     .word $0801
@@ -577,10 +582,90 @@ t23_clr:
     ldy #>str_t23_pass
     jsr show_result
     inc pass_count
-    jmp test_done
+    jmp t24
 t23_fail:
     lda #<str_t23_fail
     ldy #>str_t23_fail
+    jsr show_result
+
+// ============================================================
+// S9: NEW CHIPS DISPATCH  (T24–T27)
+// T24: PDsid     data1=$09 → RES_PDSID
+// T25: BackSID   data1=$0A → RES_BACKSID
+// T26: SIDKick-pico (8580)  data1=$0B → RES_SIDKPIC
+// T27: KungFuSID data1=$0C → RES_KUNGFU
+// ============================================================
+
+t24:
+    // T24: data1=$09 → PDsid
+    lda #$09
+    sta data1
+    jsr dispatch_pdsid
+    lda #RES_PDSID
+    jsr assert_eq
+    bne t24_fail
+    lda #<str_t24_pass
+    ldy #>str_t24_pass
+    jsr show_result
+    inc pass_count
+    jmp t25
+t24_fail:
+    lda #<str_t24_fail
+    ldy #>str_t24_fail
+    jsr show_result
+
+t25:
+    // T25: data1=$0A → BackSID
+    lda #$0A
+    sta data1
+    jsr dispatch_backsid
+    lda #RES_BACKSID
+    jsr assert_eq
+    bne t25_fail
+    lda #<str_t25_pass
+    ldy #>str_t25_pass
+    jsr show_result
+    inc pass_count
+    jmp t26
+t25_fail:
+    lda #<str_t25_fail
+    ldy #>str_t25_fail
+    jsr show_result
+
+t26:
+    // T26: data1=$0B → SIDKick-pico 8580
+    lda #$0B
+    sta data1
+    jsr dispatch_sidkpic
+    lda #RES_SIDKPIC
+    jsr assert_eq
+    bne t26_fail
+    lda #<str_t26_pass
+    ldy #>str_t26_pass
+    jsr show_result
+    inc pass_count
+    jmp t27
+t26_fail:
+    lda #<str_t26_fail
+    ldy #>str_t26_fail
+    jsr show_result
+
+t27:
+    // T27: data1=$0C → KungFuSID
+    lda #$0C
+    sta data1
+    jsr dispatch_kungfu
+    lda #RES_KUNGFU
+    jsr assert_eq
+    bne t27_fail
+    lda #<str_t27_pass
+    ldy #>str_t27_pass
+    jsr show_result
+    inc pass_count
+    jmp test_done
+t27_fail:
+    lda #<str_t27_fail
+    ldy #>str_t27_fail
     jsr show_result
 
 // ============================================================
@@ -591,7 +676,7 @@ test_done:
     ldy #>str_divider
     jsr show_result
     lda pass_count
-    cmp #23
+    cmp #27
     bne td_fail
     lda #<str_all_pass
     ldy #>str_all_pass
@@ -808,6 +893,65 @@ dispatch_fpga_stereo:
 dfps_exit:
     rts
 
+// ---- dispatch_pdsid ------------------------------------------
+// Source: checkpdsid_step (siddetector.asm ~line 533)
+// data1=$09 → RES_PDSID | else → RES_NONE
+dispatch_pdsid:
+    lda #RES_NONE
+    sta dispatch_result
+    ldx data1
+    cpx #$09                // PDsid: 'S' echo in D41E
+    bne dpds_exit
+    lda #RES_PDSID
+    sta dispatch_result
+dpds_exit:
+    rts
+
+// ---- dispatch_backsid ----------------------------------------
+// Source: checkbacksid_step (siddetector.asm ~line 555)
+// data1=$0A → RES_BACKSID | else → RES_NONE
+dispatch_backsid:
+    lda #RES_NONE
+    sta dispatch_result
+    ldx data1
+    cpx #$0A                // BackSID: D41F echoes $42
+    bne dbsid_exit
+    lda #RES_BACKSID
+    sta dispatch_result
+dbsid_exit:
+    rts
+
+// ---- dispatch_sidkpic ----------------------------------------
+// Source: checkskpico_step (siddetector.asm ~line 577)
+// data1=$0B (8580) or $0E (6581) → RES_SIDKPIC | else → RES_NONE
+dispatch_sidkpic:
+    lda #RES_NONE
+    sta dispatch_result
+    ldx data1
+    cpx #$0B                // SIDKick-pico 8580: 'S'+'K' VERSION_STR
+    beq dskp_match
+    cpx #$0E                // SIDKick-pico 6581
+    bne dskp_exit
+dskp_match:
+    lda #RES_SIDKPIC
+    sta dispatch_result
+dskp_exit:
+    rts
+
+// ---- dispatch_kungfu -----------------------------------------
+// Source: swinmicro (siddetector.asm ~line 730)
+// data1=$0C → RES_KUNGFU | else → RES_NONE
+dispatch_kungfu:
+    lda #RES_NONE
+    sta dispatch_result
+    ldx data1
+    cpx #$0C                // KungFuSID: $5A ACK from D41D
+    bne dkfu_exit
+    lda #RES_KUNGFU
+    sta dispatch_result
+dkfu_exit:
+    rts
+
 // ============================================================
 // calcMean — embedded copy of ArithmeticMean from siddetector.asm
 // Reads: zpArrayPtr ($A2), numInts, arr1/arr2
@@ -969,9 +1113,25 @@ str_t23_pass: .text "T23 PASS: FPGA $D500 -> SID_LIST[1]"
               .byte 0
 str_t23_fail: .text "T23 FAIL: FPGA $D500 -> SID_LIST[1]"
               .byte 0
+str_t24_pass: .text "T24 PASS: D1=$09 -> PDSID"
+              .byte 0
+str_t24_fail: .text "T24 FAIL: D1=$09 -> PDSID"
+              .byte 0
+str_t25_pass: .text "T25 PASS: D1=$0A -> BACKSID"
+              .byte 0
+str_t25_fail: .text "T25 FAIL: D1=$0A -> BACKSID"
+              .byte 0
+str_t26_pass: .text "T26 PASS: D1=$0B -> SIDKICK-PICO"
+              .byte 0
+str_t26_fail: .text "T26 FAIL: D1=$0B -> SIDKICK-PICO"
+              .byte 0
+str_t27_pass: .text "T27 PASS: D1=$0C -> KUNGFUSID"
+              .byte 0
+str_t27_fail: .text "T27 FAIL: D1=$0C -> KUNGFUSID"
+              .byte 0
 str_divider:  .text "--------------------------------------"
               .byte 0
-str_all_pass: .text "ALL 23 TESTS PASSED"
+str_all_pass: .text "ALL 27 TESTS PASSED"
               .byte 0
 str_some_fail:.text "SOME TESTS FAILED - CHECK ABOVE"
               .byte 0

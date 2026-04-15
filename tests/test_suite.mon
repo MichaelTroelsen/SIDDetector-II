@@ -6,9 +6,9 @@
 ; Or manually:
 ;   x64sc -autostart tests/test_suite.prg -moncommands tests/test_suite.mon
 ;
-; When all 23 tests complete the CPU spins at td_spin.
+; When all 27 tests complete the CPU spins at td_spin.
 ; Open VICE monitor (Alt+M) and type:
-;   mem $0600 $0600     — shows pass count ($17 = 23 = all passed)
+;   mem $07E8 $07E8     — shows pass count ($1B = 27 = all passed)
 ;   go                  — resume (spins forever at td_spin)
 ; =============================================================================
 

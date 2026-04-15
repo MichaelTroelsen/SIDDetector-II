@@ -1,4 +1,4 @@
-# SID Detector v1.3.79
+# SID Detector v1.3.80
 
 A Commodore 64 diagnostic utility that identifies 24+ variants of the SID (Sound Interface Device) chip — including real hardware, FPGA clones, microcontroller emulators, and PC emulators.
 
@@ -12,7 +12,7 @@ Syntax: KickAssembler (converted from ACME original)
 
 ## Screenshot
 
-![SID Detector v1.3.79 running in VICE](screenshot.png)
+![SID Detector v1.3.80 running in VICE](screenshot.png)
 
 ---
 
@@ -225,10 +225,10 @@ Result stored in `za7` (`$A7`).
 
 ---
 
-## Screen layout (v1.3.79)
+## Screen layout (v1.3.80)
 
 ```
-            siddetector v1.3.79
+            siddetector v1.3.80
 
 row  2: armsid.....:  [result]
 row  3: swinsid....:  [result]
@@ -336,7 +336,7 @@ Because the actual detection routines (`Checkarmsid`, `checkfpgasid`, etc.) prob
 
 ## Known issues / TODO
 
-- Mixed stereo config errors: ARMSID/SwinSID U mirrors D4xx through D5xx — stereo scan for those types is skipped to avoid false positives; a second chip at D500 with primary ARMSID at D400 will not be detected
+- **Fixed V1.3.80:** Stereo ARMSID@D400 + SwinSID U/ARMSID@D5xx — `s_s_arm_call_real` now allows `sfx_probe_dis_echo` when primary is ARMSID (`data4=$05`); the probe reads from `candidate+$1B` so D400 ARMSID snooping the DIS writes does not corrupt the result. Requires dual ARMSID/SwinSID U hardware to verify.
 - **Fixed V1.3.79:** SwinSID Ultimate fiktivloop false positive — AVR OSC3 returns 0 with noise enabled, causing `checksecondsid` to falsely detect D500 as a second SID. Fixed by skipping `fiktivloop` when primary is SwinSID U (`data4=$04`).
 - **Fixed V1.3.79:** Stereo 6581@D400 + SwinSID U@D500 — `s_s_arm_call_real` now tries `sfx_probe_dis_echo` before `checkrealsid` when primary is a real SID; SwinSID U echo returns 'S' and is correctly identified.
 - **Fixed V1.3.73:** 8580@D400 + ARMSID@D420 (MixSID, C09 config) now correctly detected

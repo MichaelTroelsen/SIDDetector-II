@@ -29,7 +29,7 @@
 - [x] **NOSID+U2+ indistinguishable from SwinSID Nano** — exhaustively probed 10+ discriminants (D41B, D41C, D419/D41A, D41F, freq variation, waveform, interrupt context, monotone counting, write-to-read). All overlap. U2+ FPGA generates bus noise at ~44 kHz identical to SwinSID Nano oscillator. Accepted limitation; documented in FINDINGS.md.
 - [x] **D400+D500 mixed Swinsid/real-SID** — fixed: at D5xx–D7xx in sidtype=$05 stereo scan, DIS echo (`sfx_probe_dis_echo`) is now tried before `checkrealsid` when primary is a real SID ($01/$02). Returns type $04 (SwinSID U) or $05 (ARMSID) instead of misidentifying as 6581/8580. Guard prevents triggering when ARMSID is primary (snoops all writes). *(teststatus #21 — needs hw verification)*
 - [x] **D400+D500 mixed ARMSID/real-SID** — fixed V1.3.73: jmp s_s_l3 in s_s_add for sidtype=$05 exits ARMSID scan early, preventing U64/ULTISID false entries from D5xx-DFxx scan; 8580@D400 + ARMSID@D420 hw_test 10/10 *(teststatus C09 — 🟢)*
-- [ ] **Stereo ARMSID / SwinSID U detection skipped** — ARMSID/SwinSID U mirrors through the C64 address decoder: writing "DIS" to D5xx triggers the D400 chip, echoing 'N' in D51B and falsely adding D500/D600 as extra SIDs. The stereo scan for sidtype=$05 is therefore skipped entirely when the primary chip is at D400. Fix: implement mirror detection — write a unique pattern to D400, check if D500 shows the same pattern (mirror) or different (real second chip). **Files:** `siddetector.asm` (`end_skip_armsid_scan` label, `sidstereostart` D5xx ARMSID path).
+- [x] **Stereo ARMSID / SwinSID U detection skipped** — fixed V1.3.80: `s_s_arm_call_real` now allows `data4=$05` (ARMSID primary) to reach `sfx_probe_dis_echo` for D5xx+ candidates. `sfx_probe_dis_echo` reads from `candidate+$1B` (not D41B), so D400 ARMSID snooping the DIS writes does not corrupt the result. The cleanup writes and existing `s_s_skip_dis: lda $D41B` ACK handle residual tristate. *(requires hardware with dual ARMSID/SwinSID U config to verify — teststatus: add C50+)*
 - [x] **SwinSID Ultimate fiktivloop false positive (D500)** — AVR OSC3 returns 0 with noise enabled; `checksecondsid` falsely detected D500 as a second SID. Fixed: skip `fiktivloop` for `data4=$04` (SwinSID U is always single-slot). Same pattern as SIDFX skip at `end_skip_fiktiv`.
 - [ ] **Stereo slots D700 / DF00 not verified** — D500/D600/DE00 confirmed working (hw_test baseline V1.3.45); D700 and DF00 not tested with real hardware *(teststatus #23 #25)*
 - [x] Fix FC3 cartridge false-positive C128 detection — merged check128_unknown into check128_c128 path; $D0FE open-bus ($FF) now overrides false C128/TC64 detect from FC3
@@ -37,7 +37,7 @@
 
 ## Testing
 
-### Covered by test suite (tests/test_suite.asm — 23 tests)
+### Covered by test suite (tests/test_suite.asm — 27 tests)
 - [x] Machine type dispatch: C64 / C128 / TC64 (T01–T03)
 - [x] SIDFX dispatch: found / not found (T04–T05)
 - [x] Swinsid Ultimate dispatch: data1=$04 (T06)
@@ -54,6 +54,10 @@
 - [x] No sound dispatch: data1=$F0 (T18)
 - [x] ArithmeticMean: [10,20,30]=20, [5×6]=5, [100,50,75,25]=62, empty=0 (T19–T22)
 - [x] FPGASID stereo: data1=$06 at $D500 → recorded in sid_list (T23)
+- [x] PDsid dispatch: data1=$09 (T24)
+- [x] BackSID dispatch: data1=$0A (T25)
+- [x] SIDKick-pico dispatch: data1=$0B (T26)
+- [x] KungFuSID dispatch: data1=$0C (T27)
 
 ### Not yet testable in VICE (require real hardware)
 - [ ] `Checkarmsid` hardware probe — SID register echo depends on chip model
@@ -106,7 +110,7 @@
 
 ## Stereo config error cases (wrong result reported)
 
-- D400: 6581   D500: Swinsid  — error
+- D400: 6581   D500: Swinsid  — **fixed V1.3.79** (`s_s_arm_call_real` tries `sfx_probe_dis_echo` when primary is real SID $01/$02; SwinSID U echoes 'S' at D51B → detected correctly)
 - D400: Swinsid D500: 6581   — **fixed V1.3.02** (`fiktivloop` now calls `checkrealsid` on candidate; 6581/8580 correctly identified in secondary slot)
 - D400: Swinsid DE00: 6581   — **fixed V1.3.02** (same fix)
 - D400: armsid  D500: 8580   — **fixed V1.3.02** (same fix)

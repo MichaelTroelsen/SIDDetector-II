@@ -2561,8 +2561,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 74
-.const README_MAX_SCROLL = 53    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 75
+.const README_MAX_SCROLL = 54    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -4601,13 +4601,22 @@ s_s_arm_mir_nx:
        bne s_s_arm_mir_lp
 s_s_arm_call_real:
        // Try DIS echo before checkrealsid to detect SwinSID U / ARMSID at D5xx–D7xx.
-       // Only safe when primary is a real SID ($01/$02): ARMSID primary snoops all
-       // bus writes, so sending DIS to D5xx would falsely trigger ARMSID at D400.
+       // Safe for real SID primary ($01/$02): no snooping issues.
+       // Also safe for ARMSID primary ($05) at D5xx+: sfx_probe_dis_echo reads
+       // candidate+$1B (not D41B), so D400 ARMSID snooping the DIS writes does not
+       // affect the result. The cleanup writes ($00 to base+$1D–$1F) reset ARMSID's
+       // state; the s_s_skip_dis D41B read tristate-ACKs it on a no-match path.
        lda data4
        cmp #$01               // primary = 6581?
        beq s_s_try_dis
        cmp #$02               // primary = 8580?
+       beq s_s_try_dis
+       cmp #$05               // primary = ARMSID at D400?
        bne s_s_skip_dis
+       // ARMSID primary: safe to probe D5xx+. Skip D4xx (that's the primary itself).
+       lda sptr_zp+1
+       cmp #$D4               // D4xx page → primary ARMSID slot → no DIS probe
+       beq s_s_skip_dis
 s_s_try_dis:
        jsr sfx_probe_dis_echo // A = echo from sptr_zp+$1B after DIS sequence
        cmp #$53               // 'S' = SwinSID Ultimate
@@ -7253,7 +7262,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.79 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.80 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7589,7 +7598,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.79"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.80"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8354,7 +8363,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.79 README"
+    .text "SIDDETECTOR V1.3.80 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8515,6 +8524,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.80 ARMSID+SWINSID STEREO D5XX FIX"
     .byte 13
     .byte $9E
     .text "  V1.3.79 SWINSID FIKTIVLOOP+STEREO FIX"
