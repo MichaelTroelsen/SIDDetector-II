@@ -31,7 +31,6 @@
 - [x] **D400+D500 mixed ARMSID/real-SID** — fixed V1.3.73: jmp s_s_l3 in s_s_add for sidtype=$05 exits ARMSID scan early, preventing U64/ULTISID false entries from D5xx-DFxx scan; 8580@D400 + ARMSID@D420 hw_test 10/10 *(teststatus C09 — 🟢)*
 - [x] **Stereo ARMSID / SwinSID U detection skipped** — fixed V1.3.80: `s_s_arm_call_real` now allows `data4=$05` (ARMSID primary) to reach `sfx_probe_dis_echo` for D5xx+ candidates. `sfx_probe_dis_echo` reads from `candidate+$1B` (not D41B), so D400 ARMSID snooping the DIS writes does not corrupt the result. The cleanup writes and existing `s_s_skip_dis: lda $D41B` ACK handle residual tristate. *(requires hardware with dual ARMSID/SwinSID U config to verify — teststatus: add C50+)*
 - [x] **SwinSID Ultimate fiktivloop false positive (D500)** — AVR OSC3 returns 0 with noise enabled; `checksecondsid` falsely detected D500 as a second SID. Fixed: skip `fiktivloop` for `data4=$04` (SwinSID U is always single-slot). Same pattern as SIDFX skip at `end_skip_fiktiv`.
-- [ ] **Stereo slots D700 / DF00 not verified** — D500/D600/DE00 confirmed working (hw_test baseline V1.3.45); D700 and DF00 not tested with real hardware *(teststatus #23 #25)*
 - [x] Fix FC3 cartridge false-positive C128 detection — merged check128_unknown into check128_c128 path; $D0FE open-bus ($FF) now overrides false C128/TC64 detect from FC3
 - [x] **Info page CRSR LEFT/RIGHT navigation broken** — fixed by adding B (prev) and M (next) key aliases; VICE `gtk3_sym_da.vkm` does not reliably map PC cursor keys to CIA row-0 bit-2, but B/M work correctly in VICE
 
@@ -75,7 +74,7 @@
 - [ ] **C10–C20** — misc MixSID combos (FPGASID, SwinSID Nano, SIDKick Pico, KungFuSID as primary or secondary at D420): untested, various code paths
 
 ### SIDFX secondary detection for ARMSID and SIDKick Pico at D420 (LFT slot)
-- [~] **SIDFX + ARMSID at D420** (SW1=LFT): DIS probe at D420 works when primary is NOT ARMSID (SIDFX isolates D43B from SID1). When primary IS ARMSID, D43B is contaminated (ARMSID snoops CS2 DIS writes, drives $4E on all D4xx reads). Fixed V1.3.84: ARMSID-primary guard skips DIS for D420, uses SIDFX-reported type. ARMSID@D420 is detectable when primary is a real SID/FPGASID/etc. — hardware combo to verify: real SID@D400 + ARMSID@D420.
+- [x] **SIDFX + ARMSID at D420** (SW1=LFT): ARMSID firmware does not activate DIS detection from CS2 slot — DIS writes to D43F/D43E/D43D produce no echo at D43B or D41B (confirmed hw: 8580@D400 + ARMSID@D420). ARMSID only responds to DIS via CS1. SIDFX reports ARMSID (8580-mode) as 8580 — same as real 8580, undetectable. WONTFIX: falls back to SIDFX-reported type. V1.3.84 guards prevent false positives.
 - [x] **SIDFX + SIDKick Pico at D420** (SW1=LFT): SIDKick Pico cannot be specifically identified at D420 via CS2. D41D echo test was SIDFX write-buffer artifact (SIDFX caches unmapped reg writes, returns them for any chip). DIS probe (D43B) is contaminated when primary is ARMSID (CS-agnostic bus drive). Fixed V1.3.84: removed D41D echo; added ARMSID-primary guard for DIS at D420; falls back to SIDFX-reported type. WONTFIX for specific PICO identification at D420.
 
 ## Other improvements
