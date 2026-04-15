@@ -115,6 +115,7 @@ tlr_data:
 .const buf_zp      = $AF   // temporary buffer byte
 .const sid_music_flag = $B0 // 0=SID module silent, 1=play $1806 from IRQ
 .const colwash_flag   = $B1 // 1=run COLWASH in IRQ, 0=suppress (sub-screens)
+.const retry_zp       = $B2 // checkrealsid retry count (0=1st try, 1=2nd, 2=3rd)
 
 // Detection state ($F6-$FF)
 .const cnt2_zp  = $F6   // inner mirror-scan step counter (fiktivloop / checkanothersid)
@@ -162,6 +163,7 @@ start:
                 lda #$00
                 sta data4               // init: no HW SID type saved yet
                 sta res_zp              // init: no tentative SwinSID Nano result
+                sta retry_zp            // init: no retries yet
 init_sid_list:                          // zero the 8-slot SID result tables
                 sta sid_list_h,x        // SID address high byte ($D4/$D5 ...)
                 sta sid_list_l,x        // SID address low byte  ($00/$20 ...)
@@ -686,6 +688,7 @@ checkphysical:
                 lda #<l6581f
                 ldy #>l6581f
                 jsr $AB1E
+                jsr print_retry_star   // append '*' if any retries were needed
                 jmp end
 checkphysical_8580:
                 ldx data1
@@ -699,7 +702,8 @@ checkphysical_8580:
                 lda #<l8580f
                 ldy #>l8580f
                 jsr $AB1E
-                jmp end                
+                jsr print_retry_star   // append '*' if any retries were needed
+                jmp end
 // --- Step 5: second SID scan ---
 // Use noise-waveform mirror trick: real SID at $D41B generates non-zero values,
 // while a mirrored address always reads 0.  data1=$10 if a second slot is found.
@@ -2561,8 +2565,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 76
-.const README_MAX_SCROLL = 55    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 77
+.const README_MAX_SCROLL = 56    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -4082,7 +4086,13 @@ crs_d41b_2:      lda $d41b       // should be $05-$06
                 bcs crs_maybe_retry
 crs_d41b_3:      lda $d41b       // should be $08
                 cmp #$08
-                beq loop2       // exact match → real SID confirmed
+                bne crs_maybe_retry
+                // success: save how many retries were needed (3 - buf_zp)
+                lda #$03
+                sec
+                sbc buf_zp      // 0=first try, 1=2nd, 2=3rd
+                sta retry_zp
+                jmp loop2
 crs_maybe_retry:
                 cli             // re-enable IRQ before delay
                 lda #$00
@@ -6397,6 +6407,17 @@ print_armsid_ch:
 pac_ok:         jmp $FFD2
 
 //--------------------------------------------------------------------------------------------------
+// print_retry_star: if checkrealsid needed retries (retry_zp > 0), print '*' via CHROUT.
+// Called right after printing "6581 FOUND" / "8580 FOUND" on the main screen.
+// Trashes A.
+//--------------------------------------------------------------------------------------------------
+print_retry_star:
+                lda retry_zp
+                beq prs_exit        // 0 retries → nothing to show
+                lda #$2A            // '*' (ASCII / screen code)
+                jsr $FFD2           // CHROUT: print at current cursor position
+prs_exit:       rts
+
 // print_sid_type_4: print 4-char SID type "6581" or "8580" (no space). Trashes A.
 // Reads armsid_sid_type_h: '6'=$36 → 6581, '8'=$38 → 8580, else "????".
 //--------------------------------------------------------------------------------------------------
@@ -7367,7 +7388,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.81 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.82 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7703,7 +7724,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.81"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.82"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8468,7 +8489,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.81 README"
+    .text "SIDDETECTOR V1.3.82 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8629,6 +8650,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.82 RETRY INDICATOR ON MAIN SCREEN"
     .byte 13
     .byte $9E
     .text "  V1.3.81 MULTI-SID FULL MELODY SOUND TEST"
