@@ -45,13 +45,13 @@ jobs:
         run: |
           curl -fsSL -o vice-src.tar.gz \
             "https://downloads.sourceforge.net/project/vice-emu/releases/vice-3.6.1.tar.gz"
-          sudo mkdir -p /usr/lib/vice/C64
           tar xf vice-src.tar.gz \
             --strip-components=3 \
-            -C /usr/lib/vice/C64 \
             vice-3.6.1/data/C64/kernal \
             vice-3.6.1/data/C64/basic \
             vice-3.6.1/data/C64/chargen
+          sudo mkdir -p /usr/lib/vice/C64
+          sudo mv kernal basic chargen /usr/lib/vice/C64/
           rm -f vice-src.tar.gz
           echo "ROM files installed:"
           ls -la /usr/lib/vice/C64/
