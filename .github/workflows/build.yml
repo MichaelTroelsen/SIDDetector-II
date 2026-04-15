@@ -39,6 +39,23 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y vice xvfb
 
+      # The Ubuntu vice apt package is +dfsg (C64 ROM files stripped for licensing).
+      # Download the three needed ROMs from the official VICE source distribution.
+      - name: Get C64 ROM files
+        run: |
+          curl -fsSL -o vice-src.tar.gz \
+            "https://downloads.sourceforge.net/project/vice-emu/releases/vice-3.6.1.tar.gz"
+          sudo mkdir -p /usr/lib/vice/C64
+          tar xf vice-src.tar.gz \
+            --strip-components=3 \
+            -C /usr/lib/vice/C64 \
+            vice-3.6.1/data/C64/kernal \
+            vice-3.6.1/data/C64/basic \
+            vice-3.6.1/data/C64/chargen
+          rm -f vice-src.tar.gz
+          echo "ROM files installed:"
+          ls -la /usr/lib/vice/C64/
+
       # ── Run 23 unit tests headlessly ────────────────────────────────────────
       - name: Run test suite
         run: |
