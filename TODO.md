@@ -99,8 +99,9 @@
 
 ## GitHub repository improvements
 
-- [ ] **Fix repository** — update GitHub README to current version; add proper release tags for each version; write release notes summarising what changed per version; add screenshot or screen recording to repository landing page
-- [x] **Releases** — v1.3.77 and v1.3.78 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
+- [ ] **Fix repository** — add screenshot or screen recording to repository landing page
+- [x] **Releases** — v1.3.77, v1.3.78, v1.3.79 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
+- [x] **GitHub README** — updated to v1.3.79; BackSID/PD SID added to chip table; Known issues updated with V1.3.79 stereo fixes
 - [x] **CI** — removed; use `make ci` locally (Ubuntu VICE too many ROM/autostart quirks)
 
 ## Stereo config error cases (wrong result reported)
