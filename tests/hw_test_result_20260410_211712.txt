@@ -1,0 +1,16 @@
+siddetector hardware smoke test
+Run: 2026-04-10 21:17:12   U64: 192.168.1.64
+Baseline: [1]$D400 SIDKick-pico($0B)  [2]$D420 SIDKick-pico($0B)
+
+[FAIL] SPACE restart #1 (stable)
+       slot2: expected $D420 SIDKick-pico($0B) got $D460 SIDKick-pico($0B)
+[PASS] SPACE restart #2 (stable)
+[PASS] SPACE restart #3 (stable)
+[PASS] info return (stable)
+[FAIL] debug return (stable)
+       slot2: expected $D420 SIDKick-pico($0B) got $D460 SIDKick-pico($0B)
+[PASS] readme return (stable)
+[PASS] sound test return (stable)
+[PASS] P music toggle (no restart) (stable)
+
+6/8 passed   2 failed

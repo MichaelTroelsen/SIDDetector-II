@@ -1,0 +1,19 @@
+siddetector hardware smoke test
+Run: 2026-04-11 16:03:16   U64: 192.168.1.64
+Baseline: [1]$D400 ARMSID/ARM2SID($05)  [2]$D420 ARMSID/ARM2SID($05)  [3]$DE00 ARMSID/ARM2SID($05)  [4]$D500 ULTISID-6581($21)  [5]$D600 ULTISID-6581($21)
+
+[PASS] SPACE restart #1 (stable)
+[FAIL] SPACE restart #2 (stable)
+       slot4: expected $D500 ULTISID-6581($21) got $D500 ULTISID-8580($20)
+[FAIL] SPACE restart #3 (stable)
+       slot4: expected $D500 ULTISID-6581($21) got $D500 ULTISID-8580($20)
+[FAIL] info return (stable)
+       slot4: expected $D500 ULTISID-6581($21) got $D500 ULTISID-8580($20)
+[PASS] debug return (stable)
+[FAIL] debug page 2 return (stable)
+       slot4: expected $D500 ULTISID-6581($21) got $D500 ULTISID-8580($20)
+[PASS] readme return (stable)
+[PASS] sound test return (stable)
+[PASS] P music toggle (no restart) (stable)
+
+5/9 passed   4 failed

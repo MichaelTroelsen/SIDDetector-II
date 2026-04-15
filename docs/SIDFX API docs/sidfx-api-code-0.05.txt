@@ -1,0 +1,256 @@
+;--------------------------------------------------------------------------------------------------
+;
+; This is the *preliminary* SIDFX API example source code
+;
+; The purpose of the provided source code is to aid individuals in implementing support for SIDFX
+;   into their own programs/projects. The provided source code isn't a ready-to-use demo and won't
+;   run without writing additional code.
+;
+; Changelog:
+;
+; 20160423 v0.01 - First draft code
+; 20170506 v0.02 - General code clean-up
+;		   Added various clarifications
+; 20170816 v0.03 - Added responsibilities
+;		   Added additional clarifications based beta tester feedback
+;		   Added STARTUP code
+;		   Updated SCISYN code
+; 20180324 v0.04 - Added missing PNP reference
+;		   Updated DETECTSIDFX code
+;		   Renamed SIDFXNOTFOUND reference to NOSIDFX
+; 20180427 v0.05 - Minor clean-up before official release
+;
+; Source code provided by Lotus/Ancients
+;
+; Also refer to the SIDFX control register description and the online documentation describing the
+;   switch behavior, configuration profiles and operating modes available at http://www.sidfx.dk/
+;
+; Please report any errors/issues to contact[at]sidfx[dot]dk
+;
+;--------------------------------------------------------------------------------------------------
+
+		;RESPONSIBILITIES !!!
+		;
+		;End user:
+		;  It is the responsibility of the end user to ensure that SIDFX is equipped with working
+		;  SID(s) and that the configuration matches the actual SID types. With the default SIDFX
+		;  firmware e.g. SwinSID will show as NONE (for SS Nano) or UNKN (for SS Ultimate). The
+		;  user must install the advanced firmware and manually configure the SID type to match
+		;  the SwinSID emulation mode. The same goes for a real SID chip if it for some reason
+		;  (e.g. partially defective) won't be detected properly.
+		;
+		;Integrator:
+		;  As an integrator you should observe the "stereo capable" bit before selecting a stereo
+		;  mode if you plan on supporting stereo tunes. This will ensure that the 3 grabbers are
+		;  electrically connected and that two SIDs with known types have been detected.
+
+STARTUP:
+
+		;After the C64 RESET signal is released the SIDFX unit begins the SID auto-detect sequence
+		;  followed by an initialization of the API. Therefore a software delay may be required
+		;  before communicating with SIDFX. If the user has a cartridge with DMA load and your
+		;  program don't use a cruncher and don't have any time consuming initialization code
+		;  then please add at least 1ms delay (approx. 1000 clock cycles) for safety.
+
+		ldx #$00		;wait for SIDFX to finish initialization (>1200us)
+:		inx
+		bne :-
+
+DETECTSIDFX:
+
+		;Even though the SIDFX registers are hidden the D41E and D41F registers still receive
+		;  all writes and the SIDFX state machine will react to them, but they won't cause any
+		;  harm without the correct unlock sequence. But if there has been any random/unauthorized
+		;  writes since last reset (or last SCI command) then the internal state machine may be
+		;  in an unknown state. A sequence of SCISYN commands will eventually bring it back into
+		;  idle state where it can receive new commands. At least 8 SCISYN commands are required
+		;  but 16 are recommended in order to ensure compatibility with future firmware releases
+		;  (when using a loop the number of iterations doesn't usually matter).
+
+		ldy #$0f
+:		jsr SCISYN		;bring SIDFX SCI state machine into a known state
+		dey
+		bpl :-
+
+		lda #$80		;PNP hardware detection
+		jsr SCIPUT
+		lda #$50
+		jsr SCIPUT		;send login "PNP"
+		lda #$4e
+		jsr SCIPUT
+		lda #$50
+		jsr SCIPUT
+
+		jsr SCIGET		;Read vendor ID LSB
+		sta PNP+0
+		jsr SCIGET		;Read vendor ID MSB
+		sta PNP+1
+		jsr SCIGET		;Read product ID LSB
+		sta PNP+2
+		jsr SCIGET		;Read product ID MSB
+		sta PNP+3
+
+		lda #$45		;check device ID string
+		cmp PNP+0
+		bne NOSIDFX
+		lda #$4c
+		cmp PNP+1
+		bne NOSIDFX
+		lda #$12
+		cmp PNP+2
+		bne NOSIDFX
+		lda #$58
+		cmp PNP+3
+		beq SIDFXFOUND
+
+NOSIDFX:
+
+		;optionally warn user that SIDFX was not detected
+
+		jmp PLAYTUNE
+
+SIDFXFOUND:
+
+		jsr REGUNHIDE		;unhide register map
+
+		lda $d41d		;Get SW1 position
+		lsr
+		lsr
+		lsr
+		lsr
+		and #$03
+		;your code
+
+		;optionally warn user if SW1 is not in center position (manually overriden)
+
+		lda $d41d		;Get operating mode
+		and #$07
+		;your code
+
+		lda $d41d		;Get stereo capability (are all grabbers installed?)
+		and #$08
+		;your code
+
+		lda $d41e		;Get SID1 model
+		and #$03
+		;your code
+
+		lda $d41e		;Get SID2 model
+		lsr
+		lsr
+		and #$03
+		;your code
+
+		lda $d41e		;Get SID models
+		and #$0f
+		tax
+		lda MODE6581,x		;get mode for 6581 playback
+		;or
+		lda MODE8580,x		;get mode for 8580 playback
+		bne :+
+
+		;optionally warn user that the requested SID type is not available
+:		
+		and #$07
+		ora #$f0
+		sta $d41d		;Set playback mode
+
+		;It is recommended to hide the control registers before initialization and playback of SID tunes
+		;  because unauthorized writes to the D41D-D41F area may cause unexpected behavior.
+		;But if only used with a SID player that never accesses these addresses there is of course no issues.
+
+		jsr REGHIDE		;hide register map
+
+PLAYTUNE:
+
+		;play SID tune
+
+		rts
+
+MODE6581:	.byte $f0,$f1,$f0,$f0,$f2,$f1,$f2,$f2,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f0
+MODE8580:	.byte $f0,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f2,$f2,$f1,$f2,$f0,$f0,$f1,$f0
+
+		;D41E bits 3-0 (SID model) -> D41D bits 2-0 (playback mode)
+		;
+		;MODELS	SID1	SID2	6581	8580
+		;
+		;0000	NONE	NONE	0	0
+		;0001	6581	NONE	1	0
+		;0010	8580	NONE	0	1
+		;0011	UNKN	NONE	0	0
+		;0100	NONE	6581	2	0
+		;0101	6581	6581	1	0
+		;0110	8580	6581	2	1
+		;0111	UNKN	6581	2	0
+		;1000	NONE	8580	0	2
+		;1001	6581	8580	1	2
+		;1010	8580	8580	0	1
+		;1011	UNKN	8580	0	2
+		;1100	NONE	UNKN	0	0
+		;1101	6581	UNKN	1	0
+		;1110	8580	UNKN	0	1
+		;1111	UNKN	UNKN	0	0
+		;
+		;Example tables, default mode (0) is selected when requested SID type is not available (recommended)
+
+PNP:		.res 4			;used to temporarily store the returned device ID string
+
+;--------------------------------------------------------------------------------------------------
+;	Unhide SIDFX control registers
+;
+;	A,X	modified
+;--------------------------------------------------------------------------------------------------
+
+REGUNHIDE:
+		lda #$c0		;unhide register map
+		jsr SCIPUT
+		lda #$45
+		jsr SCIPUT
+
+		jsr SCISYN		;wait for registers to become ready
+		rts
+
+;--------------------------------------------------------------------------------------------------
+;	Hide SIDFX control registers
+;
+;	A,X	modified
+;--------------------------------------------------------------------------------------------------
+
+REGHIDE:
+		lda #$c1		;hide register map
+		jsr SCIPUT
+		lda #$44
+		jsr SCIPUT
+
+		jsr SCISYN		;wait for registers to become hidden
+		rts
+
+;--------------------------------------------------------------------------------------------------
+;	Exchange SCI (Serial Comminication Interface) byte
+;
+;	A	must contain the byte to send
+;	A	will contain the byte received
+;	X	modified
+;--------------------------------------------------------------------------------------------------
+
+SCIGET:
+SCISYN:
+		ldx #$0f		;delay
+:		dex
+		bpl :-
+		lda #$00		;"nop" SCI command
+SCIPUT:
+		ldx #$07		;transfer 8 bits (MSB first)
+		stx $d41e		;bring SCI sync signal low
+:		pha			;save data byte
+		sta $d41f		;transmit bit 7
+		lda $d41f		;receive bit 0
+		ror			;push bit 0 to carry flag
+		pla			;restore data byte
+		rol			;shift transmitted bit out and received bit in
+		dex			;next bit
+		bpl :-			;done?
+		stx $d41e		;bring SCI sync signal high
+		rts
+
+;--------------------------------------------------------------------------------------------------

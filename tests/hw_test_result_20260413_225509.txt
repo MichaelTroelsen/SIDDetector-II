@@ -1,0 +1,18 @@
+siddetector hardware smoke test
+Run: 2026-04-13 22:55:09   U64: 192.168.1.64
+Baseline: [1]$D400 ARMSID/ARM2SID($05)  [2]$D420 8580($02)
+
+[PASS] SPACE restart #1 (stable)
+[PASS] SPACE restart #2 (stable)
+[PASS] SPACE restart #3 (stable)
+[FAIL] info return (stable)
+       slot2: expected $D420 8580($02) got $D440 ARMSID/ARM2SID($05)
+[FAIL] debug return (stable)
+       slot2: expected $D420 8580($02) got $D440 ARMSID/ARM2SID($05)
+[PASS] debug p2 UCI status not dirty (not $30)
+[PASS] debug page 2 return (stable)
+[PASS] readme return (stable)
+[PASS] sound test return (stable)
+[PASS] P music toggle (no restart) (stable)
+
+8/10 passed   2 failed

@@ -1,0 +1,51 @@
+siddetector hardware smoke test
+Run: 2026-04-11 09:06:03   U64: 192.168.1.64
+Scenario: SIDKick-pico stereo (D400 + D420)
+Baseline: [1]$D400 SIDKick-pico-6581($0E)  [2]$D420 SIDKick-pico-8580($0B)
+
+[FAIL] cold boot slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] cold boot slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+[PASS] SPACE restart #1 (stable)
+[FAIL] SPACE restart #1 slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] SPACE restart #1 slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+[PASS] SPACE restart #2 (stable)
+[FAIL] SPACE restart #2 slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] SPACE restart #2 slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+[PASS] SPACE restart #3 (stable)
+[FAIL] SPACE restart #3 slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] SPACE restart #3 slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+[PASS] info return (stable)
+[FAIL] info return slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] info return slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+[PASS] debug return (stable)
+[FAIL] debug return slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] debug return slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+[PASS] readme return (stable)
+[FAIL] readme return slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] readme return slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+[PASS] sound test return (stable)
+[FAIL] sound test return slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] sound test return slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+[PASS] P music toggle (no restart) (stable)
+[FAIL] P music toggle slot1
+       slot1: expected $D400 SIDKick-pico-8580($0B)  got $D400 SIDKick-pico-6581($0E)
+[FAIL] P music toggle slot2
+       slot2: expected $D420 SIDKick-pico-6581($0E)  got $D420 SIDKick-pico-8580($0B)
+
+8/26 passed   18 failed

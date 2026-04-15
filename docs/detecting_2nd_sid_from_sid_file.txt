@@ -1,0 +1,51 @@
+From iAN CooG:
+---------------
+
+- cleaning of $d420: nice idea but remember that the 2nd sid address is
+variable, so wouldn't be effective for tunes at $d460 or $d500. Better
+read the 2nd sid address from the sid if it's a v3, offset 0x7a is the
+middle part of 2nd sid address ($d000+(value<<8)) or as 6502 code
+
+	lda #$2c
+	sta secondsid		; normally not needed
+	lda headerversion	; off 0x5			;+04    WORD version
+	cmp #$03
+	bne no2ndsid
+	lda #$9d
+	sta secondsid
+no2ndsid
+...
+	lda header74
+	lsr
+	lsr
+	lsr
+	lsr
+	clc
+	adc #$d0
+	sta secondsid+2		;hi byte
+	lda header74
+	asl
+	asl
+	asl
+	asl
+	sta seconsid+1		;low byte
+...
+
+		sta d400,x
+secondsid	sta $d420,x
+
+
+
+
+
+
+
+;we can use the getpos from the dir routine: 
+;that will save us some bytes
+		lda header74
+		jsr getpos
+		sta secondsid+2
+		sty secondsid+1
+		rts
+		
+		

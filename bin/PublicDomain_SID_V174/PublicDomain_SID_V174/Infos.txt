@@ -1,0 +1,105 @@
+Firmware Installation
+=====================
+
+Remove the PDsid from the C64.
+
+
+
+Boot Option 1:
+--------------
+
+- Hold down the “Boot” button
+- Plug in the USB connector 
+- Then release the “Boot” button
+
+A new drive called “RP2350” will now appear on your computer. Copy the firmware file with the .uf2 extension to this drive. 
+Wait a moment until the “RP2350” drive disappears again. 
+The PDsid is now ready to use
+
+
+
+
+Boot Option 2/3: (if the Boot Button 1 Option is not working)
+---------------
+
+-  Use a jumper cable or tweezers and short two pins in the image "Boot_Options.png" (you have 2 options, use one of them)
+-  Plug in the USB connector
+-  Then remove the cable or tweezers
+
+A new drive called “RP2350” will now appear on your computer. Copy the firmware file with the .uf2 extension to this drive. 
+Wait a moment until the “RP2350” drive disappears again. 
+The PDsid is now ready to use
+
+
+
+
+
+Firmware History:
+=================
+
+
+V174
+
+Fixed filter bug produced in V173
+Sample Mode Fix
+
+
+V173
+
+Added another sample playback method
+
+
+V171
+
+Atari CX-30 Paddle Support (Mode Switch with 4x Fast Short Reset, C64 Paddes: 1 Beep, Atari Paddles: 2 Beeps) 
+Paddles Smoother Auto Feature (no Jitter with Arkanoid)
+Commodore Mouse 1531 Fix
+SID Mode 6581/8580 Switch via SID Registers fixed
+
+
+V161
+
+Paddles Fix (inside game "Clowns" not movable close to the right side)
+
+
+V157
+
+Sound-Fix from V1.54 (bad sound)
+
+
+V154
+
+Fixed minor issues (I Ball sample, mixed waveform, startup bug)
+Added API calls to allow integration with the new Commodore64u and Ultimate64 firmware
+
+
+V141
+
+More 1:1 Waveform Mix like Original SID
+Also a bug fixed from V132
+
+
+V132
+
+Mixed Waveforms Fix
+
+
+V124
+
+This version supports the new live performance option “ENV FIX” on the new Rev 1.5 board
+
+
+V119
+
+Small fixes
+
+
+V117
+
+This fixes the power-up bug that occurred when turning on the C64, whereby either no sound or only some of the voices could be heard.
+
+
+
+
+
+

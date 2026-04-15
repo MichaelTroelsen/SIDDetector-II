@@ -1,0 +1,137 @@
+
+
+DETECTSIDFX:
+
+		ldy #$0f
+:		jsr SCISYN		;bring SCI state machine into a known state
+		dey
+		bpl :-
+
+		lda #$80		;PNP hardware detection
+		jsr SCIPUT
+		lda #$50
+		jsr SCIPUT		;send login "PNP"
+		lda #$4e
+		jsr SCIPUT
+		lda #$50
+		jsr SCIPUT
+
+		jsr SCIGET		;Read vendor ID LSB
+		sta PNP+0
+		jsr SCIGET		;Read vendor ID MSB
+		sta PNP+1
+		jsr SCIGET		;Read product ID LSB
+		sta PNP+2
+		jsr SCIGET		;Read product ID MSB
+		sta PNP+3
+
+		lda #$45		;check PNP string
+		cmp PNP+0
+		bne NOSIDFX
+		lda #$4c
+		cmp PNP+1
+		bne NOSIDFX
+		lda #$12
+		cmp PNP+2
+		bne NOSIDFX
+		lda #$58
+		cmp PNP+3
+		bne NOSIDFX
+
+SIDFXFOUND:
+		jsr REGUNHIDE		;unhide register map
+
+		lda $d41e		;Get SID1 model
+		and #$03
+		;your code
+
+		lda $d41e		;Get SID2 model
+		lsr
+		lsr
+		and #$03
+		;your code
+
+		lda $d41d		;Get operating mode
+		and #$07
+		;your code
+
+		lda $d41d		;Get stereo capability (are all grabbers installed?)
+		and #$08
+		;your code
+
+		lda $d41d		;Get SW1 position
+		lsr
+		lsr
+		lsr
+		lsr
+		and #$03
+		;your code
+
+		;optionally warn user if SW1 is not in center position (manual override)
+
+		;your code
+		sta $d41d		;Set playback mode
+
+		jsr REGHIDE		;hide register map
+
+NOSIDFX:
+
+		;play SID tune
+
+		rts
+
+;---------------------------------------------------------------------------------------------------
+
+REGUNHIDE:
+		lda #$c0		;unhide register map
+		jsr SCIPUT
+		lda #$45
+		jsr SCIPUT
+
+		jsr SCISYN		;wait for registers to become ready
+		rts
+
+;---------------------------------------------------------------------------------------------------
+
+REGHIDE:
+		lda #$c1		;hide register map
+		jsr SCIPUT
+		lda #$44
+		jsr SCIPUT
+
+		jsr SCISYN		;wait for registers to become hidden
+		rts
+
+;---------------------------------------------------------------------------------------------------
+;	Exchange SCI byte
+;
+;	A	must contain the byte to send
+;	A	will contain the byte received
+;
+;	X	modified
+;---------------------------------------------------------------------------------------------------
+
+SCIGETW:
+		ldx #$01		;>10us delay to allow SCI ready flag to become available
+:		dex
+		bpl :-
+SCIGET:
+:		lda $d41f		;read SCI ready flag
+		bpl :-			;wait until data ready
+SCISYN:
+		lda #$00		;"nop" SCI command
+SCIPUT:
+		ldx #$07		;transfer 8 bits (MSB first)
+		stx $d41e		;bring SCI sync signal low
+:		pha			;save data byte
+		sta $d41f		;transmit bit 7
+		lda $d41f		;receive bit 0
+		ror			;push bit 0 to carry flag
+		pla			;restore data byte
+		rol			;shift transmitted bit out and received bit in
+		dex			;next bit
+		bpl :-			;done?
+		stx $d41e		;bring SCI sync signal high
+		rts
+
+;---------------------------------------------------------------------------------------------------

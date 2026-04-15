@@ -1,0 +1,17 @@
+; =============================================================================
+; test_dispatch.mon — VICE monitor commands for dispatch unit tests
+; =============================================================================
+; Usage:
+;   make test_dispatch
+; Or manually:
+;   x64sc -autostart tests/test_dispatch.prg -moncommands tests/test_dispatch.mon
+;
+; When the CPU hits td_spin (end of all tests), the VICE monitor opens.
+; In the monitor, type:
+;   mem $0600 $0600     — shows pass count (08 = all 8 tests passed)
+;   go                  — resume (loops forever at td_spin)
+; =============================================================================
+
+loadsym tests/test_dispatch.vs
+break td_spin
+go

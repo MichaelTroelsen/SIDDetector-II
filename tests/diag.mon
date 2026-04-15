@@ -1,0 +1,12 @@
+; diag.mon — break at test_start and td_spin, save memory at each
+loadsym tests/test_suite.vs
+break test_start
+break td_spin
+go
+; --- hit test_start (pass_count at d2b, dispatch_result at d2a) ---
+save "tests/diag_start.bin" 0 0d2a 0d2f
+go
+; --- hit td_spin ---
+save "tests/diag_end.bin" 0 0d2a 0d2f
+save "tests/ci_result.bin" 0 07e8 07e8
+quit

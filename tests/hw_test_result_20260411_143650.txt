@@ -1,0 +1,22 @@
+siddetector hardware smoke test
+Run: 2026-04-11 14:36:50   U64: 192.168.1.64
+Baseline: [1]$D400 ARMSID/ARM2SID($05)  [2]$D420 ARMSID/ARM2SID($05)  [3]$DE00 ARMSID/ARM2SID($05)  [4]$D500 ULTISID-8580($20)  [5]$D600 ULTISID-8580($20)
+
+[FAIL] SPACE restart #1 (stable)
+       slot4: expected $D500 ULTISID-8580($20) got (empty); slot5: expected $D600 ULTISID-8580($20) got (empty)
+[FAIL] SPACE restart #2 (stable)
+       slot4: expected $D500 ULTISID-8580($20) got (empty); slot5: expected $D600 ULTISID-8580($20) got (empty)
+[FAIL] SPACE restart #3 (stable)
+       slot4: expected $D500 ULTISID-8580($20) got (empty); slot5: expected $D600 ULTISID-8580($20) got (empty)
+[FAIL] info return (stable)
+       slot4: expected $D500 ULTISID-8580($20) got (empty); slot5: expected $D600 ULTISID-8580($20) got (empty)
+[FAIL] debug return (stable)
+       slot4: expected $D500 ULTISID-8580($20) got (empty); slot5: expected $D600 ULTISID-8580($20) got (empty)
+[FAIL] readme return (stable)
+       slot4: expected $D500 ULTISID-8580($20) got (empty); slot5: expected $D600 ULTISID-8580($20) got (empty)
+[FAIL] sound test return (stable)
+       slot4: expected $D500 ULTISID-8580($20) got (empty); slot5: expected $D600 ULTISID-8580($20) got (empty)
+[FAIL] P music toggle (no restart) (stable)
+       slot4: expected $D500 ULTISID-8580($20) got (empty); slot5: expected $D600 ULTISID-8580($20) got (empty)
+
+0/8 passed   8 failed

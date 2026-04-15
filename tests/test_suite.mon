@@ -1,0 +1,17 @@
+; =============================================================================
+; test_suite.mon — VICE monitor commands for the full test suite
+; =============================================================================
+; Usage:
+;   make test_suite
+; Or manually:
+;   x64sc -autostart tests/test_suite.prg -moncommands tests/test_suite.mon
+;
+; When all 23 tests complete the CPU spins at td_spin.
+; Open VICE monitor (Alt+M) and type:
+;   mem $0600 $0600     — shows pass count ($17 = 23 = all passed)
+;   go                  — resume (spins forever at td_spin)
+; =============================================================================
+
+loadsym tests/test_suite.vs
+break td_spin
+go

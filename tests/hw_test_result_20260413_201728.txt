@@ -1,0 +1,21 @@
+siddetector hardware smoke test
+Run: 2026-04-13 20:17:28   U64: 192.168.1.64
+Baseline: [1]$4000 ?$A0($A0)  [2]$6040 ?$E0($E0)  [4]$A060 ULTISID-8580($20)  [5]$C0A0 ?$40($40)  [6]$E0E0 ?$60($60)  [7]$2000 ?$80($80)
+
+[PASS] SPACE restart #1 (stable)
+[PASS] SPACE restart #2 (stable)
+[FAIL] SPACE restart #3 (stable)
+       slot2: expected $6040 ?$E0($E0) got $6000 ?$E0($E0)
+[PASS] info return (stable)
+[PASS] debug return (stable)
+[PASS] debug p2 UCI count >= 1
+[PASS] debug p2 UCI status not dirty (not $30)
+[FAIL] debug p2 UCI F1 hi=$E0 in $D4-$DF
+       got $E0
+[PASS] debug page 2 return (stable)
+[FAIL] readme return (stable)
+       slot2: expected $6040 ?$E0($E0) got $6000 ?$E0($E0)
+[PASS] sound test return (stable)
+[PASS] P music toggle (no restart) (stable)
+
+9/12 passed   3 failed

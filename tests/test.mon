@@ -1,0 +1,28 @@
+; =============================================================================
+; test.mon — VICE monitor commands for SID Detector unit tests
+; =============================================================================
+; Usage (from siddetector2/ directory):
+;   make test
+; Or manually:
+;   x64sc -autostart tests/test_arith.prg -moncommands tests/test.mon
+;
+; What happens:
+;   1. VICE loads and runs test_arith.prg
+;   2. The test displays PASS/FAIL on screen for each test case
+;   3. CPU spins at td_spin when done
+;
+; To inspect results in the VICE monitor (Alt+M or Tools > Monitor):
+;   mem $0600 $0600     — shows pass count (04 = all 4 tests passed)
+;   loadsym tests/test_arith.vs
+;   break td_spin       — break when tests finish
+;   go
+; =============================================================================
+
+; Load symbol file so labels are available in the monitor
+loadsym tests/test_arith.vs
+
+; Set a breakpoint at td_spin (the final spin loop, after all tests ran)
+break td_spin
+
+; Start execution
+go

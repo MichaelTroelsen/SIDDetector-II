@@ -1,0 +1,18 @@
+siddetector hardware smoke test
+Run: 2026-04-14 20:32:31   U64: 192.168.1.64
+Baseline: [1]$C000 ULTISID-8580($20)  [2]$E020 ?$40($40)  [3]$0000 ?$60($60)  [4]$2020 ?$80($80)  [5]$6040 ?$A0($A0)  [6]$A060 ?$C0($C0)  [7]$E080 ?$E0($E0)
+
+[PASS] SPACE restart #1 (stable)
+[PASS] SPACE restart #2 (stable)
+[PASS] SPACE restart #3 (stable)
+[PASS] info return (stable)
+[PASS] debug return (stable)
+[PASS] debug p2 UCI count >= 1
+[PASS] debug p2 UCI status not dirty (not $30)
+[PASS] debug p2 UCI F1 hi=$D7 in $D4-$DF
+[PASS] debug page 2 return (stable)
+[PASS] readme return (stable)
+[PASS] sound test return (stable)
+[PASS] P music toggle (no restart) (stable)
+
+12/12 passed   0 failed

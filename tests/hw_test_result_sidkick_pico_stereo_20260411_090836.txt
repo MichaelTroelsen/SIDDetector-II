@@ -1,0 +1,33 @@
+siddetector hardware smoke test
+Run: 2026-04-11 09:08:36   U64: 192.168.1.64
+Scenario: SIDKick-pico stereo (D400 + D420)
+Baseline: [1]$D400 SIDKick-pico-6581($0E)  [2]$D420 SIDKick-pico-8580($0B)
+
+[PASS] cold boot slot1
+[PASS] cold boot slot2
+[PASS] SPACE restart #1 (stable)
+[PASS] SPACE restart #1 slot1
+[PASS] SPACE restart #1 slot2
+[PASS] SPACE restart #2 (stable)
+[PASS] SPACE restart #2 slot1
+[PASS] SPACE restart #2 slot2
+[PASS] SPACE restart #3 (stable)
+[PASS] SPACE restart #3 slot1
+[PASS] SPACE restart #3 slot2
+[PASS] info return (stable)
+[PASS] info return slot1
+[PASS] info return slot2
+[PASS] debug return (stable)
+[PASS] debug return slot1
+[PASS] debug return slot2
+[PASS] readme return (stable)
+[PASS] readme return slot1
+[PASS] readme return slot2
+[PASS] sound test return (stable)
+[PASS] sound test return slot1
+[PASS] sound test return slot2
+[PASS] P music toggle (no restart) (stable)
+[PASS] P music toggle slot1
+[PASS] P music toggle slot2
+
+26/26 passed   0 failed

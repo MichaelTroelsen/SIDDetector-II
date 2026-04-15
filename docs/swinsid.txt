@@ -1,0 +1,117 @@
+ About SwinSID
+
+   SwinSID is a hardware replacement for legendary SID sound chip which was 
+   placed in every Commodore C64 computer. This hardware extension is designed 
+   as a module installed directly into the SID socket. It emulates the sound of 
+   the SID chip, but it is a lot more powerful and allows you experience the new 
+   dimension of C64 music. SwinSID can be used as a replacement for both old and 
+   new revisions of SID. It just emulates almost full register set of standardf 
+   SID, and almost all applications and hardware devices, which uses SID, should 
+   work properly. You must notice that SwinSID doesn't sounds 100% like real 
+   SID. Due to some design limitation it introduces low aliasing distortions, 
+   but in other way it has improvements from SID in different areas like better 
+   ADSR envelope handling and digital, fat and self-oscilating filter. The 
+   hardware desing of SID and SwinSID modules is different in almost every way. 
+   SwinSID is equipped with general purpose microprocessor with internal RAM and 
+   ROM. A programmable device like this has a big advantage - there is a 
+   possibility to upgrade firmware and to add new features or fixes without any 
+   hardware modification. SwinSID is based on wave table synth so, any waveform 
+   can be stored in memory and played back instead of generating only simple 
+   waves like SID does. The new mixing modes can also be used for even more rich 
+   sound. The polyphony was increased from only three to six channels with 
+   stereo panning and maintain compability with current SID2SID devices. In fact 
+   it emulates two independent SID chips!. SwinSID has a very simple design 
+   thanks to high speed programmable ATMEL AVR microcontroller running at 24MHz 
+   or 32MHz. This chip is about 30 times faster than C64's main processor 6510, 
+   that gives enough power for real-time audio generating, mixing and 
+   processing. Digital sound goes from AVR to high quality 16 bit stereo DAC. At 
+   the end of processing we have stereo analog output for external amplifier.
+
+Micro SwinSID - improved and simplified SwinSID
+
+    The Micro SwinSID uses a newer and faster microcontroller - ATMega88PA and 
+    smaller and easier to build PCB. Thanks to higher clock 32MHz speed it was 
+    possible to increade sampling frequency by 30% to 41,6KHz.   New layout 
+    doesn't require additional DAC - it uses two 1bit fast PWM to modulate audio 
+    quality and play back it with 16bit and 41,6KHz quality.
+
+SwinSID X2 - Dual core SwinSID
+
+    SwinSID X2 uses two ATMega8515 AVR MCUs thus it can emulate two SID chips 
+    with single board. This board is specially designed to use in C64 and 
+    emulate second sound chip at $d420 address. TDA1543 DAC is used to get 
+    stereo sound  - with single SID sound on each channel.  There is one 
+    firmware for dual and single core version thus the new firmware is also 
+    compatible with previous SwinSID SE board. DAC is now connected only to 
+    master core and plays its voices on left channel while slave voices on the 
+    right. Both AVRs runs with the same 24MHz integrated oscilator clock source 
+    which helps maintain stability under heavy overclocking. C64 data and addres 
+    buses of both MCUs are connected together and address decoder is used to 
+    split one CS signal into two AVRs (this requires access to external A5 
+    addres line from C64 bus). AVR port E is used for synchronization and port A 
+    for data transfer between master and slave cores.
+
+Features
+
+    SwinSID has almost all features of original SID chip - simple waveforms, 
+    effects, filter and more. In dual core mode the polyphony was increased from 
+    standard 3 to 6 voices. There is new speciall mode to allow playing single 
+    voice with two different oscillators simultaneously and adjustable phase 
+    shift. Soundcard has 8 various waveforms from classic shapes (pulse, 
+    sawtooth, sine) to complex and soft sounds. If that's not enough, waveform 
+    output can be modulated by value of other oscillator resulting in simple FM 
+    synth. SwinSID can be also used for high quallity 8 bit stereo sample 
+    playback instead of generating waveforms. Two cores gives 12 channels of 8 
+    bit stereo channels with hardware mixing and voilume control Finally, there 
+    is 16 bit digital lowpass filter with adjustable cut-off frequency and 
+    strong resonance. The filter doesn't have true SID charasteristic, but it 
+    sounds more like 8580 than 6581 with 'C64 compatible' firmware. The SwinSID 
+    waveforms was improved to match standard 8580 sound and new waves was added 
+    by using non standard waveform selection bits. That gives 8 new sounds 
+    maintaining compability with standards SID tunes.
+
+MIDIBox
+
+    In mid 2007 I have started to cooperate with Thorsten Klose (creator of the 
+    MIDIBox hardware platform) to use SwinSID as a SID replacement in his 
+    MIDIBox SID module. He built SwinSID prototype and did intensive tests to 
+    check if it is usable with his other MIDI hardware. During this tests I have 
+    made several firmware updates to meet requirements. With TK help (and his 
+    scope :) I was able to fix some critical timmings which i didn't realize 
+    until he found it. He also modified MIDIBox firmware to support new SwinSID 
+    features directly from his devices. Now you can use SwinSID not only as a 
+    SID replacement but also as a simple synthesizer with nice sets of features 
+    and oldschool sounding. The board laytout for MIDIBox  platform module with 
+    SwinSID is under development by MIDIBox community and for now only SID 
+    socket replacement is supported. Thanks
+
+    I would like to thank all people supporting Swin SID for testing, reporting 
+    bugs and etc. Special thanks goes to Thorsten Klose - for thorough testing 
+    and help fixing serious DAC problem and thanks for Crisp for firmware 
+    testing, SID recording demos and design of the new SwinSID X2 board layout.
+
+For more info about SwinSID X2 and supporting it send me an e-mail:
+swinkels@wp.pl
+
+
+
+
+Features of SwinSID X2:
+
+- Two AVR cores for double performance (48 MIPS)
+- Two SID chip emulation
+- Nearly full software compability with SID
+- 6 voices
+- 2 oscillators per voice with adjustable phase and mixing mode
+- 16 waveforms stored in flash ROM
+- Exponental ADSR volume fades without envelope bug
+- White noise generator with pitch regulation
+- FM modulation between voices
+- Hard sync modulation
+- Built-in socket for optional SID chip
+- Lowpass filter with self-oscillating resonance
+- Standard 4 bit sample playback as 4th voice
+- Extended sample playback mode (6 channels x 8 bit)
+- 2x oversampling to minimize aliasing effect
+- 16 bit mixing and output
+- 31,25 KHz sampling rate

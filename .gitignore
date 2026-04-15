@@ -1,0 +1,13 @@
+# Claude Code internal state
+.claude/
+
+# VICE runtime artifacts
+vicesnd.sid
+screen_dump.bin
+screen_dump.txt
+
+# hw_test result logs (generated, not source)
+tests/hw_test_result_*.txt
+
+# Build lock
+.version

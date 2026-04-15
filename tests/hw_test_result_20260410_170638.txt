@@ -1,0 +1,22 @@
+siddetector hardware smoke test
+Run: 2026-04-10 17:06:38   U64: 192.168.1.64
+Baseline: $00 $06 $07 $00 $00 $00 $00 $00
+
+[PASS] SPACE restart #1
+       expected $00 $06 $07 $00 $00 $00 $00 $00
+[PASS] SPACE restart #2
+       expected $00 $06 $07 $00 $00 $00 $00 $00
+[PASS] SPACE restart #3
+       expected $00 $06 $07 $00 $00 $00 $00 $00
+[PASS] info (enter+return+redetect)
+       expected $00 $06 $07 $00 $00 $00 $00 $00
+[PASS] debug (enter+return+redetect)
+       expected $00 $06 $07 $00 $00 $00 $00 $00
+[PASS] readme (enter+return+redetect)
+       expected $00 $06 $07 $00 $00 $00 $00 $00
+[PASS] sound test (enter+return+redetect)
+       expected $00 $06 $07 $00 $00 $00 $00 $00
+[PASS] P music toggle (no restart)
+       expected $00 $06 $07 $00 $00 $00 $00 $00
+
+8/8 passed   0 failed

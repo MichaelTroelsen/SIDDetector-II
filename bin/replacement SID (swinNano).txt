@@ -1,0 +1,35 @@
+
+						7-26-2018
+
+     A REPLACEMENT FOR THE 6581/8580 SID CHIP: THE SwinSID
+
+     If your SID (sound) chip has failed and you can't find a good 
+replacement, there is an alternative. It's called the SwinSID. It's an 
+early version and is still being sold as of this writing. The designer 
+uses a different type of IC in an emulator arrangement which is close 
+to the voicing of an original SID chip. There are several versions of 
+the SwinSID available and they just plug in to the board like a "real"
+SID chip. A later (smaller) version was called the Nano-SwinSID.
+     One drawback of those modules which may not be mentioned is their 
+lack of POT (potentiometer) inputs, specifically the two A/D converters 
+built into the original SID chip. A proportional mouse, graphics tablet 
+and paddle use those POT inputs to control the mouse pointer, etc. and 
+will not work with a SwinSID. Note that a joystick doesn't use those 
+inputs and works just fine without them.
+
+     THE SwinSID ULTIMATE: A COMPLETE REWORK OF THE SwinSID design
+
+     As of this writing, the newest SID replacement is SwinSID Ultimate
+developed by someone in Hungary, and is being sold on Facebook. I have 
+one and I can't tell the difference between it and an original SID chip.
+It has the POT (mouse, paddle) inputs the previous versions lacked.
+Since the designer is in Europe, the module defaults to PAL 8580 mode
+but is easily programmable to reset it to NTSC 6581 with a small C64 
+program. There is also an instruction manual that tells of the design 
+and all the improvements from the early Swinkels version modules. 
+
+NOTE: This module apparently has a problem with voicing when playing
+some older game carts. "Clowns" is apparently one of them. 
+
+
+Ray Carlsen

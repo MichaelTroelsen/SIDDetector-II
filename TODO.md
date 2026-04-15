@@ -1,0 +1,112 @@
+# SID Detector TODO
+
+## New chips to detect
+
+- [x] **KungFuSID** — Detected via D41D echo: write $A5, read back. Old firmware returns $A5 (register echo); new firmware returns $5A (FW_UPDATE_START_ACK). Both accepted. Detection placed after all other hardware checks (position 5b). `data1=$0C`.
+- [x] **SIDKick-pico** — Detected via config mode VERSION_STR: write $FF to D41F, $E0 to D41E, skip 20 bytes from D41D, read 'S'/$53 + 'K'/$4B (data1=$0B)
+- [x] **BackSID** — Detected via register echo: write $42 to D41C, $B5 to D41D, $1D to D41E, read D41F; if D41F==$42 → BackSID (data1=$0A)
+- [x] **PD SID** — Detected via register echo: write 'P' to D41D, 'D' to D41E, read 'S' from D41E (data1=$09)
+
+## Features
+
+### SID test sounds
+- [x] Play a short test tone on each detected SID so the user can hear it is working
+- [x] Use a simple triangle-wave note (voice 1, fixed frequency) per SID address
+- [x] Optionally allow pressing a key to cycle through all detected SIDs
+
+### Per-chip information pages
+- [x] After detection, add an info screen for each detected chip (press a key to step through)
+- [x] Show chip name, variant, known quirks, audio quality rating, and firmware/upgrade info
+- [x] Include "where to buy" pointer (see CHIPS.md) on-screen where space allows
+
+## Bugs to fix
+
+### Multiple SID / stereo detection errors
+- [x] **Unknown SID at D400 not written into `sid_list` tables** — fixed: after sidstereostart, if sidnum_zp==0, D400 is added as type $F0; sidstereo_print now shows "UNKNOWN SID FOUND" for $F0
+- [x] **FPGASID stereo address not scanned** — fixed: removed `fiktivloop` (noise-mirror, wrong method for FPGASID) and `jsr s_s_l3` (premature return) from `s_s_lfpgasid`/`s_s_lfpgasid_2`; outer loop now continues scanning all addresses with `checkfpgasid`
+- [x] **SIDFX stereo capability not reported** — fixed: pre-populated D400 in `end_pre_d400` block ($30 case) + added `sidFXf` dispatch in `sidstereo_print`; stereo row now shows "D400 SIDFX FOUND"
+- [x] **Swinsid Nano (NOPAD variant) indistinguishable** — no reliable discriminant found; accepted as limitation
+- [x] **NOSID+U2+ indistinguishable from SwinSID Nano** — exhaustively probed 10+ discriminants (D41B, D41C, D419/D41A, D41F, freq variation, waveform, interrupt context, monotone counting, write-to-read). All overlap. U2+ FPGA generates bus noise at ~44 kHz identical to SwinSID Nano oscillator. Accepted limitation; documented in FINDINGS.md.
+- [ ] **D400+D500 mixed Swinsid/real-SID** — wrong chip reported in both slots (stereo config error) *(teststatus #21 — untested)*
+- [x] **D400+D500 mixed ARMSID/real-SID** — fixed V1.3.73: jmp s_s_l3 in s_s_add for sidtype=$05 exits ARMSID scan early, preventing U64/ULTISID false entries from D5xx-DFxx scan; 8580@D400 + ARMSID@D420 hw_test 10/10 *(teststatus C09 — 🟢)*
+- [ ] **Stereo ARMSID / SwinSID U detection skipped** — ARMSID/SwinSID U mirrors through the C64 address decoder: writing "DIS" to D5xx triggers the D400 chip, echoing 'N' in D51B and falsely adding D500/D600 as extra SIDs. The stereo scan for sidtype=$05 is therefore skipped entirely when the primary chip is at D400. Fix: implement mirror detection — write a unique pattern to D400, check if D500 shows the same pattern (mirror) or different (real second chip). **Files:** `siddetector.asm` (`end_skip_armsid_scan` label, `sidstereostart` D5xx ARMSID path).
+- [ ] **SwinSID Ultimate detected at wrong address (D500 instead of D400)** — the register echo test ('S'=$53 in D41B) may be running against D500 instead of D400, misidentifying the primary SID slot. **Files:** `siddetector.asm:250-270` (ARMSID/SwinsidU detection step), `siddetector.asm:1896-1902` (gep_swinsidu_d decay check). *(From TO-DOS.md 2026-04-03)*
+- [ ] **Stereo slots D700 / DF00 not verified** — D500/D600/DE00 confirmed working (hw_test baseline V1.3.45); D700 and DF00 not tested with real hardware *(teststatus #23 #25)*
+- [x] Fix FC3 cartridge false-positive C128 detection — merged check128_unknown into check128_c128 path; $D0FE open-bus ($FF) now overrides false C128/TC64 detect from FC3
+- [x] **Info page CRSR LEFT/RIGHT navigation broken** — fixed by adding B (prev) and M (next) key aliases; VICE `gtk3_sym_da.vkm` does not reliably map PC cursor keys to CIA row-0 bit-2, but B/M work correctly in VICE
+
+## Testing
+
+### Covered by test suite (tests/test_suite.asm — 23 tests)
+- [x] Machine type dispatch: C64 / C128 / TC64 (T01–T03)
+- [x] SIDFX dispatch: found / not found (T04–T05)
+- [x] Swinsid Ultimate dispatch: data1=$04 (T06)
+- [x] ARM2SID dispatch: data1=$05, data2=$4F, data3=$53 (T07)
+- [x] ARMSID dispatch: data1=$05, data2=$4F, data3≠$53 (T08)
+- [x] ARMSID no-match cases: data2 wrong / data1 wrong (T09–T10)
+- [x] FPGASID 8580 dispatch: data1=$06 (T11)
+- [x] FPGASID 6581 dispatch: data1=$07 (T12)
+- [x] FPGASID no-match: data1=$F0 (T13)
+- [x] Real SID 6581 dispatch: data1=$01 (T14)
+- [x] Real SID 8580 dispatch: data1=$02 (T15)
+- [x] Real SID no-match: data1=$F0 (T16)
+- [x] Second SID dispatch: data1=$10 (T17)
+- [x] No sound dispatch: data1=$F0 (T18)
+- [x] ArithmeticMean: [10,20,30]=20, [5×6]=5, [100,50,75,25]=62, empty=0 (T19–T22)
+- [x] FPGASID stereo: data1=$06 at $D500 → recorded in sid_list (T23)
+
+### Not yet testable in VICE (require real hardware)
+- [ ] `Checkarmsid` hardware probe — SID register echo depends on chip model
+- [ ] `checkfpgasid` magic-cookie config — only works on real FPGASID
+- [ ] `checkrealsid` OSC3 readback — sawtooth decay is hardware-specific
+- [ ] `checksecondsid` noise mirror — $D41B randomness is hardware-specific
+- [ ] `calcandloop` decay timing — emulator timing differs from hardware by design
+- [ ] Add tests for new chips (PICOSid, BackBit SID, Public Domain SID) once detection method is known
+
+### MixSID hardware combination tests (require physical chip swaps)
+- [x] **C06** — ARMSID@D400 + 6581@D420: confirmed V1.3.74: fallback Checkarmsid at D400 handles ARMSID@CS1 correctly; 6581 at D420 found via sidstereostart s_s_arm_call_real; hw_test 10/10 *(teststatus C06 — 🟢)*
+- [ ] **C01–C04** — real SID + real SID combos at D420 (6581/8580 × 6581/8580): different detection path (not ARMSID); low priority, expected to work
+- [x] **C08** — 6581@D400 + ARMSID@D420: fixed V1.3.74: single CS2-DIS window in step2_armsid (pre-clean voice3+D41F, enter CS2-DIS once, checkrealsid inside window, dispatch BEFORE cleanup to avoid false uSID64 via U64 FPGA); hw_test 10/10 *(teststatus C08 — 🟢)*
+- [x] **C09** — 8580@D400 + ARMSID@D420: fixed V1.3.73 *(teststatus C09 — 🟢)*
+- [ ] **C10–C20** — misc MixSID combos (FPGASID, SwinSID Nano, SIDKick Pico, KungFuSID as primary or secondary at D420): untested, various code paths
+
+### SIDFX secondary detection for ARMSID and SIDKick Pico at D420 (LFT slot)
+- [ ] **SIDFX + ARMSID at D420** (SW1=LFT): D4xx secondary probe is currently skipped entirely due to SID1 bus conflict (SID1 drives D43B osc3, blocking echo reads). ARMSID DIS echo at D42D/D42E/D42F ($1D/$1E/$1F via CS2) may still be readable — investigate whether the D41B ACK technique (V1.3.71) can be applied to suppress SID1 interference and read ARMSID response at D42B. Expected: currently shows 8580 (SIDFX-reported type).
+- [ ] **SIDFX + SIDKick Pico at D420** (SW1=LFT): same issue — SIDKick Pico 'S'+'K' echo at D41D blocked by SID1 bus conflict. Investigate feasibility; currently shows 8580. (teststatus: add C44/C45 rows)
+
+## Other improvements
+
+- [x] **Skip $D418 decay scan when hardware SID detected** — removed from scope: decay scan still runs but result is overridden by hardware detection; no user-visible benefit in skipping it
+- [x] **ARMSID2 detection** — second generation distinguished from ARMSID
+- [~] **Save results to disk** — WONTFIX: niche use case, 1541 not always present
+- [x] **REU / GeoRAM conflict handling** — accepted limitation: documented as known false positive; no fix planned since DE00/DF00 conflict is environment-specific and rare
+- [x] **ULTISID detection improvement** — WONTFIX: U64 firmware registers not publicly documented; current $D418 decay fingerprint detection is sufficient
+- [x] **ULTISID main screen display** — V1.3.45: shows "8580 INT"/"6581 INT" instead of filter curve names (teststatus #15/#16 fixed)
+- [x] **D418 decay table accuracy** — timing constants re-measured and updated
+- [x] **Colour-coded results** — `colorize_rows` routine implemented and called after detection; reads col 13 of each row and writes green (found) / red (not found) / yellow (info) to $D800 colour RAM; boundary correctly updated to `cpx #$0E` when KUNGFUSID row was added
+
+## Other known bugs
+
+- None currently tracked
+
+## In-app content improvements
+
+- [ ] **Info screen** — add revision-specific quirks per chip (e.g. 6581 R2/R3/R4 audio differences, filter slope, voice-3 mute behaviour); expand firmware/upgrade links for ARMSID/SIDKick-pico/KungFuSID
+- [ ] **Readme screen** — add keyboard shortcut summary (I=info, D=debug, R=readme, T=sound test, P=music toggle, SPACE=restart); improve formatting and content accuracy for newly supported chips (BackSID, PDsid, KungFuSID)
+- [ ] **Main screen** — show detection confidence indicator or retry count when multiple attempts were needed (e.g. after VIC bad-line DMA steal)
+- [ ] **Sound test** — allow per-SID volume adjustment; label which SID is playing during multi-SID test
+- [ ] **Debug screen** — show siddetector version string on page 1 so it is visible without the README screen
+
+## GitHub repository improvements
+
+- [ ] **Fix repository** — update GitHub README to current version; add proper release tags for each version; write release notes summarising what changed per version; add screenshot or screen recording to repository landing page
+- [ ] **Releases** — tag V1.3.76 on GitHub with changelog; back-fill tags for V1.3.70–V1.3.75 from git log
+- [ ] **CI** — consider adding a build check (KickAssembler + Java) via GitHub Actions so PRs are validated automatically
+
+## Stereo config error cases (wrong result reported)
+
+- D400: 6581   D500: Swinsid  — error
+- D400: Swinsid D500: 6581   — **fixed V1.3.02** (`fiktivloop` now calls `checkrealsid` on candidate; 6581/8580 correctly identified in secondary slot)
+- D400: Swinsid DE00: 6581   — **fixed V1.3.02** (same fix)
+- D400: armsid  D500: 8580   — **fixed V1.3.02** (same fix)
+- D400: armsid  DE00: 8580   — **fixed V1.3.02** (same fix)

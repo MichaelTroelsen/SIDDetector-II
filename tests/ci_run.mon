@@ -1,0 +1,21 @@
+; =============================================================================
+; ci.mon — VICE moncommands for headless CI test run
+; =============================================================================
+; VICE loads this file on startup. The sequence is:
+;   1. loadsym    — load test_suite symbols so "td_spin" resolves
+;   2. break      — set breakpoint at td_spin (completion spin-loop)
+;   3. go         — start the CPU; test suite runs to completion
+;   4. (VICE hits td_spin breakpoint, re-reads next commands)
+;   5. save       — write 1-byte PRG from $07E8 (off-screen scratch RAM)
+;   6. quit       — exit VICE
+;
+; pass_count is written to $07E8 immediately before td_spin (in both
+; pass and fail paths), so the value is stable when the breakpoint fires.
+; $07E8 is off-screen scratch RAM (past the 40x25 = $07E7 last byte).
+; =============================================================================
+
+loadsym tests/test_suite.vs
+break td_spin
+go
+save "tests/ci_result.bin" 0 07e8 07e8
+quit

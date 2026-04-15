@@ -1,0 +1,46 @@
+; =============================================================================
+; debug.mon — VICE monitor commands for crash debugging
+; =============================================================================
+; Usage:
+;   make debug
+; Or manually:
+;   x64sc -autostart siddetector.prg -moncommands tests/debug.mon
+;
+; Breakpoints show the execution path through the detection chain.
+; Each stop prints the PC and SP so you can trace stack state.
+;
+; When VICE pauses at a breakpoint, type:
+;   r          — show registers (PC, SP, A, X, Y, P)
+;   mem $0100 $0110  — show stack contents
+;   g          — continue to next breakpoint
+;   x          — exit monitor (let program run freely)
+; =============================================================================
+
+; Load symbol file so labels resolve in the monitor
+loadsym siddetector.vs
+
+; --- Key checkpoints in the detection chain ---
+
+; Program entry and re-init
+break start
+
+; Detection results
+break checkphysical_8580
+break nosound
+break end
+
+; IRQ setup — SP must be safe here
+break readkey2
+
+; IRQ handler entry — check SP on every IRQ
+break IRQ
+
+; SPACEBARPROMPT — watch for false restart
+break SPACEBARPROMPT
+
+; Post-detection / decay fingerprint
+break calcandloop
+break funny_print
+
+; Start execution
+go

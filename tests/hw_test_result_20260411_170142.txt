@@ -1,0 +1,24 @@
+siddetector hardware smoke test
+Run: 2026-04-11 17:01:42   U64: 192.168.1.64
+Baseline: [1]$D400 ARMSID/ARM2SID($05)  [2]$D420 ARMSID/ARM2SID($05)  [3]$DE00 ARMSID/ARM2SID($05)  [4]$D500 ULTISID-8580-LO($20)
+
+[FAIL] SPACE restart #1 (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+[FAIL] SPACE restart #2 (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+[FAIL] SPACE restart #3 (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+[FAIL] info return (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+[FAIL] debug return (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+[FAIL] debug page 2 return (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+[FAIL] readme return (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+[FAIL] sound test return (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+[FAIL] P music toggle (no restart) (stable)
+       slot5: expected $D600 (empty)($00) got $D600 ULTISID-8580-LO($20)
+
+0/9 passed   9 failed

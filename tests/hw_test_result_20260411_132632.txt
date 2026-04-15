@@ -1,0 +1,22 @@
+siddetector hardware smoke test
+Run: 2026-04-11 13:26:32   U64: 192.168.1.64
+Baseline: [1]$D400 ARMSID/ARM2SID($05)  [2]$D420 ARMSID/ARM2SID($05)  [3]$DE00 ARMSID/ARM2SID($05)  [4]$D500 ULTISID-8580($20)  [5]$D600 ULTISID-8580($20)  [6]$D620 ULTISID-8580($20)  [7]$D640 ULTISID-8580($20)
+
+[FAIL] SPACE restart #1 (stable)
+       slot0: expected $6000 ?$D6($D6) got $8000 ?$D6($D6); slot4: expected $D500 ULTISID-8580($20) got $D600 ULTISID-8580($20); slot5: expected $D600 ULTISID-8580($20) got $D620 ULTISID-8580($20); slot6: expected $D620 ULTISID-8580($20) got $D640 ULTISID-8580($20); slot7: expected $D640 ULTISID-8580($20) got $D660 ULTISID-8580($20)
+[FAIL] SPACE restart #2 (stable)
+       slot0: expected $6000 ?$D6($D6) got $8000 ?$D6($D6); slot4: expected $D500 ULTISID-8580($20) got $D600 ULTISID-8580($20); slot5: expected $D600 ULTISID-8580($20) got $D620 ULTISID-8580($20); slot6: expected $D620 ULTISID-8580($20) got $D640 ULTISID-8580($20); slot7: expected $D640 ULTISID-8580($20) got $D660 ULTISID-8580($20)
+[FAIL] SPACE restart #3 (stable)
+       slot0: expected $6000 ?$D6($D6) got $8000 ?$D6($D6); slot4: expected $D500 ULTISID-8580($20) got $D600 ULTISID-8580($20); slot5: expected $D600 ULTISID-8580($20) got $D620 ULTISID-8580($20); slot6: expected $D620 ULTISID-8580($20) got $D640 ULTISID-8580($20); slot7: expected $D640 ULTISID-8580($20) got $D660 ULTISID-8580($20)
+[FAIL] info return (stable)
+       slot0: expected $6000 ?$D6($D6) got $8000 ?$D6($D6); slot4: expected $D500 ULTISID-8580($20) got $D600 ULTISID-8580($20); slot5: expected $D600 ULTISID-8580($20) got $D620 ULTISID-8580($20); slot6: expected $D620 ULTISID-8580($20) got $D640 ULTISID-8580($20); slot7: expected $D640 ULTISID-8580($20) got $D660 ULTISID-8580($20)
+[FAIL] debug return (stable)
+       slot0: expected $6000 ?$D6($D6) got $8000 ?$D6($D6); slot4: expected $D500 ULTISID-8580($20) got $D600 ULTISID-8580($20); slot5: expected $D600 ULTISID-8580($20) got $D620 ULTISID-8580($20); slot6: expected $D620 ULTISID-8580($20) got $D640 ULTISID-8580($20); slot7: expected $D640 ULTISID-8580($20) got $D660 ULTISID-8580($20)
+[FAIL] readme return (stable)
+       slot0: expected $6000 ?$D6($D6) got $8000 ?$D6($D6); slot4: expected $D500 ULTISID-8580($20) got $D600 ULTISID-8580($20); slot5: expected $D600 ULTISID-8580($20) got $D620 ULTISID-8580($20); slot6: expected $D620 ULTISID-8580($20) got $D640 ULTISID-8580($20); slot7: expected $D640 ULTISID-8580($20) got $D660 ULTISID-8580($20)
+[FAIL] sound test return (stable)
+       slot0: expected $6000 ?$D6($D6) got $8000 ?$D6($D6); slot4: expected $D500 ULTISID-8580($20) got $D600 ULTISID-8580($20); slot5: expected $D600 ULTISID-8580($20) got $D620 ULTISID-8580($20); slot6: expected $D620 ULTISID-8580($20) got $D640 ULTISID-8580($20); slot7: expected $D640 ULTISID-8580($20) got $D660 ULTISID-8580($20)
+[FAIL] P music toggle (no restart) (stable)
+       slot0: expected $6000 ?$D6($D6) got $8000 ?$D6($D6); slot4: expected $D500 ULTISID-8580($20) got $D600 ULTISID-8580($20); slot5: expected $D600 ULTISID-8580($20) got $D620 ULTISID-8580($20); slot6: expected $D620 ULTISID-8580($20) got $D640 ULTISID-8580($20); slot7: expected $D640 ULTISID-8580($20) got $D660 ULTISID-8580($20)
+
+0/8 passed   8 failed

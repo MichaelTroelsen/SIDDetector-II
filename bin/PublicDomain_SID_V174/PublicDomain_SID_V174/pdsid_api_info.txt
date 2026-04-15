@@ -1,0 +1,22 @@
+
+The PDsid API is very simple:
+-----------------------------
+
+
+1. Detect a PDsid: 
+
+	Write 'P' to $D41D, 'D' to $D41E, Read 'S' from $D41E.
+	
+	
+2. SID Mode Read: 
+	
+	Write 'P' to $D41D, 'D' to $D41E, Read Mode from $D41F.
+
+
+3. SID Mode Set:  
+
+	Write 'P' to $D41D, 'D' to $D41E, Write Mode (0=6581, 1=8580) to $D41F.
+
+
+That's all
+

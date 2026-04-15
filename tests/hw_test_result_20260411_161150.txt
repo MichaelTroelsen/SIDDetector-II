@@ -1,0 +1,15 @@
+siddetector hardware smoke test
+Run: 2026-04-11 16:11:50   U64: 192.168.1.64
+Baseline: [1]$D400 ARMSID/ARM2SID($05)  [2]$D420 ARMSID/ARM2SID($05)  [3]$DE00 ARMSID/ARM2SID($05)  [4]$D500 ULTISID-6581($21)  [5]$D600 ULTISID-6581($21)
+
+[PASS] SPACE restart #1 (stable)
+[PASS] SPACE restart #2 (stable)
+[PASS] SPACE restart #3 (stable)
+[PASS] info return (stable)
+[PASS] debug return (stable)
+[PASS] debug page 2 return (stable)
+[PASS] readme return (stable)
+[PASS] sound test return (stable)
+[PASS] P music toggle (no restart) (stable)
+
+9/9 passed   0 failed

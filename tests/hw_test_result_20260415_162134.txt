@@ -1,0 +1,17 @@
+siddetector hardware smoke test
+Run: 2026-04-15 16:21:34   U64: 192.168.1.64
+Baseline: [1]$D400 8580($02)  [2]$D420 6581($01)
+
+[PASS] SPACE restart #1 (stable)
+[PASS] SPACE restart #2 (stable)
+[PASS] SPACE restart #3 (stable)
+[PASS] info return (stable)
+[PASS] debug return (stable)
+[PASS] debug p2 UCI status not dirty (not $30)
+[FAIL] debug page 2 return (stable)
+       slot1: expected $D400 8580($02) got $D420 6581($01); slot2: expected $D420 6581($01) got (empty)
+[PASS] readme return (stable)
+[PASS] sound test return (stable)
+[PASS] P music toggle (no restart) (stable)
+
+9/10 passed   1 failed
