@@ -1,0 +1,12 @@
+; =============================================================================
+; screenshot.mon — VICE moncommands for automated screenshot capture
+; =============================================================================
+; Breaks at st_mainloop (entered after detection completes and the result
+; screen has been drawn). Saves screenshot via monitor command, then quits.
+; =============================================================================
+
+loadsym siddetector.vs
+break st_mainloop
+go
+screenshot PNG screenshot.png
+quit

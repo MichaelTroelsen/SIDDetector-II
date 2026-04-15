@@ -10,6 +10,12 @@ Syntax: KickAssembler (converted from ACME original)
 
 ---
 
+## Screenshot
+
+![SID Detector v1.3.79 running in VICE](screenshot.png)
+
+---
+
 ## What it does
 
 When run on a C64 (or emulator), the program probes SID hardware registers, measures timing characteristics, and displays the results on screen. It detects:
