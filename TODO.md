@@ -100,8 +100,8 @@
 ## GitHub repository improvements
 
 - [ ] **Fix repository** — update GitHub README to current version; add proper release tags for each version; write release notes summarising what changed per version; add screenshot or screen recording to repository landing page
-- [ ] **Releases** — tag V1.3.76 on GitHub with changelog; back-fill tags for V1.3.70–V1.3.75 from git log
-- [ ] **CI** — consider adding a build check (KickAssembler + Java) via GitHub Actions so PRs are validated automatically
+- [x] **Releases** — v1.3.77 and v1.3.78 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
+- [x] **CI** — removed; use `make ci` locally (Ubuntu VICE too many ROM/autostart quirks)
 
 ## Stereo config error cases (wrong result reported)
 
