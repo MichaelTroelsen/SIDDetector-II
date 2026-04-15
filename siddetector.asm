@@ -7225,7 +7225,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.77 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.78 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7561,7 +7561,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.78"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8279,7 +8279,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.77 README"
+    .text "SIDDETECTOR V1.3.78 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8428,6 +8428,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.78 DEBUG PAGE 1 VERSION STRING"
     .byte 13
     .byte $9E
     .text "  V1.3.77 C25/C26 ARMSID D5XX FIX"

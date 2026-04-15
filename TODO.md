@@ -95,7 +95,7 @@
 - [ ] **Readme screen** — add keyboard shortcut summary (I=info, D=debug, R=readme, T=sound test, P=music toggle, SPACE=restart); improve formatting and content accuracy for newly supported chips (BackSID, PDsid, KungFuSID)
 - [ ] **Main screen** — show detection confidence indicator or retry count when multiple attempts were needed (e.g. after VIC bad-line DMA steal)
 - [ ] **Sound test** — allow per-SID volume adjustment; label which SID is playing during multi-SID test
-- [ ] **Debug screen** — show siddetector version string on page 1 so it is visible without the README screen
+- [x] **Debug screen** — show siddetector version string on page 1 so it is visible without the README screen
 
 ## GitHub repository improvements
 
