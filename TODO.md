@@ -98,7 +98,7 @@
 - [x] **Info screen** — added revision quirks (6581: combined waveforms, DC offset, OSC3/ENV3; 8580: voice-3 disconnect, combined waveform note); firmware link for ARMSID; detection method added to SIDKick-pico, BackSID, PD SID; PD SID description rewritten to reflect specific product
 - [x] **Readme screen** — added PDsid to chip list; expanded detection chain with steps 3A/3B/3C (PDsid/BackSID/SIDKick-pico) and 7A (KungFuSID); fixed README_LINES=55→74 / README_MAX_SCROLL=34→53 (version history was unreachable); bumped to V1.3.79
 - [ ] **Main screen** — show detection confidence indicator or retry count when multiple attempts were needed (e.g. after VIC bad-line DMA steal)
-- [ ] **Sound test** — allow per-SID volume adjustment; label which SID is playing during multi-SID test
+- [x] **Sound test** — T-key test now shows "NOW TESTING: D4xx" before each SID; after the D400 3-voice melody, cycles through additional detected SIDs (D500/D600/etc.) playing a ~440 Hz triangle-wave note on each with address label. per-SID volume adjustment not implemented (low value).
 - [x] **Debug screen** — show siddetector version string on page 1 so it is visible without the README screen
 
 ## GitHub repository improvements

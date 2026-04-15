@@ -2913,12 +2913,17 @@ snd_clr:
            sta $D6
            lda #$07                // yellow
            sta $0286
-           // Print title
+           // Print title ending with "NOW TESTING: "
            lda #<snd_title
            sta $FE
            lda #>snd_title
            sta $FF
            jsr dbg_str
+           // Print D400 address (always the primary SID)
+           lda #$D4
+           jsr print_hex
+           lda #$00
+           jsr print_hex
            // Silence all SID voices before test
            lda #$00
            ldx #$18
@@ -2935,6 +2940,52 @@ snd_mute:
            sta $D400,x
            dex
            bpl snd_mute
+           // Cycle through additional detected SIDs (slots 2..sidnum_zp).
+           // For each: print "NOW TESTING: Dxxx", play a triangle-wave note.
+           lda sidnum_zp
+           cmp #$02               // need at least 2 SIDs
+           bcc snd_extra_done
+           lda #$02
+           sta buf_zp             // buf_zp = current slot index
+snd_extra_loop:
+           lda buf_zp
+           cmp sidnum_zp          // slot > last? (BCS: slot >= last → still iterate if equal)
+           beq snd_extra_body     // slot == sidnum_zp → process (last)
+           bcc snd_extra_body     // slot < sidnum_zp → process
+           jmp snd_extra_done     // slot > sidnum_zp → all done
+snd_extra_body:
+           lda #<snd_now_testing
+           sta $FE
+           lda #>snd_now_testing
+           sta $FF
+           jsr dbg_str
+           ldx buf_zp
+           lda sid_list_h,x       // print address high byte
+           jsr print_hex
+           ldx buf_zp
+           lda sid_list_l,x       // print address low byte
+           jsr print_hex
+           ldx buf_zp
+           lda sid_list_l,x
+           sta sptr_zp             // set up sptr_zp for indirect SID access
+           lda sid_list_h,x
+           sta sptr_zp+1
+           ldy #$18               // silence this SID
+           lda #$00
+snd_ex_mute1:
+           sta (sptr_zp),y
+           dey
+           bpl snd_ex_mute1
+           jsr snd_play_tone      // play triangle-wave note
+           ldy #$18               // mute after note
+           lda #$00
+snd_ex_mute2:
+           sta (sptr_zp),y
+           dey
+           bpl snd_ex_mute2
+           inc buf_zp
+           jmp snd_extra_loop
+snd_extra_done:
            // Print "DONE - PRESS SPACE"
            lda #<snd_done
            sta $FE
@@ -2957,6 +3008,42 @@ snd_kbdloop:
            jmp snd_kbdloop
 snd_done_space:
            jmp start
+
+// ---- snd_play_tone: short triangle-wave test note on SID at sptr_zp ----
+// Plays a single ~440 Hz note on voice 1, ~0.5s sustain + brief release.
+// sptr_zp must point to the SID base address before calling.
+// Trashes A, Y.  Preserves X (rp_delay saves/restores X internally).
+snd_play_tone:
+           lda #$3e
+           ldy #$05
+           sta (sptr_zp),y       // V1 ATK_DEC
+           lda #$ca
+           ldy #$06
+           sta (sptr_zp),y       // V1 SUS_REL
+           lda #$0f
+           ldy #$18
+           sta (sptr_zp),y       // FILTER_VOL: max volume
+           lda #$1d              // ~440 Hz freq hi
+           ldy #$01
+           sta (sptr_zp),y       // V1 FREQ HI
+           lda #$41              // ~440 Hz freq lo
+           ldy #$00
+           sta (sptr_zp),y       // V1 FREQ LO
+           lda #$11              // triangle waveform + gate on
+           ldy #$04
+           sta (sptr_zp),y       // V1 CTRL
+           lda #$d0              // ~200ms per call; 3 calls ≈ 0.6s sustain
+           jsr rp_delay
+           lda #$d0
+           jsr rp_delay
+           lda #$d0
+           jsr rp_delay
+           lda #$10              // gate off (keep triangle)
+           ldy #$04
+           sta (sptr_zp),y       // V1 CTRL
+           lda #$60              // ~75ms release
+           jsr rp_delay
+           rts
 
 // ---- st_soundtest: the 3-voice test melody ----
 // Adapted from Dead Test sound_test.asm.  rp_delay used for timing.
@@ -8589,13 +8676,20 @@ readme_nav_hint:
 // ============================================================
 
 snd_title:
-    .text "SID SOUND TEST - PLEASE WAIT..."
+    .text "SID SOUND TEST"
     .byte 13
     .byte 13
     .text "TESTING ALL 3 SID VOICES."
     .byte 13
     .text "SAWTOOTH, TRIANGLE, PULSE WAVEFORMS."
     .byte 13
+    .byte 13
+    .text "NOW TESTING: "
+    .byte 0
+
+snd_now_testing:
+    .byte 13
+    .text "NOW TESTING: "
     .byte 0
 
 snd_done:
