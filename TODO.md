@@ -75,8 +75,8 @@
 - [ ] **C10–C20** — misc MixSID combos (FPGASID, SwinSID Nano, SIDKick Pico, KungFuSID as primary or secondary at D420): untested, various code paths
 
 ### SIDFX secondary detection for ARMSID and SIDKick Pico at D420 (LFT slot)
-- [ ] **SIDFX + ARMSID at D420** (SW1=LFT): D4xx secondary probe is currently skipped entirely due to SID1 bus conflict (SID1 drives D43B osc3, blocking echo reads). ARMSID DIS echo at D42D/D42E/D42F ($1D/$1E/$1F via CS2) may still be readable — investigate whether the D41B ACK technique (V1.3.71) can be applied to suppress SID1 interference and read ARMSID response at D42B. Expected: currently shows 8580 (SIDFX-reported type).
-- [ ] **SIDFX + SIDKick Pico at D420** (SW1=LFT): same issue — SIDKick Pico 'S'+'K' echo at D41D blocked by SID1 bus conflict. Investigate feasibility; currently shows 8580. (teststatus: add C44/C45 rows)
+- [~] **SIDFX + ARMSID at D420** (SW1=LFT): DIS probe at D420 works when primary is NOT ARMSID (SIDFX isolates D43B from SID1). When primary IS ARMSID, D43B is contaminated (ARMSID snoops CS2 DIS writes, drives $4E on all D4xx reads). Fixed V1.3.84: ARMSID-primary guard skips DIS for D420, uses SIDFX-reported type. ARMSID@D420 is detectable when primary is a real SID/FPGASID/etc. — hardware combo to verify: real SID@D400 + ARMSID@D420.
+- [x] **SIDFX + SIDKick Pico at D420** (SW1=LFT): SIDKick Pico cannot be specifically identified at D420 via CS2. D41D echo test was SIDFX write-buffer artifact (SIDFX caches unmapped reg writes, returns them for any chip). DIS probe (D43B) is contaminated when primary is ARMSID (CS-agnostic bus drive). Fixed V1.3.84: removed D41D echo; added ARMSID-primary guard for DIS at D420; falls back to SIDFX-reported type. WONTFIX for specific PICO identification at D420.
 
 ## Other improvements
 

@@ -2565,8 +2565,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 78
-.const README_MAX_SCROLL = 57    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 79
+.const README_MAX_SCROLL = 58    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -6122,8 +6122,10 @@ a2spl_done:     rts
 //--------------------------------------------------------------------------------------------------
 // sidfx_populate_sid_list: populate sid_list from saved SIDFX D41D/D41E registers.
 // Slot 1 = D400 with SID1 type; slot 2 = secondary SID (SW1 address) with SID2 type.
-// SID2 probed for SIDKick Pico (sfx_probe_skpico), then SwinSID Ultimate / ARMSID
-// (sfx_probe_dis_echo, echo 'S'/$53 or 'N'/$4E at +$1B) — D5xx-D7xx only.
+// SID2 probed for: D5xx+ SIDKick Pico (sfx_probe_skpico config mode), then
+// ARMSID/SwinSID U (sfx_probe_dis_echo via OSC3 D43B), BackSID, KungFuSID, FPGASID.
+// D420: skpico skipped (CS1-only firmware); SIDFX write-buffers unmapped regs so only
+// D43B (mapped OSC3) is reliable. SIDKick Pico at D420 cannot be specifically identified.
 // Uses buf_zp ($AF), tmp_zp ($AC), sptr_zp ($F9/$FA). Trashes A, X, Y.
 //--------------------------------------------------------------------------------------------------
 sidfx_populate_sid_list:
@@ -6192,18 +6194,26 @@ sfx_pop_s2_type_ok:
                 sta sptr_zp             // secondary base address for sfx_probe_skpico
                 lda sidfx_sec_hi,y
                 sta sptr_zp+1
-                // Probe secondary SID for SIDKick Pico.
-                // sfx_probe_skpico (config mode via base+$1F) does NOT work at D420:
-                // SIDKick Pico firmware only triggers config mode via CS1 (D400).
-                // Instead, at D420 we use the D41D direct echo: in normal mode SIDKick Pico
-                // latches writes to reg $1D and echoes them on read, unlike real 6581/8580
-                // (write-only, no echo) and ARMSID (echoes to D41B, not D41D directly).
-                // sfx_probe_dis_echo reads base+$1B (OSC3 mirror) → bus conflict → D4xx only.
+                // Probe secondary SID.
+                // sfx_probe_skpico (config mode via base+$1F) requires CS1 — does NOT work
+                // at D420 (CS2). SIDFX write-buffers unmapped regs ($1D–$1F) so D43D echo
+                // returns any written value regardless of chip — not discriminating.
                 // DE/DF is SIDFX cartridge I/O — no probe possible there.
+                // D420 DIS probe (D43B=OSC3, mapped): works UNLESS primary is ARMSID.
+                // ARMSID primary snoops CS2 DIS writes and drives $4E aggressively on all
+                // D4xx reads (same address space, shared bus), contaminating D43B. Skip DIS
+                // for D420 when primary is ARMSID ($05); use SIDFX-reported type instead.
                 lda sptr_zp+1
                 cmp #$DE; beq sfx_pop_s2_add    // DE00: SIDFX cartridge I/O → skip all
                 cmp #$DF; beq sfx_pop_s2_add    // DF00: SIDFX cartridge I/O → skip all
-                cmp #$D4; beq sfx_pop_d4_echo   // D420: use D41D echo method
+                cmp #$D4; bne sfx_pop_not_d4    // not D420 → D5xx+: run skpico probe
+                // D420: check if primary SID is ARMSID (sid_list_t[x], x=1 here).
+                // data4=$30 (SIDFX flag) — primary type is in sid_list_t,x.
+                lda sid_list_t,x
+                cmp #$05                        // ARMSID primary?
+                beq sfx_pop_s2_add              // yes → D43B contaminated → use SIDFX type
+                jmp sfx_pop_try_dis             // no → safe to probe D420 with DIS
+sfx_pop_not_d4:
                 jsr sfx_probe_skpico    // D5xx+: C=1: SIDKick Pico found; C=0: not found
                 bcc sfx_pop_skp_miss
 sfx_skp_s2_match:
@@ -6216,27 +6226,8 @@ sfx_skp_s2_match:
 sfx_skp_s2_8580:
                 lda #$0B                // SIDKick Pico 8580 (or UNKN → default 8580)
                 bne sfx_pop_s2_save     // always taken (A=$0B ≠ 0)
-sfx_pop_d4_echo:
-                // D420: SIDKick Pico detection via base+$1D direct write echo.
-                // Write $B5 to base+$1D; read back — SIDKick Pico echoes the write,
-                // real SIDs return 0 (write-only), ARMSID echoes to +$1B not +$1D,
-                // KungFuSID returns bitwise complement ($4A ≠ $B5).
-                lda #$B5
-                ldy #$1D
-                sta (sptr_zp),y         // write $B5 to base+$1D
-                ldx #$08                // ~30 cycle delay
-sfx_d4_echo_wait:
-                dex
-                bne sfx_d4_echo_wait
-                lda (sptr_zp),y         // read base+$1D
-                cmp #$B5
-                bne sfx_pop_s2_add      // no echo → use SIDFX-reported type
-                beq sfx_skp_s2_match    // echo confirmed → SIDKick Pico (always taken)
 sfx_pop_skp_miss:
-                // sfx_probe_dis_echo reads base+$1B (OSC3 mirror) → bus conflict at D420.
-                lda sptr_zp+1
-                cmp #$D4
-                beq sfx_pop_s2_add      // (unreachable: D4xx handled by sfx_pop_d4_echo above)
+sfx_pop_try_dis_d4:
 sfx_pop_try_dis:
                 jsr sfx_probe_dis_echo  // A = echo byte from base+$1B after DIS sequence
                 cmp #$53                // 'S' = SwinSID Ultimate
@@ -6348,12 +6339,19 @@ sfx_skp_miss:
 // sfx_probe_dis_echo: write ARM DIS sequence to secondary SID, return echo from +$1B in A.
 // Clears base+$1D before DIS (reset ARM/SwinSID state), then writes:
 //   'D'=$44→base+$1F, 'I'=$49→base+$1E, 'S'=$53→base+$1D.
-// Waits loop1sek×2, reads base+$1B into A, cleans up D/I/S, returns A.
+// Waits loop1sek×2, ACKs primary ARMSID (if any), reads base+$1B into A, cleans up.
 // Caller checks: A=$53 → SwinSID Ultimate; A=$4E → ARMSID/ARM2SID; other → not found.
 // Uses (sptr_zp),y indirect-indexed — no self-modification needed.
 // loop1sek uses X only (preserves Y). rp_delay not used.
 // Trashes A, Y; preserves X.
-// Only call for D5xx–D7xx — D4xx bus conflict: SID1 actively drives +$1B (osc3).
+// In generic stereo scan: only call for D5xx–D7xx — D4xx bus conflict (SID1 drives +$1B).
+// Exception: safe at D4xx from sidfx_populate_sid_list — SIDFX isolates D43B from SID1.
+// Note: SIDFX write-buffers unmapped regs ($1D–$1F), so only use D43B (mapped OSC3) for
+// detection at D420; never rely on D43D/D43E/D43F readback for chip identification.
+// Primary ARMSID ACK: ARMSID snoops CS2 DIS writes (CS-agnostic) and aggressively drives
+// $4E on ALL reads until D41B is read. This contaminates base+$1B of the secondary SID.
+// ACK D41B before reading secondary base+$1B, except when sptr_zp=D400 where D41B IS
+// the target echo. Skip ACK when lo=0 and hi=$D4 (D400 slot).
 //--------------------------------------------------------------------------------------------------
 sfx_probe_dis_echo:
                 lda #$00                // pre-clear base+$1D (reset ARM/SwinSID echo state)
@@ -6370,6 +6368,15 @@ sfx_probe_dis_echo:
                 sta (sptr_zp),y
                 jsr loop1sek
                 jsr loop1sek
+                // ACK primary ARMSID before reading secondary base+$1B.
+                // Skip when sptr_zp=D400 (lo=$00, hi=$D4): D41B IS the echo we want.
+                lda sptr_zp+1
+                cmp #$D4
+                bne sfx_dis_ack         // D5xx+ → ACK
+                lda sptr_zp
+                beq sfx_dis_no_ack      // lo=0, hi=$D4 → D400 slot → skip ACK
+sfx_dis_ack:    lda $D41B               // ACK: clears primary ARMSID bus drive
+sfx_dis_no_ack:
                 ldy #$1B
                 lda (sptr_zp),y         // read echo from base+$1B
                 pha
@@ -7415,7 +7422,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.83 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.84 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7751,7 +7758,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.83"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.84"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8516,7 +8523,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.83 README"
+    .text "SIDDETECTOR V1.3.84 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8677,6 +8684,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.84 ARMSID+SIDFX D420 BUS CONTAMINATION FIX"
     .byte 13
     .byte $9E
     .text "  V1.3.83 SIDKICK-PICO D420 SIDFX DETECTION"
