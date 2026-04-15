@@ -874,8 +874,13 @@ end_skip_arm2sid:
                 // Set sidtype = primary chip type so fiktivloop's f_l_l_found
                 // calls checkfpgasid (not checkrealsid) for FPGASID secondaries.
                 // SIDFX: skip fiktivloop — noise-mirror trick fails (D5xx mirrors D4xx noise)
+                // SwinSID U: skip fiktivloop — OSC3 (D41B) returns 0 with noise enabled on
+                // AVR-based emulators, so checksecondsid falsely detects D500 as a second SID.
+                // SwinSID U is always a single-slot device; no stereo config exists.
                 lda data4
                 cmp #$30
+                beq end_skip_fiktiv
+                cmp #$04                // SwinSID Ultimate: always single-slot
                 beq end_skip_fiktiv
                 sta sidtype
                 jsr fiktivloop_d400
@@ -2556,8 +2561,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 55
-.const README_MAX_SCROLL = 34    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 74
+.const README_MAX_SCROLL = 53    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -4530,7 +4535,8 @@ s_s_arm_detect:
        // immune to ARMSID bus contention.
        lda data1
        cmp #$F0
-       bne s_s_arm_found      // ARMSID/SwinsidU found → proceed normally
+       beq s_s_arm_skip_armsid_chk  // $F0 = not found → continue to mirror check
+       jmp s_s_arm_found            // ARMSID/SwinsidU found → proceed normally
 s_s_arm_skip_armsid_chk:
        // Mirror check: if any already-found real SID (type $01 or $02) drives noise
        // and candidate+$1B reads non-zero, the candidate is a mirror → skip.
@@ -4594,6 +4600,28 @@ s_s_arm_mir_nx:
        dex
        bne s_s_arm_mir_lp
 s_s_arm_call_real:
+       // Try DIS echo before checkrealsid to detect SwinSID U / ARMSID at D5xx–D7xx.
+       // Only safe when primary is a real SID ($01/$02): ARMSID primary snoops all
+       // bus writes, so sending DIS to D5xx would falsely trigger ARMSID at D400.
+       lda data4
+       cmp #$01               // primary = 6581?
+       beq s_s_try_dis
+       cmp #$02               // primary = 8580?
+       bne s_s_skip_dis
+s_s_try_dis:
+       jsr sfx_probe_dis_echo // A = echo from sptr_zp+$1B after DIS sequence
+       cmp #$53               // 'S' = SwinSID Ultimate
+       bne s_s_try_dis_arm
+       lda #$04               // SwinSID Ultimate confirmed
+       sta data1
+       jmp s_s_arm_found
+s_s_try_dis_arm:
+       cmp #$4E               // 'N' = ARMSID
+       bne s_s_skip_dis
+       lda #$05               // ARMSID confirmed
+       sta data1
+       jmp s_s_arm_found
+s_s_skip_dis:
        lda $D41B              // ACK ARMSID DIS: read CS1/$1B so ARM tristates data bus before checkrealsid
        jsr checkrealsid       // candidate confirmed independent; identify 6581/8580
 s_s_arm_found:
@@ -7225,7 +7253,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.78 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.79 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7561,7 +7589,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.78"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.79"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -7802,6 +7830,19 @@ ip_6581:
     .text "  R4AR (5286) - LAST 6581 REVISION"
     .byte 13
     .byte 13
+    .text " QUIRKS:"
+    .byte 13
+    .text "  COMBINED WAVEFORMS PRODUCE UNIQUE"
+    .byte 13
+    .text "  TIMBRES USED IN MANY C64 CLASSICS."
+    .byte 13
+    .text "  FILTER HAS DC OFFSET - SLIGHT HUM"
+    .byte 13
+    .text "  WHEN FILTER IS NOT ENGAGED."
+    .byte 13
+    .text "  OSC3/ENV3 READABLE FOR RNG USE."
+    .byte 13
+    .byte 13
     .text " FOUND IN: C64 BREADBIN, C64C (EARLY)"
     .byte 0
 
@@ -7831,6 +7872,20 @@ ip_8580:
     .text " (6581 USES 12V). MIXING THEM WITHOUT"
     .byte 13
     .text " ADJUSTMENT CAN DAMAGE THE CHIP."
+    .byte 13
+    .byte 13
+    .text " VOICE 3 DISCONNECT: D418 BIT 7 MUTES"
+    .byte 13
+    .text " VOICE 3 FROM AUDIO OUTPUT WHILE"
+    .byte 13
+    .text " OSC3/ENV3 REMAIN READABLE - USED"
+    .byte 13
+    .text " FOR SILENT RANDOM NUMBER GENERATION."
+    .byte 13
+    .byte 13
+    .text " COMBINED WAVEFORMS PRODUCE SOFTER,"
+    .byte 13
+    .text " MORE UNIFORM RESULTS THAN THE 6581."
     .byte 13
     .byte 13
     .text " FOUND IN: C64C (LATE), C128, C128D"
@@ -7874,6 +7929,8 @@ ip_armsid:
     .byte 13
     .byte 13
     .text " MADE BY: ARMSID.COM"
+    .byte 13
+    .text " FIRMWARE UPDATES: ARMSID.COM"
     .byte 0
 
 ip_swinu:
@@ -8133,6 +8190,13 @@ ip_sidkpic:
     .text " HIGH-QUALITY AUDIO OUTPUT."
     .byte 13
     .byte 13
+    .text " DETECTED VIA VERSION STRING: WRITE"
+    .byte 13
+    .text " $FF TO D41F, $E0 TO D41E, SKIP 20"
+    .byte 13
+    .text " BYTES FROM D41D. READS 'S' + 'K'."
+    .byte 13
+    .byte 13
     .text " OPEN SOURCE PROJECT ON GITHUB"
     .byte 0
 
@@ -8141,23 +8205,25 @@ ip_pubdom:
     .byte 13
     .text "----------------------------------------"
     .byte 13
-    .text " A PD SID IS ANY OPEN-SOURCE OR FREELY"
+    .text " THE PDSID IS A FREE/OPEN-SOURCE SID"
     .byte 13
-    .text " AVAILABLE SID CHIP SUBSTITUTE."
+    .text " REPLACEMENT FIRMWARE. IT IDENTIFIES"
     .byte 13
-    .byte 13
-    .text " VARIOUS HOBBYIST DESIGNS EXIST USING"
-    .byte 13
-    .text " MICROCONTROLLERS, FPGAS, OR DISCRETE"
-    .byte 13
-    .text " COMPONENTS TO APPROXIMATE SID SOUND."
+    .text " ITSELF VIA A REGISTER ECHO PROTOCOL."
     .byte 13
     .byte 13
-    .text " QUALITY AND COMPATIBILITY VARY WIDELY"
+    .text " DETECTED: WRITE 'P' ($50) TO D41D,"
     .byte 13
-    .text " DEPENDING ON THE SPECIFIC DESIGN AND"
+    .text " 'D' ($44) TO D41E. READ D41E:"
     .byte 13
-    .text " FIRMWARE VERSION."
+    .text " EXPECTS 'S' ($53) ECHOED BACK."
+    .byte 13
+    .text " REAL SID CHIPS DO NOT ECHO WRITES."
+    .byte 13
+    .byte 13
+    .text " QUALITY AND COMPATIBILITY DEPEND ON"
+    .byte 13
+    .text " THE HARDWARE AND FIRMWARE VERSION."
     .byte 0
 
 ip_backsid:
@@ -8177,6 +8243,15 @@ ip_backsid:
     .text " TO OTHER SID REPLACEMENTS, IT OFFERS"
     .byte 13
     .text " BASIC COMPATIBILITY WITH C64 SOFTWARE."
+    .byte 13
+    .byte 13
+    .text " DETECTED VIA REGISTER ECHO: WRITE"
+    .byte 13
+    .text " $42 TO D41C, $B5 TO D41D, $1D TO"
+    .byte 13
+    .text " D41E. READ D41F: EXPECTS $42 BACK."
+    .byte 13
+    .text " REAL SID CHIPS DO NOT HOLD WRITES."
     .byte 0
 
 ip_kungfusid:
@@ -8279,7 +8354,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.78 README"
+    .text "SIDDETECTOR V1.3.79 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8298,7 +8373,7 @@ readme_text:
     .text "    NANO  SIDFX  ULTISID  SIDKICK"
     .byte 13
     .byte $9E
-    .text "    KUNGFUSID  BACKSID  USID64"
+    .text "    KUNGFUSID  BACKSID  USID64  PDSID"
     .byte 13
     .byte $9E
     .text "  EMU: VICE RESID/FASTSID  HOXS64"
@@ -8320,7 +8395,16 @@ readme_text:
     .text "  2 SIDFX   SCI SERIAL PROTOCOL"
     .byte 13
     .byte $9E
-    .text "  3 ARMSID/SWINSID-U  REG ECHO"
+    .text "  3 ARMSID/SWINSID-U  REG ECHO DIS"
+    .byte 13
+    .byte $9E
+    .text "  3A PDSID   WRITE P/D READ S AT D41E"
+    .byte 13
+    .byte $9E
+    .text "  3B BACKSID  POLL D41F FOR $42"
+    .byte 13
+    .byte $9E
+    .text "  3C SIDKICK  CFG MODE VERS S+K"
     .byte 13
     .byte $9E
     .text "  4 FPGASID  MAGIC COOKIE $1D/$F5"
@@ -8333,6 +8417,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  7 2ND SID  NOISE WAVEFORM MIRROR"
+    .byte 13
+    .byte $9E
+    .text "  7A KUNGFUSID  D41D ECHO $A5/$5A"
     .byte 13
     .byte $9E
     .text "  8 EMULATOR  $D418 DECAY TIMING"
@@ -8428,6 +8515,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.79 SWINSID FIKTIVLOOP+STEREO FIX"
     .byte 13
     .byte $9E
     .text "  V1.3.78 DEBUG PAGE 1 VERSION STRING"

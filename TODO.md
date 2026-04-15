@@ -27,10 +27,10 @@
 - [x] **SIDFX stereo capability not reported** — fixed: pre-populated D400 in `end_pre_d400` block ($30 case) + added `sidFXf` dispatch in `sidstereo_print`; stereo row now shows "D400 SIDFX FOUND"
 - [x] **Swinsid Nano (NOPAD variant) indistinguishable** — no reliable discriminant found; accepted as limitation
 - [x] **NOSID+U2+ indistinguishable from SwinSID Nano** — exhaustively probed 10+ discriminants (D41B, D41C, D419/D41A, D41F, freq variation, waveform, interrupt context, monotone counting, write-to-read). All overlap. U2+ FPGA generates bus noise at ~44 kHz identical to SwinSID Nano oscillator. Accepted limitation; documented in FINDINGS.md.
-- [ ] **D400+D500 mixed Swinsid/real-SID** — wrong chip reported in both slots (stereo config error) *(teststatus #21 — untested)*
+- [x] **D400+D500 mixed Swinsid/real-SID** — fixed: at D5xx–D7xx in sidtype=$05 stereo scan, DIS echo (`sfx_probe_dis_echo`) is now tried before `checkrealsid` when primary is a real SID ($01/$02). Returns type $04 (SwinSID U) or $05 (ARMSID) instead of misidentifying as 6581/8580. Guard prevents triggering when ARMSID is primary (snoops all writes). *(teststatus #21 — needs hw verification)*
 - [x] **D400+D500 mixed ARMSID/real-SID** — fixed V1.3.73: jmp s_s_l3 in s_s_add for sidtype=$05 exits ARMSID scan early, preventing U64/ULTISID false entries from D5xx-DFxx scan; 8580@D400 + ARMSID@D420 hw_test 10/10 *(teststatus C09 — 🟢)*
 - [ ] **Stereo ARMSID / SwinSID U detection skipped** — ARMSID/SwinSID U mirrors through the C64 address decoder: writing "DIS" to D5xx triggers the D400 chip, echoing 'N' in D51B and falsely adding D500/D600 as extra SIDs. The stereo scan for sidtype=$05 is therefore skipped entirely when the primary chip is at D400. Fix: implement mirror detection — write a unique pattern to D400, check if D500 shows the same pattern (mirror) or different (real second chip). **Files:** `siddetector.asm` (`end_skip_armsid_scan` label, `sidstereostart` D5xx ARMSID path).
-- [ ] **SwinSID Ultimate detected at wrong address (D500 instead of D400)** — the register echo test ('S'=$53 in D41B) may be running against D500 instead of D400, misidentifying the primary SID slot. **Files:** `siddetector.asm:250-270` (ARMSID/SwinsidU detection step), `siddetector.asm:1896-1902` (gep_swinsidu_d decay check). *(From TO-DOS.md 2026-04-03)*
+- [x] **SwinSID Ultimate fiktivloop false positive (D500)** — AVR OSC3 returns 0 with noise enabled; `checksecondsid` falsely detected D500 as a second SID. Fixed: skip `fiktivloop` for `data4=$04` (SwinSID U is always single-slot). Same pattern as SIDFX skip at `end_skip_fiktiv`.
 - [ ] **Stereo slots D700 / DF00 not verified** — D500/D600/DE00 confirmed working (hw_test baseline V1.3.45); D700 and DF00 not tested with real hardware *(teststatus #23 #25)*
 - [x] Fix FC3 cartridge false-positive C128 detection — merged check128_unknown into check128_c128 path; $D0FE open-bus ($FF) now overrides false C128/TC64 detect from FC3
 - [x] **Info page CRSR LEFT/RIGHT navigation broken** — fixed by adding B (prev) and M (next) key aliases; VICE `gtk3_sym_da.vkm` does not reliably map PC cursor keys to CIA row-0 bit-2, but B/M work correctly in VICE
@@ -91,8 +91,8 @@
 
 ## In-app content improvements
 
-- [ ] **Info screen** — add revision-specific quirks per chip (e.g. 6581 R2/R3/R4 audio differences, filter slope, voice-3 mute behaviour); expand firmware/upgrade links for ARMSID/SIDKick-pico/KungFuSID
-- [ ] **Readme screen** — add keyboard shortcut summary (I=info, D=debug, R=readme, T=sound test, P=music toggle, SPACE=restart); improve formatting and content accuracy for newly supported chips (BackSID, PDsid, KungFuSID)
+- [x] **Info screen** — added revision quirks (6581: combined waveforms, DC offset, OSC3/ENV3; 8580: voice-3 disconnect, combined waveform note); firmware link for ARMSID; detection method added to SIDKick-pico, BackSID, PD SID; PD SID description rewritten to reflect specific product
+- [x] **Readme screen** — added PDsid to chip list; expanded detection chain with steps 3A/3B/3C (PDsid/BackSID/SIDKick-pico) and 7A (KungFuSID); fixed README_LINES=55→74 / README_MAX_SCROLL=34→53 (version history was unreachable); bumped to V1.3.79
 - [ ] **Main screen** — show detection confidence indicator or retry count when multiple attempts were needed (e.g. after VIC bad-line DMA steal)
 - [ ] **Sound test** — allow per-SID volume adjustment; label which SID is playing during multi-SID test
 - [x] **Debug screen** — show siddetector version string on page 1 so it is visible without the README screen

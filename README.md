@@ -1,4 +1,4 @@
-# SID Detector v1.3.76
+# SID Detector v1.3.79
 
 A Commodore 64 diagnostic utility that identifies 24+ variants of the SID (Sound Interface Device) chip — including real hardware, FPGA clones, microcontroller emulators, and PC emulators.
 
@@ -18,7 +18,7 @@ When run on a C64 (or emulator), the program probes SID hardware registers, meas
 |----------|-----------------|
 | Real chips | 6581 R2, R3, R4, R4AR · 8580 |
 | FPGA clones | FPGASID (6581 mode · 8580 mode) |
-| Microcontroller | ARMSID · ARM2SID · Swinsid Ultimate · Swinsid Nano · Swinsid Micro · SIDKick · KungFuSID · SIDFX · ULTISID (U64) · uSID64 |
+| Microcontroller | ARMSID · ARM2SID · Swinsid Ultimate · Swinsid Nano · Swinsid Micro · SIDKick-pico · KungFuSID · BackSID · PD SID · SIDFX · ULTISID (U64) · uSID64 |
 | Emulators | VICE 3.3 ResID 6581/8580 · VICE 3.3 FastSID · HOXS64 · Frodo · YACE64 · EMU64 · C64DBG |
 | Machine type | C64 · C128 · TC64 (Turbo Chameleon 64) |
 | Clock | PAL · NTSC |
@@ -219,10 +219,10 @@ Result stored in `za7` (`$A7`).
 
 ---
 
-## Screen layout (v1.3.76)
+## Screen layout (v1.3.79)
 
 ```
-            siddetector v1.3.76
+            siddetector v1.3.79
 
 row  2: armsid.....:  [result]
 row  3: swinsid....:  [result]
@@ -331,9 +331,11 @@ Because the actual detection routines (`Checkarmsid`, `checkfpgasid`, etc.) prob
 ## Known issues / TODO
 
 - Mixed stereo config errors: ARMSID/SwinSID U mirrors D4xx through D5xx — stereo scan for those types is skipped to avoid false positives; a second chip at D500 with primary ARMSID at D400 will not be detected
-- **Fixed V1.3.73:** 8580@D400 + ARMSID@D420 (MixSID, C09 config) now correctly detected; `s_s_add` for `sidtype=$05` exits sidstereostart early via `jmp s_s_l3` to prevent garbage entries from D5xx-DFxx ULTISID slots on U64 hardware
+- **Fixed V1.3.79:** SwinSID Ultimate fiktivloop false positive — AVR OSC3 returns 0 with noise enabled, causing `checksecondsid` to falsely detect D500 as a second SID. Fixed by skipping `fiktivloop` when primary is SwinSID U (`data4=$04`).
+- **Fixed V1.3.79:** Stereo 6581@D400 + SwinSID U@D500 — `s_s_arm_call_real` now tries `sfx_probe_dis_echo` before `checkrealsid` when primary is a real SID; SwinSID U echo returns 'S' and is correctly identified.
+- **Fixed V1.3.73:** 8580@D400 + ARMSID@D420 (MixSID, C09 config) now correctly detected
+- **Fixed V1.3.74:** 6581@D400 + ARMSID@D420 (MixSID, C08 config) now correctly detected
 - ARM2SID stereo D400+D500 not yet verified on hardware
 - Stereo slots D700 and DF00 not yet tested on hardware
 - Swinsid Nano with NOSID+U2+ (Ultimate II+ with virtual SID off) is indistinguishable — reported as SwinSID Nano; accepted limitation
-- ULTISID 6581 display fix in V1.3.45 not verified on hardware (no 6581 UltiSID in test rig)
 - FPGASID in SIDFX SID1 slot is undetectable: SIDFX drives D419/D41A (POT registers) with real joystick data, masking FPGASID's identify-mode readback signature; additionally, the SIDFX SCI state machine reacts to D41E writes, disrupting the magic-cookie handshake. No software workaround is possible. Reported as SIDFX with unknown SID type.
