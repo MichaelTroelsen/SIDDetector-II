@@ -104,8 +104,8 @@
 ## GitHub repository improvements
 
 - [x] **Fix repository** — screenshot added to README; landing page now shows detection result screen
-- [x] **Releases** — v1.3.77, v1.3.78, v1.3.79 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
-- [x] **GitHub README** — updated to v1.3.79; BackSID/PD SID added to chip table; Known issues updated with V1.3.79 stereo fixes
+- [x] **Releases** — v1.3.77, v1.3.78, v1.3.79, v1.3.80 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
+- [x] **GitHub README** — updated to v1.3.80; Known issues updated with V1.3.80 ARMSID stereo D5xx fix
 - [x] **CI** — removed; use `make ci` locally (Ubuntu VICE too many ROM/autostart quirks)
 
 ## Stereo config error cases (wrong result reported)
