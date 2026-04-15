@@ -1,0 +1,96 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Java (required by KickAssembler) ────────────────────────────────────
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── KickAssembler ───────────────────────────────────────────────────────
+      - name: Download KickAssembler
+        run: |
+          curl -fsSL -o KickAss.zip "http://theweb.dk/KickAssembler/KickAssembler.zip"
+          unzip -j KickAss.zip KickAss.jar
+          echo "KickAssembler ready: $(java -jar KickAss.jar 2>&1 | head -1)"
+
+      # ── Build ───────────────────────────────────────────────────────────────
+      - name: Build siddetector.prg
+        run: java -jar KickAss.jar siddetector.asm -o siddetector.prg
+
+      - name: Build test suite
+        run: java -jar KickAss.jar tests/test_suite.asm -o tests/test_suite.prg
+
+      # ── VICE + headless display ─────────────────────────────────────────────
+      - name: Install VICE and Xvfb
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y vice xvfb
+
+      # ── Run 23 unit tests headlessly ────────────────────────────────────────
+      - name: Run test suite
+        run: |
+          set -euo pipefail
+
+          # Start virtual display
+          Xvfb :99 -screen 0 800x600x24 &
+          export DISPLAY=:99
+          sleep 1
+
+          # Pick a free TCP port for VICE remote monitor
+          MONITOR_PORT=$(python3 -c \
+            "import socket; s=socket.socket(); s.bind(('',0)); \
+             print(s.getsockname()[1]); s.close()")
+
+          rm -f tests/ci_result.bin
+
+          # Launch VICE in background
+          x64sc \
+            -autostart tests/test_suite.prg \
+            -remotemonitor \
+            -remotemonitoraddress "ip4://127.0.0.1:${MONITOR_PORT}" \
+            +confirmonexit \
+            2>/dev/null &
+          VICE_PID=$!
+
+          # Extract pass_count address from freshly built symbol file
+          PASS_ADDR=$(grep ' \.pass_count$' tests/test_suite.vs \
+            | awk '{print $2}' | sed 's/C://')
+
+          # Connect via remote monitor, wait for td_spin breakpoint, save result
+          python3 scripts/vice_monitor.py \
+            "$PASS_ADDR" tests/ci_result.bin "$MONITOR_PORT"
+
+          # Clean up VICE
+          sleep 2
+          pkill x64sc || true
+          wait "$VICE_PID" 2>/dev/null || true
+
+          # Gate on pass count
+          PASS_HEX=$(od -An -tx1 -j2 -N1 tests/ci_result.bin | tr -d ' \n')
+          PASS_DEC=$((16#$PASS_HEX))
+          echo "Test suite: $PASS_DEC / 23 passed"
+          if [ "$PASS_DEC" -ne 23 ]; then
+            echo "FAIL: expected 23, got $PASS_DEC" >&2
+            exit 1
+          fi
+          echo "PASS: all 23 tests passed."
+
+      # ── Upload build artefact ────────────────────────────────────────────────
+      - name: Upload siddetector.prg
+        uses: actions/upload-artifact@v4
+        with:
+          name: siddetector-prg
+          path: siddetector.prg
