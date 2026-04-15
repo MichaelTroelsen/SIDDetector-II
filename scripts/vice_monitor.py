@@ -3,15 +3,16 @@
 vice_monitor.py — Connect to VICE remote monitor, run test_suite, save result.
 
 Usage:
-    python3 scripts/vice_monitor.py <pass_count_addr> <output_file> <port>
+    python3 scripts/vice_monitor.py <td_spin_addr> <output_file> <port>
 
-  pass_count_addr  : hex address of pass_count (from test_suite.vs)
-  output_file      : path to write the result byte
-  port             : TCP port VICE remote monitor is listening on
+  td_spin_addr  : hex address of td_spin label (from test_suite.vs), e.g. "0bd7"
+  output_file   : path to write the result byte
+  port          : TCP port VICE remote monitor is listening on
 
 Connects to VICE remote monitor on localhost:<port>.
-Sets a breakpoint at td_spin, resumes execution, waits for the breakpoint,
-then saves $07E8 (pass_count copy in off-screen RAM) to output_file and quits.
+Sets a numeric breakpoint at td_spin_addr, resumes execution, waits for it
+to fire (verifying PC matches), then saves $07E8 (pass_count copy in
+off-screen RAM) to output_file and quits.
 
 Exit codes:
   0 — success (result file written)
@@ -27,7 +28,7 @@ HOST = "127.0.0.1"
 TIMEOUT = 120  # seconds to wait for td_spin breakpoint
 
 def recv_until_prompt(sock, timeout=TIMEOUT):
-    """Read from socket until we see a monitor prompt line like '(C:$xxxx)'."""
+    """Read from socket until we see a monitor prompt '(C:$xxxx)'."""
     sock.settimeout(2.0)
     buf = b""
     deadline = time.time() + timeout
@@ -38,21 +39,28 @@ def recv_until_prompt(sock, timeout=TIMEOUT):
                 break
             buf += chunk
             text = buf.decode("latin-1", errors="replace")
-            # VICE monitor prompt looks like: (C:$080d)  or  (C:$0000)
             if re.search(r'\(C:\$[0-9a-fA-F]{4}\)', text):
                 return text
         except socket.timeout:
             continue
     return buf.decode("latin-1", errors="replace")
 
+def extract_pc(text):
+    """Return the PC address from the last monitor prompt in text, or None."""
+    m = re.findall(r'\(C:\$([0-9a-fA-F]{4})\)', text)
+    return m[-1].lower() if m else None
+
 def send(sock, cmd):
     sock.sendall((cmd + "\n").encode())
 
 def main():
     if len(sys.argv) != 4:
-        print(f"Usage: {sys.argv[0]} <pass_count_addr> <output_file> <port>", file=sys.stderr)
+        print(f"Usage: {sys.argv[0]} <td_spin_addr> <output_file> <port>",
+              file=sys.stderr)
         sys.exit(1)
 
+    # Normalise to 4 hex digits for comparison with monitor prompt (C:$XXXX)
+    td_spin_addr = sys.argv[1].lower().zfill(4)
     output_file = sys.argv[2]
     PORT = int(sys.argv[3])
 
@@ -69,28 +77,38 @@ def main():
             time.sleep(0.5)
 
     if sock is None:
-        print("ERROR: could not connect to VICE remote monitor on localhost:6510", file=sys.stderr)
+        print("ERROR: could not connect to VICE remote monitor", file=sys.stderr)
         sys.exit(1)
 
     try:
-        # Initial banner / prompt
+        # Drain the initial banner (may arrive late; that's OK)
         recv_until_prompt(sock, timeout=10)
 
-        # Load symbols and set breakpoint
-        send(sock, "loadsym tests/test_suite.vs")
+        # Set a numeric breakpoint — avoids loadsym CWD issues on Linux
+        send(sock, f"break ${td_spin_addr}")
         recv_until_prompt(sock, timeout=5)
 
-        send(sock, "break td_spin")
-        recv_until_prompt(sock, timeout=5)
-
-        # Start execution; wait for td_spin breakpoint (test runs to completion)
-        send(sock, "go")
-        resp = recv_until_prompt(sock, timeout=TIMEOUT)
-        if "(C:$" not in resp:
-            print("ERROR: timed out waiting for td_spin breakpoint", file=sys.stderr)
+        # Resume execution and wait for td_spin.
+        # Guard against the "shifted buffer" race (banner arrives late so the
+        # go-response contains an earlier prompt instead of the breakpoint hit):
+        # keep going until PC == td_spin_addr.
+        for _ in range(20):
+            send(sock, "go")
+            resp = recv_until_prompt(sock, timeout=TIMEOUT)
+            pc = extract_pc(resp)
+            if pc is None:
+                print("ERROR: timed out waiting for td_spin breakpoint",
+                      file=sys.stderr)
+                sys.exit(1)
+            if pc == td_spin_addr:
+                break  # breakpoint fired at the right address
+            # Wrong address — a timing shift or early breakpoint; keep going
+        else:
+            print(f"ERROR: never reached td_spin (${td_spin_addr})",
+                  file=sys.stderr)
             sys.exit(1)
 
-        # Save pass_count copy from off-screen scratch RAM
+        # Save pass_count copy from off-screen scratch RAM ($07E8)
         save_cmd = f'save "{output_file}" 0 07e8 07e8'
         send(sock, save_cmd)
         recv_until_prompt(sock, timeout=5)

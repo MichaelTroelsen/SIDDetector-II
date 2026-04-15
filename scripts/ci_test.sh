@@ -53,15 +53,15 @@ rm -f tests/ci_result.bin
 VICE_PID=$!
 
 # ---- Connect via Python monitor client ------------------------------------
-PASS_ADDR=$(grep ' \.pass_count$' tests/test_suite.vs | awk '{print $2}' | sed 's/C://')
-if [ -z "$PASS_ADDR" ]; then
-    echo "ERROR: could not find pass_count in tests/test_suite.vs" >&2
+TD_SPIN=$(grep ' \.td_spin$' tests/test_suite.vs | awk '{print $2}' | sed 's/C://')
+if [ -z "$TD_SPIN" ]; then
+    echo "ERROR: could not find td_spin in tests/test_suite.vs" >&2
     kill "$VICE_PID" 2>/dev/null || true
     cmd //c "taskkill /F /IM x64sc.exe" 2>/dev/null || true
     exit 1
 fi
 
-if ! "$PYTHON" scripts/vice_monitor.py "$PASS_ADDR" "tests/ci_result.bin" "$MONITOR_PORT"; then
+if ! "$PYTHON" scripts/vice_monitor.py "$TD_SPIN" "tests/ci_result.bin" "$MONITOR_PORT"; then
     echo "ERROR: vice_monitor.py failed" >&2
     kill "$VICE_PID" 2>/dev/null || true
     cmd //c "taskkill /F /IM x64sc.exe" 2>/dev/null || true

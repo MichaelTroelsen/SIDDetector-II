@@ -91,13 +91,13 @@ jobs:
             2>/dev/null &
           VICE_PID=$!
 
-          # Extract pass_count address from freshly built symbol file
-          PASS_ADDR=$(grep ' \.pass_count$' tests/test_suite.vs \
+          # Extract td_spin address from freshly built symbol file
+          TD_SPIN=$(grep ' \.td_spin$' tests/test_suite.vs \
             | awk '{print $2}' | sed 's/C://')
 
           # Connect via remote monitor, wait for td_spin breakpoint, save result
           python3 scripts/vice_monitor.py \
-            "$PASS_ADDR" tests/ci_result.bin "$MONITOR_PORT"
+            "$TD_SPIN" tests/ci_result.bin "$MONITOR_PORT"
 
           # Clean up VICE
           sleep 2
