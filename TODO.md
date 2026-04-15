@@ -98,14 +98,14 @@
 - [x] **Info screen** — added revision quirks (6581: combined waveforms, DC offset, OSC3/ENV3; 8580: voice-3 disconnect, combined waveform note); firmware link for ARMSID; detection method added to SIDKick-pico, BackSID, PD SID; PD SID description rewritten to reflect specific product
 - [x] **Readme screen** — added PDsid to chip list; expanded detection chain with steps 3A/3B/3C (PDsid/BackSID/SIDKick-pico) and 7A (KungFuSID); fixed README_LINES=55→74 / README_MAX_SCROLL=34→53 (version history was unreachable); bumped to V1.3.79
 - [ ] **Main screen** — show detection confidence indicator or retry count when multiple attempts were needed (e.g. after VIC bad-line DMA steal)
-- [x] **Sound test** — T-key test now shows "NOW TESTING: D4xx" before each SID; after the D400 3-voice melody, cycles through additional detected SIDs (D500/D600/etc.) playing a ~440 Hz triangle-wave note on each with address label. per-SID volume adjustment not implemented (low value).
+- [x] **Sound test** — T-key test shows "NOW TESTING: D4xx" before each SID; all detected SIDs play the full 3-voice melody (snd_patch_page self-modifies all 31 sta $D4xx in st_soundtest to any SID page). per-SID volume adjustment not implemented (low value).
 - [x] **Debug screen** — show siddetector version string on page 1 so it is visible without the README screen
 
 ## GitHub repository improvements
 
 - [x] **Fix repository** — screenshot added to README; landing page now shows detection result screen
-- [x] **Releases** — v1.3.77, v1.3.78, v1.3.79, v1.3.80 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
-- [x] **GitHub README** — updated to v1.3.80; Known issues updated with V1.3.80 ARMSID stereo D5xx fix
+- [x] **Releases** — v1.3.77, v1.3.78, v1.3.79, v1.3.80, v1.3.81 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
+- [x] **GitHub README** — updated to v1.3.81; Known issues updated with V1.3.81 multi-SID full melody
 - [x] **CI** — removed; use `make ci` locally (Ubuntu VICE too many ROM/autostart quirks)
 
 ## Stereo config error cases (wrong result reported)
