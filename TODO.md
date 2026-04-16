@@ -77,6 +77,15 @@
 - [x] **SIDFX + ARMSID at D420** (SW1=LFT): ARMSID firmware does not activate DIS detection from CS2 slot — DIS writes to D43F/D43E/D43D produce no echo at D43B or D41B (confirmed hw: 8580@D400 + ARMSID@D420). ARMSID only responds to DIS via CS1. SIDFX reports ARMSID (8580-mode) as 8580 — same as real 8580, undetectable. WONTFIX: falls back to SIDFX-reported type. V1.3.84 guards prevent false positives.
 - [x] **SIDFX + SIDKick Pico at D420** (SW1=LFT): SIDKick Pico cannot be specifically identified at D420 via CS2. D41D echo test was SIDFX write-buffer artifact (SIDFX caches unmapped reg writes, returns them for any chip). DIS probe (D43B) is contaminated when primary is ARMSID (CS-agnostic bus drive). Fixed V1.3.84: removed D41D echo; added ARMSID-primary guard for DIS at D420; falls back to SIDFX-reported type. WONTFIX for specific PICO identification at D420.
 
+## ARMSID2 SFX capability
+
+ARMSID2 (second generation) includes built-in SFX Sound Expander emulation (Yamaha OPL2 / YM3812).
+Detection and presentation tasks:
+
+- [ ] **Detect SFX capability** — probe ARMSID2 firmware to determine whether SFX is present/enabled; find a reliable discriminant (config register, echo, or capability flag) that distinguishes ARMSID2-with-SFX from plain ARMSID2
+- [ ] **Update in-app info screen** — add SFX capability note to ARMSID2 info page; include what SFX Sound Expander emulation means (OPL2 FM synthesis, compatible with software using the SFX cartridge)
+- [ ] **Update README screen** — mention ARMSID2 SFX capability in the chip list / detection chain description
+
 ## Other improvements
 
 - [x] **Skip $D418 decay scan when hardware SID detected** — removed from scope: decay scan still runs but result is overridden by hardware detection; no user-visible benefit in skipping it
