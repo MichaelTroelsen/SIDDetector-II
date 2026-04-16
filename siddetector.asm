@@ -5711,20 +5711,12 @@ ssp_a2_arm2:
         jsr     $AB1E                // print "ARM2SID "
         lda     tmp_zp
         jsr     print_map_name       // "SIDL"/"SIDR"/"SID3"/"SFX-"/"----"
+        lda     tmp_zp
+        cmp     #$03                 // SFX- slot? skip SID type (OPL2, not a SID)
+        beq     ssp_a2_arm2_done
         lda     #$20
         jsr     $FFD2
-        jsr     print_sid_type_4     // "6581" or "8580"
-        lda     armsid_emul_mode
-        and     #$03
-        beq     ssp_a2_arm2_done     // mode=0: no SFX suffix
-        lda     #$2B                 // '+'
-        jsr     $FFD2
-        lda     #$53                 // 'S'
-        jsr     $FFD2
-        lda     #$46                 // 'F'
-        jsr     $FFD2
-        lda     #$58                 // 'X'
-        jsr     $FFD2
+        jsr     print_sid_type_4     // "6581" or "8580" (SID slots only)
 ssp_a2_arm2_done:
         jmp     ssp_skp20
 ssp_skp7:
@@ -5776,20 +5768,12 @@ ssp_skp10:
         jsr     $AB1E                // print "ARM2SID "
         lda     tmp_zp
         jsr     print_map_name
+        lda     tmp_zp
+        cmp     #$03                 // SFX- slot? skip SID type
+        beq     ssp_skp10_done
         lda     #$20
         jsr     $FFD2
-        jsr     print_sid_type_4
-        lda     armsid_emul_mode
-        and     #$03
-        beq     ssp_skp10_done       // mode=0: no SFX suffix
-        lda     #$2B                 // '+'
-        jsr     $FFD2
-        lda     #$53                 // 'S'
-        jsr     $FFD2
-        lda     #$46                 // 'F'
-        jsr     $FFD2
-        lda     #$58                 // 'X'
-        jsr     $FFD2
+        jsr     print_sid_type_4     // SID slots only
 ssp_skp10_done:
         jmp     ssp_skp20
 ssp_skp10_gen:
