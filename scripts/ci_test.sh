@@ -28,7 +28,7 @@ cd "$ROOT"
 KICKASS="java -jar C:/debugger/kickasm/KickAss.jar"
 VICE="C:/winvice/bin/x64sc.exe"
 PYTHON="/c/Python314/python"
-EXPECTED_PASS=29   # $1D hex
+EXPECTED_PASS=30   # $1E hex
 
 # ---- Build ----------------------------------------------------------------
 echo "=== CI: build test_suite.prg ==="

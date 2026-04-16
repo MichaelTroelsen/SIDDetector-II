@@ -615,12 +615,25 @@ cskp_disp:
                 lda #<skpicof_6581
                 ldy #>skpicof_6581
                 jsr $AB1E
-                jmp end
+                jmp cskp_fm_disp
 cskp_print_8580:
                 lda #<skpicof
                 ldy #>skpicof
                 jsr $AB1E
-                jmp end
+cskp_fm_disp:
+                // Append "+FM" if config[8] is 4 or 5 (FM_ENABLE = 6 - config[8] > 0).
+                lda skpico_fm
+                cmp #$04
+                bcc cskp_no_fm          // < 4: no FM
+                cmp #$06
+                bcs cskp_no_fm          // >= 6: FM_ENABLE=0, not active
+                lda #$2B                // '+'
+                jsr $FFD2
+                lda #$46                // 'F'
+                jsr $FFD2
+                lda #$4D                // 'M'
+                jsr $FFD2
+cskp_no_fm:     jmp end
 
 // --- Step 4: FPGASID ---
 // Writes magic cookie $81/$65 to D419/D41A to enter config mode,
@@ -1695,6 +1708,11 @@ sip_rc_done:
            jsr arm2sid_print_extra
            jmp sip_rc_ret
 sip_rc_notarm:
+           cmp #12             // IP_SIDKPIC = 12
+           bne sip_rc_notskp
+           jsr skpico_print_extra
+           jmp sip_rc_ret
+sip_rc_notskp:
            cmp #6              // IP_FPGA8580 = 6
            beq sip_rc_fpga
            cmp #7              // IP_FPGA6581 = 7
@@ -2582,8 +2600,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 81
-.const README_MAX_SCROLL = 60    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 83
+.const README_MAX_SCROLL = 62    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -3699,6 +3717,8 @@ checkskpico:
                 stx x_zp
                 sty y_zp
                 pha
+                lda #$00
+                sta skpico_fm       // default: no FM; set by Phase 3 if chip found
                 lda sptr_zp+1
                 sta cskp_d41F+2
                 sta cskp_d41E+2
@@ -3752,10 +3772,28 @@ cskp_d41D_k:    lda $D41D           // byte[1]: expect 'K' = $4B
                 beq cskp_found_8580
                 lda #$0E            // 3=6581 (or unexpected → treat as 6581)
                 sta data1
-                jmp cskp_done
+                jmp cskp_phase3
 cskp_found_8580:
                 lda #$0B            // 2=8580
                 sta data1
+                // Phase 3 — FM Sound Expander: read config[8] (CFG_SID2_TYPE).
+                // Re-enter config mode (primary D400 always): $FF→D41F, $00→D41E (page 0),
+                // then discard config[0..7] and read config[8].
+                // config[8] >= 4 → FM enabled (FM_ENABLE = 6 - config[8] > 0 for values 4/5).
+                // FM maps to $DF00 (requires A8/IO hardware connection).
+cskp_phase3:
+                lda #$FF
+                sta $D41F           // re-enter config mode (primary SID always at D400)
+                lda #$00
+                sta $D41E           // page 0: config[] access starting at config[0]
+                ldx #$08
+cskp_fm_lp:    lda $D41D           // discard config[0..7] (auto-increment)
+                dex
+                bne cskp_fm_lp
+                lda $D41D           // 9th read = config[8] = CFG_SID2_TYPE
+                sta skpico_fm       // store: 0-3=SID types, >=4=FM mode
+                lda #$00
+                sta $D418           // exit config mode (non-config-reg write)
                 jmp cskp_done
 cskp_notfound:
                 lda #$F0
@@ -6873,6 +6911,83 @@ ape_map_cr_done:
 ape_done:       rts
 
 //--------------------------------------------------------------------------------------------------
+// skpico_print_extra: appended to SIDKick-pico info page (IP_SIDKPIC=12, called from sip_rc_done).
+// If FM Sound Expander is enabled (config[8] >= 4 and < 6), prints FM status line.
+// Trashes A.
+//--------------------------------------------------------------------------------------------------
+skpico_print_extra:
+                lda #$0D
+                jsr $FFD2               // CR after last line of ip_sidkpic
+                lda skpico_fm
+                cmp #$04
+                bcs spe_check_max       // >= 4: check upper bound
+                rts                     // < 4: no FM
+spe_check_max:  cmp #$06
+                bcc spe_print_fm        // 4 or 5: FM active (FM_ENABLE = 6 - config[8] > 0)
+                rts                     // >= 6: FM_ENABLE=0, not active
+spe_print_fm:
+                // " FM SOUND EXPANDER AT $DF00"
+                lda #$0D
+                jsr $FFD2
+                lda #$20                // ' '
+                jsr $FFD2
+                lda #$46                // 'F'
+                jsr $FFD2
+                lda #$4D                // 'M'
+                jsr $FFD2
+                lda #$20
+                jsr $FFD2
+                lda #$53                // 'S'
+                jsr $FFD2
+                lda #$4F                // 'O'
+                jsr $FFD2
+                lda #$55                // 'U'
+                jsr $FFD2
+                lda #$4E                // 'N'
+                jsr $FFD2
+                lda #$44                // 'D'
+                jsr $FFD2
+                lda #$20
+                jsr $FFD2
+                lda #$45                // 'E'
+                jsr $FFD2
+                lda #$58                // 'X'
+                jsr $FFD2
+                lda #$50                // 'P'
+                jsr $FFD2
+                lda #$41                // 'A'
+                jsr $FFD2
+                lda #$4E                // 'N'
+                jsr $FFD2
+                lda #$44                // 'D'
+                jsr $FFD2
+                lda #$45                // 'E'
+                jsr $FFD2
+                lda #$52                // 'R'
+                jsr $FFD2
+                lda #$20
+                jsr $FFD2
+                lda #$41                // 'A'
+                jsr $FFD2
+                lda #$54                // 'T'
+                jsr $FFD2
+                lda #$20
+                jsr $FFD2
+                lda #$24                // '$'
+                jsr $FFD2
+                lda #$44                // 'D'
+                jsr $FFD2
+                lda #$46                // 'F'
+                jsr $FFD2
+                lda #$30                // '0'
+                jsr $FFD2
+                lda #$30                // '0'
+                jsr $FFD2
+                lda #$0D
+                jsr $FFD2
+spe_done:       rts
+
+//--------------------------------------------------------------------------------------------------
 // fpgasid_print_extra: appended to FPGASID info pages (IP_FPGA8580=6, IP_FPGA6581=7).
 // Prints CPLD and FPGA revision on a new line.
 // Trashes A, $FE/$FF.
@@ -7474,6 +7589,7 @@ arm2sid_slot_d2:     .byte $34,$34,$35,$35,$45,$45,$46,$46  // 2nd hex digit: '4
 arm2sid_shortf:      .text "ARM2SID "
                      .byte 0                         // prefix for stereo SID entries
 backsid_d41f:        .byte 0     // D41F readback from checkbacksid ($42 = BackSID present)
+skpico_fm:           .byte 0     // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
 MODE6581:     .byte $f0,$f1,$f0,$f0,$f2,$f1,$f2,$f2,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f0
 MODE8580:     .byte $f0,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f2,$f2,$f1,$f2,$f0,$f0,$f1,$f0
 MODEUNKN:     .byte $f0,$f0,$f0,$f0,$f0,$f0,$f0,$f2,$f0,$f0,$f0,$f2,$f0,$f1,$f1,$f0
@@ -7508,7 +7624,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.85 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.86 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7844,7 +7960,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.85"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.86"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8609,7 +8725,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.85 README"
+    .text "SIDDETECTOR V1.3.86 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8770,6 +8886,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.86 SIDKICK-PICO FM SOUND EXPANDER DETECTION"
     .byte 13
     .byte $9E
     .text "  V1.3.85 ARM2SID SFX MODE ON MAIN + INFO SCREENS"

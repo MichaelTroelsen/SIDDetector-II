@@ -1,5 +1,5 @@
 // =============================================================================
-// test_suite.asm — Full SID Detector unit test suite  (29 tests)
+// test_suite.asm — Full SID Detector unit test suite  (30 tests)
 // =============================================================================
 // Covers every detection dispatch scenario in the sequential detection chain.
 // Each test presets the relevant zero-page inputs, calls an embedded copy of
@@ -17,9 +17,10 @@
 //   S8  FPGA Stereo   (T23)      data1=$06 at $D500 → recorded in sid_list
 //   S9  New chips     (T24–T27)  PDsid/$09 / BackSID/$0A / SKpico/$0B / KungFu/$0C
 //   S10 ARM2SID SFX   (T28–T29)  emul_mode=$01 → SFX only / $02 → SID+SFX
+//   S11 SKpico FM     (T30)      skpico_fm=$04 → FM Sound Expander at $DF00
 //
 // Pass count written to $07E8 on completion.
-// 29 = all tests passed.
+// 30 = all tests passed.
 // =============================================================================
 
 .encoding "petscii_upper"
@@ -60,6 +61,10 @@
 // ARM2SID config variables (absolute addresses from siddetector.sym)
 .const armsid_emul_mode = $5375  // bits[1:0]: 0=SID,1=SFX,2=SFX+SID
 .const armsid_major_var = $536b  // firmware major (2=ARMSID, 3=ARM2SID)
+
+// SIDKick-pico config variables (absolute addresses from siddetector.sym)
+.const skpico_fm_var    = $5545  // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
+.const RES_SKPICO_FM    = $15   // SIDKick-pico FM Sound Expander detected
 
 * = $0801
     .word $0801
@@ -716,10 +721,34 @@ t29:
     ldy #>str_t29_pass
     jsr show_result
     inc pass_count
-    jmp test_done
+    jmp t30
 t29_fail:
     lda #<str_t29_fail
     ldy #>str_t29_fail
+    jsr show_result
+
+// ============================================================
+// S11: SIDKICK-PICO FM SOUND EXPANDER DISPATCH  (T30)
+// Mirrors skpico_fm check in cskp_fm_disp (siddetector.asm)
+// T30: skpico_fm=$04 (FM_ENABLE=2)  → RES_SKPICO_FM
+// ============================================================
+
+t30:
+    // T30: skpico_fm=$04 → FM Sound Expander active
+    lda #$04
+    sta skpico_fm_var
+    jsr dispatch_skpico_fm
+    lda #RES_SKPICO_FM
+    jsr assert_eq
+    bne t30_fail
+    lda #<str_t30_pass
+    ldy #>str_t30_pass
+    jsr show_result
+    inc pass_count
+    jmp test_done
+t30_fail:
+    lda #<str_t30_fail
+    ldy #>str_t30_fail
     jsr show_result
 
 // ============================================================
@@ -730,7 +759,7 @@ test_done:
     ldy #>str_divider
     jsr show_result
     lda pass_count
-    cmp #29
+    cmp #30
     bne td_fail
     lda #<str_all_pass
     ldy #>str_all_pass
@@ -1006,6 +1035,27 @@ dispatch_kungfu:
 dkfu_exit:
     rts
 
+// ---- dispatch_skpico_fm --------------------------------------
+// Source: cskp_fm_disp in siddetector.asm
+// Reads skpico_fm (absolute $5545):
+//   >= 4 and < 6 → RES_SKPICO_FM (FM Sound Expander active)
+//   else → RES_NONE
+dispatch_skpico_fm:
+    lda #RES_NONE
+    sta dispatch_result
+    lda skpico_fm_var
+    cmp #$04
+    bcs dsfm_chk_max    // >= 4
+    rts                 // < 4: no FM
+dsfm_chk_max:
+    cmp #$06
+    bcc dsfm_found      // 4 or 5: FM active
+    rts                 // >= 6: FM_ENABLE=0
+dsfm_found:
+    lda #RES_SKPICO_FM
+    sta dispatch_result
+    rts
+
 // ---- dispatch_arm2sid_sfx ------------------------------------
 // Source: armsid: SFX mode check (siddetector.asm)
 // Reads armsid_emul_mode (absolute $5375) bits[1:0]:
@@ -1215,9 +1265,13 @@ str_t29_pass: .text "T29 PASS: EMUL=$02 -> SID+SFX"
               .byte 0
 str_t29_fail: .text "T29 FAIL: EMUL=$02 -> SID+SFX"
               .byte 0
+str_t30_pass: .text "T30 PASS: FM=$04 -> SKPICO FM"
+              .byte 0
+str_t30_fail: .text "T30 FAIL: FM=$04 -> SKPICO FM"
+              .byte 0
 str_divider:  .text "--------------------------------------"
               .byte 0
-str_all_pass: .text "ALL 29 TESTS PASSED"
+str_all_pass: .text "ALL 30 TESTS PASSED"
               .byte 0
 str_some_fail:.text "SOME TESTS FAILED - CHECK ABOVE"
               .byte 0
