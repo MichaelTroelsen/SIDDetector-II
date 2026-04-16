@@ -87,9 +87,9 @@ ARMSID2 (second generation) includes built-in SFX Sound Expander emulation (Yama
 
 The value is shown on the debug screen ("SID"/"SFX"/"BOT") but not surfaced elsewhere.
 
-- [ ] **Main screen** — when ARM2SID emul_mode≥1, append "+SFX" after the SID type (e.g. "ARM2SID V3.XX L 8580 +SFX"); mode=1 (SFX only) should suppress the SID type field
-- [ ] **Info page** — add SFX mode line to `arm2sid_print_extra` (after CH: line); show "MODE: SID", "MODE: SFX", or "MODE: SID+SFX"
-- [ ] **README screen** — mention ARM2SID SFX Sound Expander emulation in the chip description
+- [x] **Main screen** — V1.3.85: when ARM2SID emul_mode≥1, "FOUND" replaced by "+SFX " (same width); mode=1 (SFX only) suppresses SID type field; mode=2 shows "+SFX " + SID type
+- [x] **Info page** — V1.3.85: `arm2sid_print_extra` shows "MODE: SID", "MODE: SFX", or "MODE: SID+SFX" (ARM2SID only)
+- [x] **Stereo rows** — V1.3.85: ARM2SID SFX- slots (DF00/DF20) omit SID type (`print_map_name` shows "SFX-"; `tmp_zp==$03` guard skips `print_sid_type_4`)
 
 ## Other improvements
 

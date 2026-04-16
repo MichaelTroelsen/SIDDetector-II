@@ -1,8 +1,8 @@
 # SID Detector — Test Status
 
-**Last updated:** 2026-04-15  
+**Last updated:** 2026-04-16  
 **Build:** `$2400–$57D0` (code) `$6000–$8CFE` (data)  
-**Version:** V1.3.84  
+**Version:** V1.3.85  
 Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 
 ---
@@ -148,7 +148,7 @@ Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed i
 
 ## Unit Tests (`make ci`)
 
-Last result: **27 / 27** ✅ (2026-04-15 — `$1B` at `$07E8` via `make ci`)
+Last result: **29 / 29** ✅ (2026-04-16 — `$1D` at `$07E8` via `make ci`)
 
 | # | Test | Input | Expected | Result |
 |---|------|-------|----------|--------|
@@ -179,8 +179,10 @@ Last result: **27 / 27** ✅ (2026-04-15 — `$1B` at `$07E8` via `make ci`)
 | U25 | BackSID dispatch | `data1=$0A` | BACKSID | 🟢 |
 | U26 | SIDKick-pico dispatch | `data1=$0B` | SIDKICK-PICO | 🟢 |
 | U27 | KungFuSID dispatch | `data1=$0C` | KUNGFUSID | 🟢 |
+| U28 | ARM2SID SFX-only | `armsid_emul_mode=$01, armsid_major=ARM2` | ARM2SID SFX mode | 🟢 |
+| U29 | ARM2SID SFX+SID | `armsid_emul_mode=$02, armsid_major=ARM2` | ARM2SID SFX+SID mode | 🟢 |
 
-> All 27 unit tests pass as of 2026-04-15. Run `make ci` to verify.
+> All 29 unit tests pass as of 2026-04-16. Run `make ci` to verify.
 
 ---
 
