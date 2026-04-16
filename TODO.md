@@ -64,7 +64,7 @@
 - [ ] `checkrealsid` OSC3 readback — sawtooth decay is hardware-specific
 - [ ] `checksecondsid` noise mirror — $D41B randomness is hardware-specific
 - [ ] `calcandloop` decay timing — emulator timing differs from hardware by design
-- [ ] Add tests for new chips (PICOSid, BackBit SID, Public Domain SID) once detection method is known
+- [x] **PICOSid / BackBit SID / Public Domain SID** — detection implemented (SIDKick-pico config-mode, BackSID unlock protocol, PD SID echo); VICE unit tests T24–T27 added
 
 ### MixSID hardware combination tests (require physical chip swaps)
 - [x] **C06** — ARMSID@D400 + 6581@D420: confirmed V1.3.74: fallback Checkarmsid at D400 handles ARMSID@CS1 correctly; 6581 at D420 found via sidstereostart s_s_arm_call_real; hw_test 10/10 *(teststatus C06 — 🟢)*
