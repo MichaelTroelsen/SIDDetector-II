@@ -1,5 +1,5 @@
 // =============================================================================
-// test_suite.asm — Full SID Detector unit test suite  (30 tests)
+// test_suite.asm — Full SID Detector unit test suite  (32 tests)
 // =============================================================================
 // Covers every detection dispatch scenario in the sequential detection chain.
 // Each test presets the relevant zero-page inputs, calls an embedded copy of
@@ -17,10 +17,11 @@
 //   S8  FPGA Stereo   (T23)      data1=$06 at $D500 → recorded in sid_list
 //   S9  New chips     (T24–T27)  PDsid/$09 / BackSID/$0A / SKpico/$0B / KungFu/$0C
 //   S10 ARM2SID SFX   (T28–T29)  emul_mode=$01 → SFX only / $02 → SID+SFX
-//   S11 SKpico FM     (T30)      skpico_fm=$04 → FM Sound Expander at $DF00
+//   S11 SKpico FM     (T30–T31)  skpico_fm=$04/$05 → FM Sound Expander at $DF00
+//   S12 FM-YAM OPL2   (T32)     fmyam_detected=$01 → FM-YAM/OPL2 found at $DF00
 //
 // Pass count written to $07E8 on completion.
-// 30 = all tests passed.
+// 32 = all tests passed.
 // =============================================================================
 
 .encoding "petscii_upper"
@@ -59,12 +60,16 @@
 .const RES_ARM2SFXSID = $14   // ARM2SID SFX+SID mode  (emul_mode=2)
 
 // ARM2SID config variables (absolute addresses from siddetector.sym)
-.const armsid_emul_mode = $5375  // bits[1:0]: 0=SID,1=SFX,2=SFX+SID
-.const armsid_major_var = $536b  // firmware major (2=ARMSID, 3=ARM2SID)
+.const armsid_emul_mode = $5592  // bits[1:0]: 0=SID,1=SFX,2=SFX+SID
+.const armsid_major_var = $5588  // firmware major (2=ARMSID, 3=ARM2SID)
 
 // SIDKick-pico config variables (absolute addresses from siddetector.sym)
-.const skpico_fm_var    = $5545  // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
+.const skpico_fm_var    = $55c1  // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
 .const RES_SKPICO_FM    = $15   // SIDKick-pico FM Sound Expander detected
+
+// FM-YAM Sound Expander variables (absolute addresses from siddetector.sym)
+.const fmyam_detected_var = $55c2  // 1 = OPL2 found at $DF00 via timer probe
+.const RES_FMYAM          = $16   // FM-YAM / OPL2 Sound Expander at $DF00
 
 * = $0801
     .word $0801
@@ -745,10 +750,57 @@ t30:
     ldy #>str_t30_pass
     jsr show_result
     inc pass_count
-    jmp test_done
+    jmp t31
 t30_fail:
     lda #<str_t30_fail
     ldy #>str_t30_fail
+    jsr show_result
+
+// ============================================================
+// S11 continued: SKpico FM — second mode (T31)
+// T31: skpico_fm=$05 (FM_ENABLE=1) also triggers FM detection
+// ============================================================
+
+t31:
+    // T31: skpico_fm=$05 → FM still active (FM_ENABLE = 6-5 = 1 > 0)
+    lda #$05
+    sta skpico_fm_var
+    jsr dispatch_skpico_fm
+    lda #RES_SKPICO_FM
+    jsr assert_eq
+    bne t31_fail
+    lda #<str_t31_pass
+    ldy #>str_t31_pass
+    jsr show_result
+    inc pass_count
+    jmp t32
+t31_fail:
+    lda #<str_t31_fail
+    ldy #>str_t31_fail
+    jsr show_result
+
+// ============================================================
+// S12: FM-YAM SOUND EXPANDER DISPATCH  (T32)
+// Mirrors fmyam_detected check in backsid_post_fixup (siddetector.asm)
+// T32: fmyam_detected=$01 → RES_FMYAM
+// ============================================================
+
+t32:
+    // T32: fmyam_detected=$01 → FM-YAM/OPL2 found
+    lda #$01
+    sta fmyam_detected_var
+    jsr dispatch_fmyam
+    lda #RES_FMYAM
+    jsr assert_eq
+    bne t32_fail
+    lda #<str_t32_pass
+    ldy #>str_t32_pass
+    jsr show_result
+    inc pass_count
+    jmp test_done
+t32_fail:
+    lda #<str_t32_fail
+    ldy #>str_t32_fail
     jsr show_result
 
 // ============================================================
@@ -759,7 +811,7 @@ test_done:
     ldy #>str_divider
     jsr show_result
     lda pass_count
-    cmp #30
+    cmp #32
     bne td_fail
     lda #<str_all_pass
     ldy #>str_all_pass
@@ -1035,6 +1087,19 @@ dispatch_kungfu:
 dkfu_exit:
     rts
 
+// ---- dispatch_fmyam ------------------------------------------
+// Source: fmyam_detected check in backsid_post_fixup (siddetector.asm)
+// Reads fmyam_detected (absolute $55C2): non-zero → RES_FMYAM
+dispatch_fmyam:
+    lda #RES_NONE
+    sta dispatch_result
+    lda fmyam_detected_var
+    beq dfmy_exit           // $00 → not found
+    lda #RES_FMYAM
+    sta dispatch_result
+dfmy_exit:
+    rts
+
 // ---- dispatch_skpico_fm --------------------------------------
 // Source: cskp_fm_disp in siddetector.asm
 // Reads skpico_fm (absolute $5545):
@@ -1269,9 +1334,17 @@ str_t30_pass: .text "T30 PASS: FM=$04 -> SKPICO FM"
               .byte 0
 str_t30_fail: .text "T30 FAIL: FM=$04 -> SKPICO FM"
               .byte 0
+str_t31_pass: .text "T31 PASS: FM=$05 -> SKPICO FM"
+              .byte 0
+str_t31_fail: .text "T31 FAIL: FM=$05 -> SKPICO FM"
+              .byte 0
+str_t32_pass: .text "T32 PASS: FMYAM=$01 -> FM-YAM"
+              .byte 0
+str_t32_fail: .text "T32 FAIL: FMYAM=$01 -> FM-YAM"
+              .byte 0
 str_divider:  .text "--------------------------------------"
               .byte 0
-str_all_pass: .text "ALL 30 TESTS PASSED"
+str_all_pass: .text "ALL 32 TESTS PASSED"
               .byte 0
 str_some_fail:.text "SOME TESTS FAILED - CHECK ABOVE"
               .byte 0

@@ -935,7 +935,8 @@ end_skip_fiktiv:
 end_sid_found:
                 lda #$13                // restore 'S' at $0680 (spinner left it on last frame)
                 sta $0680
-                jsr backsid_post_fixup  // print stereo SIDs + fix row 8 if BackSID found
+                jsr checkfmyam          // probe $DF00 for OPL2 (FM-YAM); skipped if SKpico FM or ARM2SID SFX active
+                jsr backsid_post_fixup  // print stereo SIDs + fix row 8 if BackSID found; display FM-YAM if found
 
                 // --- Step 6: $D418 decay fingerprint ---
                 // Skipped when a chip was already identified by magic detection
@@ -2600,8 +2601,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 83
-.const README_MAX_SCROLL = 62    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 85
+.const README_MAX_SCROLL = 64    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -6416,6 +6417,77 @@ sfx_skp_miss:
 // ACK D41B before reading secondary base+$1B, except when sptr_zp=D400 where D41B IS
 // the target echo. Skip ACK when lo=0 and hi=$D4 (D400 slot).
 //--------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------
+// checkfmyam: probe $DF00 for OPL2/YM3812 (FM-YAM Sound Expander or compatible).
+// Uses the standard AdLib timer detection algorithm:
+//   Step 1: Reset Timer 1 + Timer 2 flags (reg $04 = $60 then $80)
+//   Step 2: Read status ($DF00) & $E0 → must be $00 (no timer flags)
+//   Step 3: Set Timer 1 period (reg $02 = $FF), start Timer 1 (reg $04 = $21)
+//   Step 4: Wait ~160 CPU cycles (> 80μs at 1 MHz; OPL2 Timer 1 fires after ~80μs)
+//   Step 5: Read status ($DF00) & $E0 → must be $C0 (IRQ + T1 flags set)
+// Guards:
+//   - skpico_fm >= 4: SIDKick Pico is the OPL2 source at $DF00 (already detected)
+//   - arm2sid_map_h2 lo nibble == 3: ARM2SID SFX- slot at DF00 (already detected)
+// Sets fmyam_detected = $01 if OPL2 found, $00 otherwise.
+// Trashes A, X. Preserves Y.
+//--------------------------------------------------------------------------------------------------
+checkfmyam:
+                lda #$00
+                sta fmyam_detected
+                // Guard: SIDKick Pico FM at $DF00
+                lda skpico_fm
+                cmp #$04
+                bcs cfm_done            // >= 4: SKpico owns $DF00
+                // Guard: ARM2SID SFX- slot at DF00 (armsid_map_h2 lo nibble = 3)
+                lda armsid_map_h2
+                and #$0F
+                cmp #$03
+                beq cfm_done            // = 3: ARM2SID owns $DF00
+                // Step 1: Reset Timer 1 + Timer 2 via reg $04
+                lda #$04
+                sta $DF00               // select reg 4 (Timer Control)
+                lda #$60
+                sta $DF01               // $60 = T1 mask + T2 mask (reset flags)
+                lda #$04
+                sta $DF00
+                lda #$80
+                sta $DF01               // $80 = IRQ-RESET
+                // Step 2: Read status → expect $00 (no timer flags set)
+                lda $DF00
+                and #$E0
+                bne cfm_cleanup         // not $00 → nothing at $DF00 or bad state
+                // Step 3: Set Timer 1 period = $FF, start Timer 1
+                lda #$02
+                sta $DF00               // select reg 2 (Timer 1 period)
+                lda #$FF
+                sta $DF01               // period = $FF (overflows after 1 tick × 80μs)
+                lda #$04
+                sta $DF00               // select reg 4
+                lda #$21
+                sta $DF01               // $21 = T1 start, T1 mask=0
+                // Step 4: Wait ~160 CPU cycles (>= 80μs at 1 MHz PAL)
+                ldx #$20
+cfm_wait:       dex
+                bne cfm_wait
+                // Step 5: Read status → expect $C0 (IRQ + T1 fired)
+                lda $DF00
+                and #$E0
+                cmp #$C0
+                bne cfm_cleanup         // mismatch → not OPL2
+                lda #$01
+                sta fmyam_detected
+cfm_cleanup:    // Mask timers and reset IRQ flags (stop OPL2 from generating spurious IRQs)
+                lda #$04
+                sta $DF00
+                lda #$60
+                sta $DF01               // mask T1 + T2
+                lda #$04
+                sta $DF00
+                lda #$80
+                sta $DF01               // reset IRQ flags
+cfm_done:       rts
+
+//--------------------------------------------------------------------------------------------------
 sfx_probe_dis_echo:
                 lda #$00                // pre-clear base+$1D (reset ARM/SwinSID echo state)
                 ldy #$1D
@@ -7545,6 +7617,8 @@ pdsidf:         .text "PD SID FOUND"
                 .byte 0
 backsidf:       .text "BACKSID FOUND"
                 .byte 0
+fmyamf:         .text "FM-YAM FOUND"
+                .byte 0
 skpicof:        .text "SIDKICK-PICO 8580"
                 .byte 0
 skpicof_6581:   .text "SIDKICK-PICO 6581"
@@ -7590,6 +7664,7 @@ arm2sid_shortf:      .text "ARM2SID "
                      .byte 0                         // prefix for stereo SID entries
 backsid_d41f:        .byte 0     // D41F readback from checkbacksid ($42 = BackSID present)
 skpico_fm:           .byte 0     // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
+fmyam_detected:      .byte 0     // 1 = OPL2 found at $DF00 via timer probe (FM-YAM or compatible)
 MODE6581:     .byte $f0,$f1,$f0,$f0,$f2,$f1,$f2,$f2,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f0
 MODE8580:     .byte $f0,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f2,$f2,$f1,$f2,$f0,$f0,$f1,$f0
 MODEUNKN:     .byte $f0,$f0,$f0,$f0,$f0,$f0,$f0,$f2,$f0,$f0,$f0,$f2,$f0,$f1,$f1,$f0
@@ -7624,7 +7699,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.86 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.87 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7960,7 +8035,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.86"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.87"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8725,7 +8800,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.86 README"
+    .text "SIDDETECTOR V1.3.87 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8886,6 +8961,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.87 FM-YAM OPL2 DETECTION + SKPICO FM T31/T32"
     .byte 13
     .byte $9E
     .text "  V1.3.86 SIDKICK-PICO FM SOUND EXPANDER DETECTION"
@@ -9061,6 +9139,32 @@ bpf_clr:
                 inx
                 cpx #11
                 bne bpf_clr
+                // FM-YAM: if detected, show "DF00 FM-YAM FOUND" on next available stereo row.
+                // sidnum_zp entries were shown at rows 16..15+sidnum_zp; next = 16+sidnum_zp.
+                // Skip if sidnum_zp >= 8 (rows 16-23 full; row 24 is shortcut bar).
+                lda fmyam_detected
+                beq bpf_done
+                lda sidnum_zp
+                cmp #$08
+                bcs bpf_done            // all 8 rows used — no room
+                clc
+                adc #$10                // row = 16 + sidnum_zp
+                tax
+                ldy #13
+                jsr $E50C
+                lda #$44                // 'D'
+                jsr $FFD2
+                lda #$46                // 'F'
+                jsr $FFD2
+                lda #$30                // '0'
+                jsr $FFD2
+                lda #$30                // '0'
+                jsr $FFD2
+                lda #$20                // ' '
+                jsr $FFD2
+                lda #<fmyamf
+                ldy #>fmyamf
+                jsr $AB1E
 bpf_done:
                 rts
 
