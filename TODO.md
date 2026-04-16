@@ -80,11 +80,16 @@
 ## ARMSID2 SFX capability
 
 ARMSID2 (second generation) includes built-in SFX Sound Expander emulation (Yamaha OPL2 / YM3812).
-Detection and presentation tasks:
+`armsid_emul_mode` is already read in `armsid_get_version` ('m','m' command → D41B bits[1:0]):
+  - 0 = SID only (standard)
+  - 1 = SFX only (OPL2, no SID)
+  - 2 = SFX + SID (both simultaneously)
 
-- [ ] **Detect SFX capability** — probe ARMSID2 firmware to determine whether SFX is present/enabled; find a reliable discriminant (config register, echo, or capability flag) that distinguishes ARMSID2-with-SFX from plain ARMSID2
-- [ ] **Update in-app info screen** — add SFX capability note to ARMSID2 info page; include what SFX Sound Expander emulation means (OPL2 FM synthesis, compatible with software using the SFX cartridge)
-- [ ] **Update README screen** — mention ARMSID2 SFX capability in the chip list / detection chain description
+The value is shown on the debug screen ("SID"/"SFX"/"BOT") but not surfaced elsewhere.
+
+- [ ] **Main screen** — when ARM2SID emul_mode≥1, append "+SFX" after the SID type (e.g. "ARM2SID V3.XX L 8580 +SFX"); mode=1 (SFX only) should suppress the SID type field
+- [ ] **Info page** — add SFX mode line to `arm2sid_print_extra` (after CH: line); show "MODE: SID", "MODE: SFX", or "MODE: SID+SFX"
+- [ ] **README screen** — mention ARM2SID SFX Sound Expander emulation in the chip description
 
 ## Other improvements
 
