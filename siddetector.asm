@@ -511,7 +511,29 @@ armsid:
                 jsr print_armsid_ch    // append " L" or " R" (channel)
                 lda #$20
                 jsr $FFD2
-                jsr print_sid_type_4   // append "6581" or "8580"
+                // emul_mode=0: SID only → print SID type normally
+                // emul_mode=1: SFX only → skip SID type, print "+SFX"
+                // emul_mode=2: SFX+SID  → print SID type then " +SFX"
+                lda armsid_emul_mode
+                and #$03
+                cmp #$01               // SFX only?
+                beq arm2_sfx_str       // mode=1: skip SID type, go print +SFX
+                jsr print_sid_type_4   // mode 0 or 2: print "6581"/"8580"
+                lda armsid_emul_mode
+                and #$03
+                beq arm2_sfx_done      // mode=0: done
+arm2_sfx_str:   // mode=1 (SFX only) or mode=2 (SFX+SID): print " +SFX"
+                lda #$20               // ' '
+                jsr $FFD2
+                lda #$2B               // '+'
+                jsr $FFD2
+                lda #$53               // 'S'
+                jsr $FFD2
+                lda #$46               // 'F'
+                jsr $FFD2
+                lda #$58               // 'X'
+                jsr $FFD2
+arm2_sfx_done:
                 jmp end
                 tsx                    // unreachable; kept for padding
 armsidlo:
@@ -2565,8 +2587,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 79
-.const README_MAX_SCROLL = 58    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 81
+.const README_MAX_SCROLL = 60    // README_LINES - 21 visible rows (row 0 is a fixed header)
 
 readme_entry:
            lda #$00
@@ -6699,6 +6721,65 @@ ape_ch_ok:      jsr $FFD2
 ape_no_ch:
                 lda #$0D
                 jsr $FFD2
+                // ARM2SID only: mode line "MODE: SID" / "MODE: SFX" / "MODE: SID+SFX"
+                lda armsid_major
+                cmp #$03
+                bne ape_skip_mode      // not ARM2SID → skip mode line
+                lda #$20               // ' '
+                jsr $FFD2
+                lda #$4D               // 'M'
+                jsr $FFD2
+                lda #$4F               // 'O'
+                jsr $FFD2
+                lda #$44               // 'D'
+                jsr $FFD2
+                lda #$45               // 'E'
+                jsr $FFD2
+                lda #$3A               // ':'
+                jsr $FFD2
+                lda #$20               // ' '
+                jsr $FFD2
+                lda armsid_emul_mode
+                and #$03
+                cmp #$01               // SFX only?
+                beq ape_mode_sfx
+                cmp #$02               // SFX+SID?
+                beq ape_mode_sfxsid
+                // mode=0: "SID"
+                lda #$53               // 'S'
+                jsr $FFD2
+                lda #$49               // 'I'
+                jsr $FFD2
+                lda #$44               // 'D'
+                jsr $FFD2
+                jmp ape_mode_done
+ape_mode_sfx:   // mode=1: "SFX"
+                lda #$53               // 'S'
+                jsr $FFD2
+                lda #$46               // 'F'
+                jsr $FFD2
+                lda #$58               // 'X'
+                jsr $FFD2
+                jmp ape_mode_done
+ape_mode_sfxsid: // mode=2: "SID+SFX"
+                lda #$53               // 'S'
+                jsr $FFD2
+                lda #$49               // 'I'
+                jsr $FFD2
+                lda #$44               // 'D'
+                jsr $FFD2
+                lda #$2B               // '+'
+                jsr $FFD2
+                lda #$53               // 'S'
+                jsr $FFD2
+                lda #$46               // 'F'
+                jsr $FFD2
+                lda #$58               // 'X'
+                jsr $FFD2
+ape_mode_done:
+                lda #$0D
+                jsr $FFD2
+ape_skip_mode:
                 // ARM2SID only: memory map
                 lda armsid_major
                 cmp #$03
@@ -7422,7 +7503,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.84 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.85 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -7758,7 +7839,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.84"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.85"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8523,7 +8604,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.84 README"
+    .text "SIDDETECTOR V1.3.85 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8684,6 +8765,9 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  CSDB:      RELEASE #176909"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.85 ARM2SID SFX MODE ON MAIN + INFO SCREENS"
     .byte 13
     .byte $9E
     .text "  V1.3.84 ARMSID+SIDFX D420 BUS CONTAMINATION FIX"

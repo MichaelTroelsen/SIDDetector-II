@@ -1,5 +1,5 @@
 // =============================================================================
-// test_suite.asm — Full SID Detector unit test suite  (27 tests)
+// test_suite.asm — Full SID Detector unit test suite  (29 tests)
 // =============================================================================
 // Covers every detection dispatch scenario in the sequential detection chain.
 // Each test presets the relevant zero-page inputs, calls an embedded copy of
@@ -16,9 +16,10 @@
 //   S7  ArithMean     (T19–T22)  pure arithmetic unit tests
 //   S8  FPGA Stereo   (T23)      data1=$06 at $D500 → recorded in sid_list
 //   S9  New chips     (T24–T27)  PDsid/$09 / BackSID/$0A / SKpico/$0B / KungFu/$0C
+//   S10 ARM2SID SFX   (T28–T29)  emul_mode=$01 → SFX only / $02 → SID+SFX
 //
 // Pass count written to $07E8 on completion.
-// 27 = all tests passed.
+// 29 = all tests passed.
 // =============================================================================
 
 .encoding "petscii_upper"
@@ -53,6 +54,12 @@
 .const RES_BACKSID    = $10
 .const RES_SIDKPIC    = $11
 .const RES_KUNGFU     = $12
+.const RES_ARM2SFX    = $13   // ARM2SID SFX-only mode (emul_mode=1)
+.const RES_ARM2SFXSID = $14   // ARM2SID SFX+SID mode  (emul_mode=2)
+
+// ARM2SID config variables (absolute addresses from siddetector.sym)
+.const armsid_emul_mode = $5375  // bits[1:0]: 0=SID,1=SFX,2=SFX+SID
+.const armsid_major_var = $536b  // firmware major (2=ARMSID, 3=ARM2SID)
 
 * = $0801
     .word $0801
@@ -662,10 +669,57 @@ t27:
     ldy #>str_t27_pass
     jsr show_result
     inc pass_count
-    jmp test_done
+    jmp t28
 t27_fail:
     lda #<str_t27_fail
     ldy #>str_t27_fail
+    jsr show_result
+
+// ============================================================
+// S10: ARM2SID SFX MODE DISPATCH  (T28–T29)
+// Mirrors emul_mode check in armsid: (siddetector.asm)
+// T28: emul_mode=$01 (SFX only)    → RES_ARM2SFX
+// T29: emul_mode=$02 (SFX+SID)     → RES_ARM2SFXSID
+// ============================================================
+
+t28:
+    // T28: armsid_emul_mode=$01 → SFX only
+    lda #$03
+    sta armsid_major_var        // ARM2SID major = 3
+    lda #$01
+    sta armsid_emul_mode
+    jsr dispatch_arm2sid_sfx
+    lda #RES_ARM2SFX
+    jsr assert_eq
+    bne t28_fail
+    lda #<str_t28_pass
+    ldy #>str_t28_pass
+    jsr show_result
+    inc pass_count
+    jmp t29
+t28_fail:
+    lda #<str_t28_fail
+    ldy #>str_t28_fail
+    jsr show_result
+
+t29:
+    // T29: armsid_emul_mode=$02 → SFX+SID
+    lda #$03
+    sta armsid_major_var
+    lda #$02
+    sta armsid_emul_mode
+    jsr dispatch_arm2sid_sfx
+    lda #RES_ARM2SFXSID
+    jsr assert_eq
+    bne t29_fail
+    lda #<str_t29_pass
+    ldy #>str_t29_pass
+    jsr show_result
+    inc pass_count
+    jmp test_done
+t29_fail:
+    lda #<str_t29_fail
+    ldy #>str_t29_fail
     jsr show_result
 
 // ============================================================
@@ -676,7 +730,7 @@ test_done:
     ldy #>str_divider
     jsr show_result
     lda pass_count
-    cmp #27
+    cmp #29
     bne td_fail
     lda #<str_all_pass
     ldy #>str_all_pass
@@ -952,6 +1006,30 @@ dispatch_kungfu:
 dkfu_exit:
     rts
 
+// ---- dispatch_arm2sid_sfx ------------------------------------
+// Source: armsid: SFX mode check (siddetector.asm)
+// Reads armsid_emul_mode (absolute $5375) bits[1:0]:
+//   1 → RES_ARM2SFX    (SFX only)
+//   2 → RES_ARM2SFXSID (SFX+SID)
+//   else → RES_NONE
+dispatch_arm2sid_sfx:
+    lda #RES_NONE
+    sta dispatch_result
+    lda armsid_emul_mode
+    and #$03
+    cmp #$01
+    bne dasfx_chk2
+    lda #RES_ARM2SFX
+    sta dispatch_result
+    rts
+dasfx_chk2:
+    cmp #$02
+    bne dasfx_exit
+    lda #RES_ARM2SFXSID
+    sta dispatch_result
+dasfx_exit:
+    rts
+
 // ============================================================
 // calcMean — embedded copy of ArithmeticMean from siddetector.asm
 // Reads: zpArrayPtr ($A2), numInts, arr1/arr2
@@ -1129,9 +1207,17 @@ str_t27_pass: .text "T27 PASS: D1=$0C -> KUNGFUSID"
               .byte 0
 str_t27_fail: .text "T27 FAIL: D1=$0C -> KUNGFUSID"
               .byte 0
+str_t28_pass: .text "T28 PASS: EMUL=$01 -> SFX ONLY"
+              .byte 0
+str_t28_fail: .text "T28 FAIL: EMUL=$01 -> SFX ONLY"
+              .byte 0
+str_t29_pass: .text "T29 PASS: EMUL=$02 -> SID+SFX"
+              .byte 0
+str_t29_fail: .text "T29 FAIL: EMUL=$02 -> SID+SFX"
+              .byte 0
 str_divider:  .text "--------------------------------------"
               .byte 0
-str_all_pass: .text "ALL 27 TESTS PASSED"
+str_all_pass: .text "ALL 29 TESTS PASSED"
               .byte 0
 str_some_fail:.text "SOME TESTS FAILED - CHECK ABOVE"
               .byte 0

@@ -7,7 +7,7 @@
 #   (or: make ci)
 #
 # Exit codes:
-#   0 — all 27 tests passed
+#   0 — all 29 tests passed
 #   1 — build failed, VICE did not exit cleanly, or pass count is wrong
 #
 # How it works:
@@ -28,7 +28,7 @@ cd "$ROOT"
 KICKASS="java -jar C:/debugger/kickasm/KickAss.jar"
 VICE="C:/winvice/bin/x64sc.exe"
 PYTHON="/c/Python314/python"
-EXPECTED_PASS=27   # $1B hex
+EXPECTED_PASS=29   # $1D hex
 
 # ---- Build ----------------------------------------------------------------
 echo "=== CI: build test_suite.prg ==="
