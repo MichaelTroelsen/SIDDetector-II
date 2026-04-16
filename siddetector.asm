@@ -504,35 +504,30 @@ armsid:
                 ldx #02                // row 2 = "armsid....:" line
                 ldy #13
                 jsr $E50C
+                // emul_mode=0: "ARM2SID FOUND V3.xx L 6581"
+                // emul_mode=1: "ARM2SID +SFX  V3.xx L"        (SFX only — no SID type)
+                // emul_mode=2: "ARM2SID +SFX  V3.xx L 6581"   (SFX+SID)
+                lda armsid_emul_mode
+                and #$03
+                beq arm2_print_found   // mode=0: normal "FOUND" string
+                lda #<arm2sid_sfxf
+                ldy #>arm2sid_sfxf
+                jsr $AB1E              // "ARM2SID +SFX "
+                jmp arm2_print_ver
+arm2_print_found:
                 lda #<arm2sidf
                 ldy #>arm2sidf
-                jsr $AB1E
-                jsr print_armsid_ver   // append " V3.xx"
-                jsr print_armsid_ch    // append " L" or " R" (channel)
+                jsr $AB1E              // "ARM2SID FOUND"
+arm2_print_ver:
+                jsr print_armsid_ver   // " V3.xx"
+                jsr print_armsid_ch    // " L" or " R"
+                lda armsid_emul_mode
+                and #$03
+                cmp #$01               // SFX only? → skip SID type
+                beq arm2_sfx_done
                 lda #$20
                 jsr $FFD2
-                // emul_mode=0: SID only → print SID type normally
-                // emul_mode=1: SFX only → skip SID type, print "+SFX"
-                // emul_mode=2: SFX+SID  → print SID type then " +SFX"
-                lda armsid_emul_mode
-                and #$03
-                cmp #$01               // SFX only?
-                beq arm2_sfx_str       // mode=1: skip SID type, go print +SFX
-                jsr print_sid_type_4   // mode 0 or 2: print "6581"/"8580"
-                lda armsid_emul_mode
-                and #$03
-                beq arm2_sfx_done      // mode=0: done
-arm2_sfx_str:   // mode=1 (SFX only) or mode=2 (SFX+SID): print " +SFX"
-                lda #$20               // ' '
-                jsr $FFD2
-                lda #$2B               // '+'
-                jsr $FFD2
-                lda #$53               // 'S'
-                jsr $FFD2
-                lda #$46               // 'F'
-                jsr $FFD2
-                lda #$58               // 'X'
-                jsr $FFD2
+                jsr print_sid_type_4   // "6581" or "8580"
 arm2_sfx_done:
                 jmp end
                 tsx                    // unreachable; kept for padding
@@ -5706,7 +5701,7 @@ ssp_skp6:
         lda     #$05        // restore type code for ssp_skp7's cmp #$05
         jmp     ssp_skp7
 ssp_a2_arm2:
-        // ARM2SID stereo entry: "ARM2SID SID3 8580" format
+        // ARM2SID stereo entry: "ARM2SID SIDL 6581+SFX" format
         lda     sid_list_h,y
         ldx     sid_list_l,y
         jsr     arm2sid_slot_lookup  // (high,low) → A = map value
@@ -5719,6 +5714,18 @@ ssp_a2_arm2:
         lda     #$20
         jsr     $FFD2
         jsr     print_sid_type_4     // "6581" or "8580"
+        lda     armsid_emul_mode
+        and     #$03
+        beq     ssp_a2_arm2_done     // mode=0: no SFX suffix
+        lda     #$2B                 // '+'
+        jsr     $FFD2
+        lda     #$53                 // 'S'
+        jsr     $FFD2
+        lda     #$46                 // 'F'
+        jsr     $FFD2
+        lda     #$58                 // 'X'
+        jsr     $FFD2
+ssp_a2_arm2_done:
         jmp     ssp_skp20
 ssp_skp7:
         cmp     #$05
@@ -5772,6 +5779,18 @@ ssp_skp10:
         lda     #$20
         jsr     $FFD2
         jsr     print_sid_type_4
+        lda     armsid_emul_mode
+        and     #$03
+        beq     ssp_skp10_done       // mode=0: no SFX suffix
+        lda     #$2B                 // '+'
+        jsr     $FFD2
+        lda     #$53                 // 'S'
+        jsr     $FFD2
+        lda     #$46                 // 'F'
+        jsr     $FFD2
+        lda     #$58                 // 'X'
+        jsr     $FFD2
+ssp_skp10_done:
         jmp     ssp_skp20
 ssp_skp10_gen:
         lda     #<secondsid
@@ -7420,6 +7439,8 @@ c128_text:      .text " C128"
 tc64_text:      .text " TC64"
                 .byte 0,0
 arm2sidf:       .text "ARM2SID FOUND"
+                .byte 0
+arm2sid_sfxf:   .text "ARM2SID +SFX "   // same width as "ARM2SID FOUND" — used when emul_mode>=1
                 .byte 0
 pdsidf:         .text "PD SID FOUND"
                 .byte 0
