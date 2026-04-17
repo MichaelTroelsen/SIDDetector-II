@@ -987,6 +987,7 @@ after_decay:
                 adc #$10                // row = 16 + sidnum_zp
                 tax
                 ldy #13
+                sec                     // PLOT requires carry SET to write position
                 jsr $E50C
                 lda #$44; jsr $FFD2     // 'D'
                 lda #$46; jsr $FFD2     // 'F'
@@ -1013,6 +1014,7 @@ sfxexp_row_ok:  cmp #$18                // guard: beyond row 23
                 bcs sfxexp_disp_skip
                 tax
                 ldy #13
+                sec                     // PLOT requires carry SET to write position
                 jsr $E50C
                 lda #$44; jsr $FFD2     // 'D'
                 lda #$45; jsr $FFD2     // 'E'
@@ -6623,52 +6625,35 @@ cse_tah_b:      dex
 checksfxexpander:
                 lda #$00
                 sta sfxexp_detected
-                // Guard: SIDFX present — $DE00 area conflicts
-                lda data4
-                cmp #$30
-                bne cse_try_a
-                rts                                     // SIDFX: exit immediately
+                // Guard: SIDFX ($30) — $DE00 area conflicts with SIDFX SCI bus
+                // Guard: emulator/unknown ($F0) — VICE maps OPL regardless of SFX setting
+                lda data4; cmp #$30; bne cse_g1; rts   // SIDFX: exit
+cse_g1:         cmp #$F0; bne cse_try_a; rts           // emulator: exit
 
-                // === Pre-check: OPL1 status register bits 5:0 are always 0 on real hardware.
-                // VICE open bus ($85) and real C64 open bus ($FF) have nonzero lower 6 bits.
-                // Reading $DE00 BEFORE any writes: if ($DE00 & $3F) ≠ 0 → not real OPL1 → exit.
-                // This reliably rejects VICE IO1 open bus whether SFX is enabled or disabled,
-                // since VICE OPL maps registers even when "SFX Sound Expander" is unchecked.
+                // === OPL1 timer probe: standard port order (addr→$DE00, data→$DE01) ===
+                // After RST (write $80 to reg 4), real OPL1 clears status to $00.
+                // Real C64 open bus ($FF) and unmapped IO1 do not respond → remain ≠ $00.
 cse_try_a:
-                lda $DE00; and #$3F; beq cse_raw_ok; rts   // nonzero lower bits → not OPL1
-cse_raw_ok:
                 lda #$04; ldx #$60; jsr cse_write_a    // stop timers
-                lda #$04; ldx #$80; jsr cse_write_a    // clear IRQ / timer flags (RST)
-                lda $DE00; sta dse_s2b                  // capture status for debug
-                and #$60                                // check T1 (bit6) and T2 (bit5) only
-                bne cse_try_b                           // T1 or T2 set → timer was already running; try B
-                lda #$02; ldx #$7F; jsr cse_write_a    // timer 1 period
-                lda #$04; ldx #$01; jsr cse_write_a    // start timer 1 (no mask — VICE OPL1 needs unmasked T1)
-                ldx #$20                                // wait ~41ms (>2 PAL frames; VICE OPL updates per frame)
+                lda #$04; ldx #$80; jsr cse_write_a    // RST: clear all IRQ/timer flags
+                lda $DE00; sta dse_s2b                  // capture for debug
+                bne cse_done                            // ≠ $00 → OPL not mapped → not SFX
+                // OPL responded with $00 → start T1 and measure
+                lda #$02; ldx #$7F; jsr cse_write_a    // timer 1 period = $7F (~10ms)
+                lda #$04; ldx #$01; jsr cse_write_a    // start T1 (unmasked)
+                ldx #$20                                // wait ~41ms (>4× T1 period)
 cse_wait_ao:    ldy #$00
 cse_wait_ai:    dey; bne cse_wait_ai; dex; bne cse_wait_ao
-                lda $DE00; sta dse_s6b                  // capture post-timer status for debug
-                // Real OPL1 sets both IRQ (bit7) and T1_FLAG (bit6) on T1 overflow → $C0.
-                // VICE open bus and VICE OPL1 (buggy) only set bit7 ($80/$85) — not equal $C0.
-                and #$C0; cmp #$C0; beq cse_found       // both bits required → real OPL1 only
-                // Try A failed. Reset before try B.
-                lda #$04; ldx #$60; jsr cse_write_a
+                lda $DE00; sta dse_s6b                  // capture post-timer for debug
+                // Real OPL1: T1 overflow sets both IRQ (bit7) and T1_FLAG (bit6) → $C0 or $C5.
+                and #$C0; cmp #$C0; beq cse_found       // both bits → real OPL1 confirmed
+                lda #$04; ldx #$60; jsr cse_write_a    // cleanup: stop timers
+cse_done:       rts
 
-                // === Try B: swapped port order (addr→$DE01, data→$DE00) ===
-                // Fallback only: for custom hardware that reverses the YM3526 address/data lines.
-cse_try_b:      lda #$04; ldx #$60; jsr cse_write_b    // stop timers
-                lda #$04; ldx #$80; jsr cse_write_b    // clear IRQ flags
-                lda $DE00; and #$40; bne cse_done       // T1 already set → cannot measure
-                lda #$02; ldx #$7F; jsr cse_write_b    // timer 1 period
-                lda #$04; ldx #$21; jsr cse_write_b    // start timer 1
-                ldx #$0C                                // wait ~15ms
-cse_wait_bo:    ldy #$00
-cse_wait_bi:    dey; bne cse_wait_bi; dex; bne cse_wait_bo
-                lda $DE00; and #$40; beq cse_done       // T1 not set → no timer
 cse_found:      lda #$01
                 sta sfxexp_detected
-                lda #$04; ldx #$60; jsr cse_write_a    // stop timers (standard order)
-cse_done:       rts
+                lda #$04; ldx #$60; jsr cse_write_a    // stop timers
+cse_exit:       rts
 
 //--------------------------------------------------------------------------------------------------
 sfx_probe_dis_echo:
@@ -7888,7 +7873,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.99 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.100 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8224,7 +8209,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.99"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.100"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9001,7 +8986,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.99 README"
+    .text "SIDDETECTOR V1.3.100 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9164,7 +9149,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
-    .text "  V1.3.99 FIX SFX FALSE POSITIVE: CHECK $DE00&$3F=0 FIRST"
+    .text "  V1.3.100 FIX SFX: SKIP EMULATOR; SEC BEFORE $E50C; POST-RST $00"
     .byte 13
     .byte $9E
     .text "  V1.3.95 FIX IS_U64 FALSE POS; FIKTIVLOOP SKIP+LIST INIT"
