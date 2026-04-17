@@ -6646,9 +6646,9 @@ cse_try_a:
 cse_wait_ao:    ldy #$00
 cse_wait_ai:    dey; bne cse_wait_ai; dex; bne cse_wait_ao
                 lda $DE00; sta dse_s6b                  // capture post-timer status for debug
-                // VICE OPL1 sets IRQ bit (bit7) on T1 overflow but NOT T1_FLAG (bit6) — VICE bug.
-                // Real OPL1/OPL2 sets both bits 7 and 6. Accept either.
-                and #$C0; bne cse_found                 // IRQ or T1_FLAG set → OPL timer fired
+                // Real OPL1 sets both IRQ (bit7) and T1_FLAG (bit6) on T1 overflow → $C0.
+                // VICE open bus and VICE OPL1 (buggy) only set bit7 ($80/$85) — not equal $C0.
+                and #$C0; cmp #$C0; beq cse_found       // both bits required → real OPL1 only
                 // Try A failed. Reset before try B.
                 lda #$04; ldx #$60; jsr cse_write_a
 
@@ -7886,7 +7886,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.97 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.98 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8222,7 +8222,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.97"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.98"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8999,7 +8999,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.97 README"
+    .text "SIDDETECTOR V1.3.98 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9162,7 +9162,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
-    .text "  V1.3.97 CBM SFX EXPANDER: DE00 REAL HW, DF00 VICE"
+    .text "  V1.3.98 FIX SFX FALSE POSITIVE: REQUIRE $C0 (REAL HW)"
     .byte 13
     .byte $9E
     .text "  V1.3.95 FIX IS_U64 FALSE POS; FIKTIVLOOP SKIP+LIST INIT"
