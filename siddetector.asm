@@ -6629,12 +6629,14 @@ checksfxexpander:
                 bne cse_try_a
                 rts                                     // SIDFX: exit immediately
 
-                // === Try A: standard port order (addr→$DE00, data→$DE01) ===
-                // Used for both real hardware and VICE (VICE uses standard YM3526 wiring).
-                // VICE OPL1 may have a stuck IRQ bit (bit 7 = $85 idle) that does not clear
-                // via $80 IRQ_RESET; treat as OPL1 present and proceed. Only T1/T2 overflow
-                // flags (bits 6-5) indicate timer state; bit 7 alone must not redirect to Try B.
+                // === Pre-check: OPL1 status register bits 5:0 are always 0 on real hardware.
+                // VICE open bus ($85) and real C64 open bus ($FF) have nonzero lower 6 bits.
+                // Reading $DE00 BEFORE any writes: if ($DE00 & $3F) ≠ 0 → not real OPL1 → exit.
+                // This reliably rejects VICE IO1 open bus whether SFX is enabled or disabled,
+                // since VICE OPL maps registers even when "SFX Sound Expander" is unchecked.
 cse_try_a:
+                lda $DE00; and #$3F; beq cse_raw_ok; rts   // nonzero lower bits → not OPL1
+cse_raw_ok:
                 lda #$04; ldx #$60; jsr cse_write_a    // stop timers
                 lda #$04; ldx #$80; jsr cse_write_a    // clear IRQ / timer flags (RST)
                 lda $DE00; sta dse_s2b                  // capture status for debug
@@ -7886,7 +7888,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.98 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.99 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8222,7 +8224,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.98"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.99"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8999,7 +9001,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.98 README"
+    .text "SIDDETECTOR V1.3.99 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9162,7 +9164,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
-    .text "  V1.3.98 FIX SFX FALSE POSITIVE: REQUIRE $C0 (REAL HW)"
+    .text "  V1.3.99 FIX SFX FALSE POSITIVE: CHECK $DE00&$3F=0 FIRST"
     .byte 13
     .byte $9E
     .text "  V1.3.95 FIX IS_U64 FALSE POS; FIKTIVLOOP SKIP+LIST INIT"
