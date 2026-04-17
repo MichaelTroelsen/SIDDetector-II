@@ -2,6 +2,7 @@
 
 ## New chips to detect
 
+- [x] **CBM SFX Sound Expander** — V1.3.97: `checksfxexpander` detects OPL1 (YM3526) at $DE00 (IO1). Try A (standard port order: addr→$DE00, data→$DE01) handles both real hardware and VICE. VICE quirk: IRQ bit (bit7) may be stuck high before timer fires — baseline check uses bits 6-5 only (`and #$60`); post-timer uses bits 7-6 (`and #$C0`) to accept either T1_FLAG or IRQ. Real hardware uses standard OPL1 clear+timer; VICE OPL1 does not properly set T1_FLAG (bit6) on overflow but does set IRQ (bit7). Try B (swapped ports) kept as fallback for unusual custom hardware.
 - [x] **KungFuSID** — Detected via D41D echo: write $A5, read back. Old firmware returns $A5 (register echo); new firmware returns $5A (FW_UPDATE_START_ACK). Both accepted. Detection placed after all other hardware checks (position 5b). `data1=$0C`.
 - [x] **SIDKick-pico** — Detected via config mode VERSION_STR: write $FF to D41F, $E0 to D41E, skip 20 bytes from D41D, read 'S'/$53 + 'K'/$4B (data1=$0B)
 - [x] **BackSID** — Detected via register echo: write $42 to D41C, $B5 to D41D, $1D to D41E, read D41F; if D41F==$42 → BackSID (data1=$0A)

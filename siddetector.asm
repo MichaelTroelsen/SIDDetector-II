@@ -164,16 +164,18 @@ start:
                 sta data4               // init: no HW SID type saved yet
                 sta res_zp              // init: no tentative SwinSID Nano result
                 sta retry_zp            // init: no retries yet
-init_sid_list:                          // zero the 8-slot SID result tables
+init_sid_list:                          // zero the 8-slot SID result tables (A=$00)
                 sta sid_list_h,x        // SID address high byte ($D4/$D5 ...)
                 sta sid_list_l,x        // SID address low byte  ($00/$20 ...)
                 sta sid_list_t,x        // chip type code for this slot
                 inx
                 cpx #$08               // 8 slots; slot 0 unused, slots 1-7 active
                 bne init_sid_list
-                
+
                 lda #$00
                 sta sid_music_flag      // ensure SID module is silent at startup/restart
+                lda #$FF
+                sta dfx_preread         // $FF = checkfmyam not yet reached (init after loop)
                 jsr printscreen         // blit static 25x40 UI to screen RAM $0400
 
                 // checkpalntsc patches NMI vector to RTI then checks if a
@@ -267,7 +269,12 @@ iloop2:          inx
                 // --- Step 0.1: Detect Ultimate64 via UCI Status Register ---
                 // UCI is mapped by default to $DF1C-$DF1F on Ultimate64.
                 // $DF1F = UCI Status: returns 0 (idle) on U64; open bus ($FF) on real C64.
-                // Any hardware without UCI at $DF1F will read $FF here.
+                // Guard: check $DF00 first. On U64, IO2 is open bus → $DF00=$FF.
+                // If $DF00 ≠ $FF, some device (SFX Sound Expander, REU, etc.) owns IO2 → not U64.
+                // Prevents false is_u64=1 when VICE SFX maps all $DF00-$DFFF to OPL2 ($DF1F=$00).
+                lda     $DF00
+                cmp     #$FF
+                bne     step01_done         // IO2 mapped (OPL2/REU/etc.) → not U64
                 lda     $DF1F
                 cmp     #$FF
                 beq     step01_done         // $FF = open bus = not U64
@@ -342,13 +349,7 @@ step1_sidfx:
                 ldy #>sidfxu
                 jmp sidfxprint
 nosidfxl:
-                txs
-                ldx #12
-                ldy #13
-                jsr $E50C
-                tsx
-                lda #<nosidfxu
-                ldy #>nosidfxu 
+                jmp step2_armsid
 sidfxprint:
                 jsr $AB1E
 step2_armsid:
@@ -935,8 +936,7 @@ end_skip_fiktiv:
 end_sid_found:
                 lda #$13                // restore 'S' at $0680 (spinner left it on last frame)
                 sta $0680
-                jsr checkfmyam          // probe $DF00 for OPL2 (FM-YAM); skipped if SKpico FM or ARM2SID SFX active
-                jsr backsid_post_fixup  // print stereo SIDs + fix row 8 if BackSID found; display FM-YAM if found
+                jsr backsid_post_fixup  // print stereo SIDs + fix row 8 if BackSID found
 
                 // --- Step 6: $D418 decay fingerprint ---
                 // Skipped when a chip was already identified by magic detection
@@ -971,6 +971,58 @@ skip_decay:
 after_decay:
                 // cursor cleanup via $AB1E removed: we now write directly to screen RAM,
                 // so no KERNAL cursor artifact exists at row 0 to erase.
+
+                // Probe $DF00 for OPL2 (FM-YAM / SFX Sound Expander).
+                // Done here (after all screen writes) because OPL2 access at $DF40/$DF50
+                // can interfere with KERNAL print routines if done earlier.
+                jsr checkfmyam
+                // Display "DF00 FM-YAM FOUND" on next available stereo row if detected.
+                // sidnum_zp entries occupy rows 16..15+sidnum_zp; next row = 16+sidnum_zp.
+                lda fmyam_detected
+                beq fmyam_disp_skip
+                lda sidnum_zp
+                cmp #$08
+                bcs fmyam_disp_skip
+                clc
+                adc #$10                // row = 16 + sidnum_zp
+                tax
+                ldy #13
+                jsr $E50C
+                lda #$44; jsr $FFD2     // 'D'
+                lda #$46; jsr $FFD2     // 'F'
+                lda #$30; jsr $FFD2     // '0'
+                lda #$30; jsr $FFD2     // '0'
+                lda #$20; jsr $FFD2     // ' '
+                lda #<fmyamf
+                ldy #>fmyamf
+                jsr $AB1E
+fmyam_disp_skip:
+
+                // Probe $DE00 for OPL2 (CBM SFX Sound Expander at IO1).
+                jsr checksfxexpander
+                // Display "DE00 +CBM SFX   " on next available stereo row if detected.
+                lda sfxexp_detected
+                beq sfxexp_disp_skip
+                lda sidnum_zp
+                clc
+                adc #$10                // base: row 16 + sidnum_zp
+                ldx fmyam_detected      // shift +1 if FM-YAM also occupies a row
+                beq sfxexp_row_ok
+                adc #$01
+sfxexp_row_ok:  cmp #$18                // guard: beyond row 23
+                bcs sfxexp_disp_skip
+                tax
+                ldy #13
+                jsr $E50C
+                lda #$44; jsr $FFD2     // 'D'
+                lda #$45; jsr $FFD2     // 'E'
+                lda #$30; jsr $FFD2     // '0'
+                lda #$30; jsr $FFD2     // '0'
+                lda #$20; jsr $FFD2     // ' '
+                lda #<cbmsfxf
+                ldy #>cbmsfxf
+                jsr $AB1E
+sfxexp_disp_skip:
 
                 jsr colorize_rows       // colour-code result rows in $D800
 
@@ -2107,6 +2159,36 @@ dbg_sidfx_skip:
            ldy #>dbg_s_u64
            jsr $AB1E
            lda is_u64
+           jsr print_hex
+           lda #$0D
+           jsr $FFD2
+           // Line: FMYAM:XX  (fmyam_detected: 00=not found, 01=OPL2 confirmed)
+           lda #<dbg_s_fmyam
+           ldy #>dbg_s_fmyam
+           jsr $AB1E
+           lda fmyam_detected
+           jsr print_hex
+           lda #$0D
+           jsr $FFD2
+           // Line: SFX:XX  (dfx_preread: raw $DF00 at pre-read; $FF=not reached, $00=OPL2 idle, $C0=timer still set)
+           lda #<dbg_s_sfx
+           ldy #>dbg_s_sfx
+           jsr $AB1E
+           lda dfx_preread
+           jsr print_hex
+           lda #$0D
+           jsr $FFD2
+           // Line: CSE:XX  (dse_s6b: raw $DE00 at try-B step 6; $FF=not reached, $C0=OPL timer fired)
+           lda #<dbg_s_cse
+           ldy #>dbg_s_cse
+           jsr $AB1E
+           lda dse_s6b
+           jsr print_hex
+           lda #$20; jsr $FFD2     // space
+           lda #<dbg_s_sfxdet
+           ldy #>dbg_s_sfxdet
+           jsr $AB1E
+           lda sfxexp_detected
            jsr print_hex
            lda #$0D
            jsr $FFD2
@@ -5370,8 +5452,7 @@ fll_not_arm2sid_u64:
        beq fll_sid_typed
        lda is_u64              // on Ultimate64 (non-ARM2SID primary)?
        bne fll_ultisid
-       lda #$10                // fallback: unknown/generic second SID
-       jmp fll_sid_typed
+       jmp f_l_next            // checkrealsid failed + not U64 → skip (OPL2 or unidentified)
 fll_ultisid:
        // Determine 6581 vs 8580 from U64 UCI filter curve config.
        // sptr_zp == mptr_zp at this point (both set from mptr_zp above).
@@ -6418,74 +6499,174 @@ sfx_skp_miss:
 // the target echo. Skip ACK when lo=0 and hi=$D4 (D400 slot).
 //--------------------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------------------
-// checkfmyam: probe $DF00 for OPL2/YM3812 (FM-YAM Sound Expander or compatible).
-// Uses the standard AdLib timer detection algorithm:
-//   Step 1: Reset Timer 1 + Timer 2 flags (reg $04 = $60 then $80)
-//   Step 2: Read status ($DF00) & $E0 → must be $00 (no timer flags)
-//   Step 3: Set Timer 1 period (reg $02 = $FF), start Timer 1 (reg $04 = $21)
-//   Step 4: Wait ~160 CPU cycles (> 80μs at 1 MHz; OPL2 Timer 1 fires after ~80μs)
-//   Step 5: Read status ($DF00) & $E0 → must be $C0 (IRQ + T1 flags set)
+// checkfmyam: probe $DF00/$DF01 for OPL2/YM3812 (FM-YAM / SFX Sound Expander or compatible).
+// Standard AdLib OPL2 I/O map (IO2 = $DF00-$DFFF):
+//   $DF00 = register select (write OPL2 register number here; also status read)
+//   $DF01 = data write (write OPL2 register value here)
+// Detection algorithm (REU-safe — ALL writes to $DF01 have bit7=0):
+//   Pre-read: $DF00 & $E0 must be $00 (VICE open-bus=$FF→$E0≠0 exits here)
+//   Step 1: reg $04 = $60 — stop timers (bit7=0, safe)
+//   Step 2: Read status → must still be $00
+//   Step 3: reg $02 = $7F — Timer 1 period (bit7=0; fires after ~10.3ms)
+//   Step 4: reg $04 = $21 — start Timer 1 masked (bit7=0, safe)
+//   Step 5: Wait ~15ms (nested loop: 12×256×5 ≈ 15,360 cycles)
+//   Step 6: Read status & $E0 → must be $C0 (IRQ + T1 fired)
+// OPL2 timing requirements per YM3812 datasheet:
+//   tAS: addr write → data write ≥ 3.3μs  (5 NOPs = 10 cycles)
+//   tAH: data write → next addr write ≥ 23μs  (cfm_tah loop ≈ 30 cycles)
+// REU safety: $DF01 is the REU COMMAND register; bit7=1 triggers DMA EXECUTE.
+//   All values written here ($60,$7F,$21) have bit7=0 → no REU DMA in any path.
 // Guards:
+//   - is_u64 != 0: Ultimate64 uses $DF00-$DFFF for UCI; FM-YAM can't coexist (exp port taken)
+//   - data4=$30: SIDFX detected — $DF00 area conflicts; FM-YAM + SIDFX combo unsupported
 //   - skpico_fm >= 4: SIDKick Pico is the OPL2 source at $DF00 (already detected)
 //   - arm2sid_map_h2 lo nibble == 3: ARM2SID SFX- slot at DF00 (already detected)
 // Sets fmyam_detected = $01 if OPL2 found, $00 otherwise.
-// Trashes A, X. Preserves Y.
+// Trashes A, X, Y.
 //--------------------------------------------------------------------------------------------------
+cfm_write_reg:  // helper: write OPL2 reg. On entry: A=reg#, X=value. Trashes A,X.
+                sta $DF00               // select register (addr port A0=0)
+                nop; nop; nop; nop; nop // tAS >= 3.3μs (10 cycles)
+                stx $DF01               // write value (data port A0=1)
+                ldx #$06                // tAH >= 23μs: ~30 cycles
+cfm_tah:        dex
+                bne cfm_tah
+                rts
+
 checkfmyam:
                 lda #$00
                 sta fmyam_detected
-                // Guard: SIDKick Pico FM at $DF00
+                // Guard: Ultimate64 — UCI at $DF1C-$DF1F; FM-YAM can't coexist (exp port taken)
+                lda is_u64
+                beq cfm_g1; rts         // U64 present: skip probe, no false writes to UCI space
+cfm_g1:         // Guard: SIDFX present — $DF00 area may conflict; FM-YAM + SIDFX not supported
+                lda data4
+                cmp #$30
+                bne cfm_g2; rts         // data4=$30 = SIDFX confirmed
+cfm_g2:         // Guard: SIDKick Pico FM at $DF00
                 lda skpico_fm
                 cmp #$04
-                bcs cfm_done            // >= 4: SKpico owns $DF00
-                // Guard: ARM2SID SFX- slot at DF00 (armsid_map_h2 lo nibble = 3)
+                bcc cfm_g3; rts         // >= 4: SKpico owns $DF00
+cfm_g3:         // Guard: ARM2SID SFX- slot at DF00 (armsid_map_h2 lo nibble = 3)
                 lda armsid_map_h2
                 and #$0F
                 cmp #$03
-                beq cfm_done            // = 3: ARM2SID owns $DF00
-                // Step 1: Reset Timer 1 + Timer 2 via reg $04
-                lda #$04
-                sta $DF00               // select reg 4 (Timer Control)
-                lda #$60
-                sta $DF01               // $60 = T1 mask + T2 mask (reset flags)
-                lda #$04
-                sta $DF00
-                lda #$80
-                sta $DF01               // $80 = IRQ-RESET
-                // Step 2: Read status → expect $00 (no timer flags set)
+                bne cfm_body; rts       // = 3: ARM2SID owns $DF00
+cfm_body:
+                // Step 1: stop timers. Bit7=0: REU-safe write to $DF01.
+                lda #$04; ldx #$60; jsr cfm_write_reg
+                // Step 2: read baseline; capture for debug page (SFX:XX).
                 lda $DF00
-                and #$E0
-                bne cfm_cleanup         // not $00 → nothing at $DF00 or bad state
-                // Step 3: Set Timer 1 period = $FF, start Timer 1
-                lda #$02
-                sta $DF00               // select reg 2 (Timer 1 period)
-                lda #$FF
-                sta $DF01               // period = $FF (overflows after 1 tick × 80μs)
-                lda #$04
-                sta $DF00               // select reg 4
-                lda #$21
-                sta $DF01               // $21 = T1 start, T1 mask=0
-                // Step 4: Wait ~160 CPU cycles (>= 80μs at 1 MHz PAL)
-                ldx #$20
-cfm_wait:       dex
-                bne cfm_wait
-                // Step 5: Read status → expect $C0 (IRQ + T1 fired)
+                sta dfx_preread
+                // $FF = open-bus or VICE lazy-init (OPL not yet responsive); proceed to timer test.
+                // For any other value: T1 bit (bit 6) must be clear; stuck IRQ (bit 7) is ignored.
+                cmp #$FF
+                beq cfm_start_timer     // pre-init: skip baseline T1 check
+                and #$40
+                bne cfm_done            // T1 already set → cannot measure delta
+cfm_start_timer:
+                // Step 3: reg $02 = $7F — Timer 1 period (REU-safe).
+                lda #$02; ldx #$7F; jsr cfm_write_reg
+                // Step 4: reg $04 = $21 — start Timer 1 (REU-safe).
+                lda #$04; ldx #$21; jsr cfm_write_reg
+                // Step 5: Wait ~15ms (12 × 256 × 5 cycles ≈ 15.4ms > 10.4ms timer period)
+                ldx #$0C
+cfm_wait_o:     ldy #$00
+cfm_wait_i:     dey
+                bne cfm_wait_i
+                dex
+                bne cfm_wait_o
+                // Step 6: read post-timer status.
+                // $FF = still open-bus (no OPL present); real OPL status never has all bits set.
                 lda $DF00
-                and #$E0
-                cmp #$C0
-                bne cfm_cleanup         // mismatch → not OPL2
+                cmp #$FF
+                beq cfm_done            // open-bus → no OPL at $DF00
+                and #$40
+                beq cfm_done            // T1 not set → timer didn't fire → no FM-YAM
                 lda #$01
                 sta fmyam_detected
-cfm_cleanup:    // Mask timers and reset IRQ flags (stop OPL2 from generating spurious IRQs)
-                lda #$04
-                sta $DF00
-                lda #$60
-                sta $DF01               // mask T1 + T2
-                lda #$04
-                sta $DF00
-                lda #$80
-                sta $DF01               // reset IRQ flags
+cfm_cleanup:    lda #$04; ldx #$60; jsr cfm_write_reg
 cfm_done:       rts
+
+//--------------------------------------------------------------------------------------------------
+// checksfxexpander: probe $DE00/$DE01 for OPL (CBM SFX Sound Expander at IO1 = $DE00-$DEFF).
+// Uses the same AdLib timer algorithm as checkfmyam.
+// Port order note: VICE swaps the OPL write ports relative to real YM3526 hardware:
+//   Real HW: addr→$DE00 (A0=0), data→$DE01 (A0=1)   (standard YM3526 pinout)
+//   VICE:    addr→$DE01 (A0=1), data→$DE00 (A0=0)   (VICE sfx_soundexpander.c)
+// Status reads ($DE00) are identical in both.
+// Detection uses two tries: Try A (real HW order), then Try B (VICE order).
+// Guards:
+//   - data4=$30: SIDFX present — $DE00 area conflicts
+//   - pre-read $DE00 & $E0 ≠ $00: open-bus ($FF) or pending IRQ → exit
+// Sets sfxexp_detected = $01 if OPL found, $00 otherwise.
+// Trashes A, X, Y.
+//--------------------------------------------------------------------------------------------------
+// Write helper A: real-hardware port order — addr→$DE00, data→$DE01
+cse_write_a:    sta $DE00               // reg# to OPL address port (A0=0)
+                nop; nop; nop; nop; nop // tAS >= 3.3μs
+                stx $DE01               // data to OPL data port (A0=1)
+                ldx #$06
+cse_tah_a:      dex
+                bne cse_tah_a
+                rts
+
+// Write helper B: VICE port order — addr→$DE01, data→$DE00
+cse_write_b:    sta $DE01               // reg# to OPL address port (VICE: odd = address)
+                nop; nop; nop; nop; nop // tAS >= 3.3μs
+                stx $DE00               // data to OPL data port (VICE: even = data)
+                ldx #$06
+cse_tah_b:      dex
+                bne cse_tah_b
+                rts
+
+checksfxexpander:
+                lda #$00
+                sta sfxexp_detected
+                // Guard: SIDFX present — $DE00 area conflicts
+                lda data4
+                cmp #$30
+                bne cse_try_a
+                rts                                     // SIDFX: exit immediately
+
+                // === Try A: standard port order (addr→$DE00, data→$DE01) ===
+                // Used for both real hardware and VICE (VICE uses standard YM3526 wiring).
+                // VICE OPL1 may have a stuck IRQ bit (bit 7 = $85 idle) that does not clear
+                // via $80 IRQ_RESET; treat as OPL1 present and proceed. Only T1/T2 overflow
+                // flags (bits 6-5) indicate timer state; bit 7 alone must not redirect to Try B.
+cse_try_a:
+                lda #$04; ldx #$60; jsr cse_write_a    // stop timers
+                lda #$04; ldx #$80; jsr cse_write_a    // clear IRQ / timer flags (RST)
+                lda $DE00; sta dse_s2b                  // capture status for debug
+                and #$60                                // check T1 (bit6) and T2 (bit5) only
+                bne cse_try_b                           // T1 or T2 set → timer was already running; try B
+                lda #$02; ldx #$7F; jsr cse_write_a    // timer 1 period
+                lda #$04; ldx #$01; jsr cse_write_a    // start timer 1 (no mask — VICE OPL1 needs unmasked T1)
+                ldx #$20                                // wait ~41ms (>2 PAL frames; VICE OPL updates per frame)
+cse_wait_ao:    ldy #$00
+cse_wait_ai:    dey; bne cse_wait_ai; dex; bne cse_wait_ao
+                lda $DE00; sta dse_s6b                  // capture post-timer status for debug
+                // VICE OPL1 sets IRQ bit (bit7) on T1 overflow but NOT T1_FLAG (bit6) — VICE bug.
+                // Real OPL1/OPL2 sets both bits 7 and 6. Accept either.
+                and #$C0; bne cse_found                 // IRQ or T1_FLAG set → OPL timer fired
+                // Try A failed. Reset before try B.
+                lda #$04; ldx #$60; jsr cse_write_a
+
+                // === Try B: swapped port order (addr→$DE01, data→$DE00) ===
+                // Fallback only: for custom hardware that reverses the YM3526 address/data lines.
+cse_try_b:      lda #$04; ldx #$60; jsr cse_write_b    // stop timers
+                lda #$04; ldx #$80; jsr cse_write_b    // clear IRQ flags
+                lda $DE00; and #$40; bne cse_done       // T1 already set → cannot measure
+                lda #$02; ldx #$7F; jsr cse_write_b    // timer 1 period
+                lda #$04; ldx #$21; jsr cse_write_b    // start timer 1
+                ldx #$0C                                // wait ~15ms
+cse_wait_bo:    ldy #$00
+cse_wait_bi:    dey; bne cse_wait_bi; dex; bne cse_wait_bo
+                lda $DE00; and #$40; beq cse_done       // T1 not set → no timer
+cse_found:      lda #$01
+                sta sfxexp_detected
+                lda #$04; ldx #$60; jsr cse_write_a    // stop timers (standard order)
+cse_done:       rts
 
 //--------------------------------------------------------------------------------------------------
 sfx_probe_dis_echo:
@@ -7619,6 +7800,8 @@ backsidf:       .text "BACKSID FOUND"
                 .byte 0
 fmyamf:         .text "FM-YAM FOUND"
                 .byte 0
+cbmsfxf:        .text "+CBM SFX    "
+                .byte 0
 skpicof:        .text "SIDKICK-PICO 8580"
                 .byte 0
 skpicof_6581:   .text "SIDKICK-PICO 6581"
@@ -7665,6 +7848,10 @@ arm2sid_shortf:      .text "ARM2SID "
 backsid_d41f:        .byte 0     // D41F readback from checkbacksid ($42 = BackSID present)
 skpico_fm:           .byte 0     // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
 fmyam_detected:      .byte 0     // 1 = OPL2 found at $DF00 via timer probe (FM-YAM or compatible)
+sfxexp_detected:     .byte 0     // 1 = OPL found at $DE00 via timer probe (CBM SFX Sound Expander)
+dse_s2b:             .byte $FF   // raw $DE00 at try-B step 2 ($FF=not reached; $00=OPL clear; else=not OPL/stuck)
+dse_s6b:             .byte $FF   // raw $DE00 at step 6 of try B ($FF=not reached, $C0=detected, else=timer failed)
+dfx_preread:         .byte $FF   // raw $DF00 value at checkfmyam pre-read ($FF = not reached)
 MODE6581:     .byte $f0,$f1,$f0,$f0,$f2,$f1,$f2,$f2,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f0
 MODE8580:     .byte $f0,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f2,$f2,$f1,$f2,$f0,$f0,$f1,$f0
 MODEUNKN:     .byte $f0,$f0,$f0,$f0,$f0,$f0,$f0,$f2,$f0,$f0,$f0,$f2,$f0,$f1,$f1,$f0
@@ -7699,7 +7886,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.87 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.3.97 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8035,7 +8222,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.87"
+    .text "    SID DETECTOR - DEBUG INFO   V1.3.97"
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8139,6 +8326,18 @@ dbg_s_uci:
     .byte 0
 dbg_s_u64:
     .text " U64:"
+    .byte 0
+dbg_s_fmyam:
+    .text "FMYAM:"
+    .byte 0
+dbg_s_sfx:
+    .text "SFX:"
+    .byte 0
+dbg_s_cse:
+    .text "CSE:"
+    .byte 0
+dbg_s_sfxdet:
+    .text " SFXD:"
     .byte 0
 dbg_s_d418:
     .text "D418:"
@@ -8800,7 +8999,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.87 README"
+    .text "SIDDETECTOR V1.3.97 README"
     .byte 13
     .byte 13
     .byte $05
@@ -8963,7 +9162,19 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
-    .text "  V1.3.87 FM-YAM OPL2 DETECTION + SKPICO FM T31/T32"
+    .text "  V1.3.97 CBM SFX EXPANDER: DE00 REAL HW, DF00 VICE"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.95 FIX IS_U64 FALSE POS; FIKTIVLOOP SKIP+LIST INIT"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.94 DBG SFX: ROW; CAPTURE DFX_PREREAD ($DF00)"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.93 FM-YAM: ALL WRITES BIT7=0; PRE-READ GUARD"
+    .byte 13
+    .byte $9E
+    .text "  V1.3.92 FM-YAM: FIX REU/VICE GARBAGE; DBG FMYAM ROW"
     .byte 13
     .byte $9E
     .text "  V1.3.86 SIDKICK-PICO FM SOUND EXPANDER DETECTION"
@@ -9110,6 +9321,7 @@ fiktivloop_d400:
 //   - clears "NOSID FOUND" from row 11 with spaces
 // BackSID may sit at D560 or another non-D400 address, so the main chain
 // (which only checks D400) misses it; this fixup corrects the display.
+// Note: FM-YAM display is done separately in main flow after checkfmyam.
 backsid_post_fixup:
                 jsr sidstereo_print
                 // scan sid_list_t[1..sidnum_zp] for BackSID type $0A
@@ -9139,32 +9351,6 @@ bpf_clr:
                 inx
                 cpx #11
                 bne bpf_clr
-                // FM-YAM: if detected, show "DF00 FM-YAM FOUND" on next available stereo row.
-                // sidnum_zp entries were shown at rows 16..15+sidnum_zp; next = 16+sidnum_zp.
-                // Skip if sidnum_zp >= 8 (rows 16-23 full; row 24 is shortcut bar).
-                lda fmyam_detected
-                beq bpf_done
-                lda sidnum_zp
-                cmp #$08
-                bcs bpf_done            // all 8 rows used — no room
-                clc
-                adc #$10                // row = 16 + sidnum_zp
-                tax
-                ldy #13
-                jsr $E50C
-                lda #$44                // 'D'
-                jsr $FFD2
-                lda #$46                // 'F'
-                jsr $FFD2
-                lda #$30                // '0'
-                jsr $FFD2
-                lda #$30                // '0'
-                jsr $FFD2
-                lda #$20                // ' '
-                jsr $FFD2
-                lda #<fmyamf
-                ldy #>fmyamf
-                jsr $AB1E
 bpf_done:
                 rts
 
