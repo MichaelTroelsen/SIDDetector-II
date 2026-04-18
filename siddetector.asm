@@ -6740,18 +6740,19 @@ cfm_body:
                 sei                     // IRQs off during probe
                 lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
                 lda #$04; ldx #$80; jsr cfm_write_reg    // RST all flags
-                // STRICT detection: real OPL returns status = $00 EXACTLY after RST.
-                // Open bus and bus noise never settle to exact $00 on removed HW.
-                // Read twice; require BOTH == $00 to avoid transient bus glitches.
+                // Detection: real OPL after RST returns $00 or ($00-$1F) — reserved
+                // bits 4-0 may read back as chip-ID noise on some FM-YAM variants.
+                // Require (read & $E0) == 0 on TWO reads → upper bits clear.
+                // Bus noise (open-bus) typically has high bits set: $FF, $D1, $C5,
+                // $BB, $A4, $B7 — all fail the $E0 mask.
                 lda $DF60
                 sta dfx_preread
-                cmp #$00
-                bne cfm_rst_done                         // not $00 → no OPL
-                lda $DF60
-                cmp #$00
-                bne cfm_rst_done                         // 2nd read not $00 → noise
-                // Both reads were $00 → OPL confirmed
-                sta dfx_postread                         // $00 for diagnostic
+                and #$E0
+                bne cfm_rst_done                         // high bits set → bus noise
+                lda $DF60                                // 2nd read — must also pass
+                sta dfx_postread
+                and #$E0
+                bne cfm_rst_done                         // noisy → reject
                 lda #$01
                 sta fmyam_detected
                 lda sfx_port_mode                        // prefer SFX if already detected
@@ -8089,7 +8090,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.18 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.19 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8425,7 +8426,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.18 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.19 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9202,7 +9203,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.18 README"
+    .text "SIDDETECTOR V1.4.19 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9365,6 +9366,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.19 FM-YAM ROBUST DETECT: (STATUS & \$E0) == 0 (ACCEPTS \$00-\$1F)  "
     .text "  V1.4.18 FIX FM/SFX FALSE POSITIVE: STRICT $00 POST-RST; DISABLE DE00 "
     .text "  V1.4.17 FIX FM-YAM DETECT ON REAL HW: CHECK $DF60 != $FF (2 READS)  "
     .text "  V1.4.16 VERSION BUMP — CONSOLIDATE SOUND TEST (SID + 3 FM INSTRUMENTS)"
