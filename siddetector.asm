@@ -2663,8 +2663,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 85
-.const README_MAX_SCROLL = 64    // README_LINES - 21 visible rows (row 0 is a fixed header)
+.const README_LINES      = 92    // actual CR count in readme_text
+.const README_MAX_SCROLL = 71    // README_LINES - 21 visible rows
 
 readme_entry:
            lda #$00
@@ -7921,7 +7921,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.22 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.23 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8257,7 +8257,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.22 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.23 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9028,7 +9028,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.22 README"
+    .text "SIDDETECTOR V1.4.23 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9191,29 +9191,25 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
-    .text "  V1.4.22 CLEANUP: REMOVE DEAD $DE00 PROBE + 5 DEBUG VARS (-280B CODE)"
-    .text "  V1.4.21 VERSION BUMP + DOCS — SFX/FM DETECTION + SOUND TEST COMPLETE"
-    .text "  V1.4.20 NEUTRAL LABEL 'SFX/FM FOUND' (CBM SFX + FM-YAM SHARE CHIP)   "
-    .text "  V1.4.19 FM-YAM ROBUST DETECT: (STATUS & \$E0) == 0 (ACCEPTS \$00-\$1F)  "
-    .text "  V1.4.18 FIX FM/SFX FALSE POSITIVE: STRICT $00 POST-RST; DISABLE DE00 "
-    .text "  V1.4.17 FIX FM-YAM DETECT ON REAL HW: CHECK $DF60 != $FF (2 READS)  "
-    .text "  V1.4.16 VERSION BUMP — CONSOLIDATE SOUND TEST (SID + 3 FM INSTRUMENTS)"
-    .text "  V1.4.15 ADD SFX INSTR 1 (BELL): 3 FM INSTRUMENTS NOW — BELL/ORG/FLUTE"
-    .text "  V1.4.14 FIX SID PULSE: PW TABLE REORDER MATCHED WAVEFORM REORDER     "
-    .text "  V1.4.13 SFX 3-OCTAVE MELODY (C4/C5/C6) MATCHING SID V1/V2/V3 VOICES "
-    .text "  V1.4.12 OPL INIT: $08=0 FM MODE + $BD=C0 DISABLE RHYTHM (XENTAX REF) "
-    .text "  V1.4.11 SFX TEST: ALWAYS WRITE $DF40+$DE00 (WHICHEVER HW IS THERE)  "
-    .text "  V1.4.10 SFX MELODY: C4 E4 G4 C5 G4 E4 C4 (ARPEGGIO MATCHING SID)    "
-    .text "  V1.4.09 FIX HANG: OPL /IRQ STORM — SEI+MASKED T1 ($04=$41)+RST ACK  "
-    .text "  V1.4.08 SFX INSTR 3 (PURE SINE/FLUTE) + INSTR 2 (ORGAN); MELODY x7   "
-    .text "  V1.4.07 SFX MELODY: 7 NOTES (C D E C8VA E D C) MATCHING SID PATTERN "
-    .text "  V1.4.06 FM-YAM/SFX AT $DF40/$DF50/$DF60 (XENTAX); SFX TEST NOW AUDIO"
-    .text "  V1.4.05 FM SOUND: FIX SL=0 LOUD (WAS SILENT); SIG (STATUS&E1)==C0   "
-    .text "  V1.4.04 SID NOISE LAST; OPL SOUND FIX (WAVE-SEL $01=$20, F0/FF ENV) "
-    .text "  V1.4.03 SOUND TEST: PLAY OPL IF SFX/FM PRESENT, 2 INSTRUMENTS      "
-    .text "  V1.4.02 SFX/FM STRICT: (STATUS&E0)==C0; YM3526 TAH 120US; A/B FIX  "
-    .text "  V1.4.01 FIX PLOT CARRY (A/B GHOSTS); SFX PORT FALLBACK; RM DBG    "
-    .text "  V1.4.00 FIX SFX DETECT: POST-RST CHECK BITS 6-5; TIMER BITS 7|6   "
+    .text "  V1.4.23 FIX README SCROLL PAST CSDB LINE"
+    .byte 13
+    .byte $9E
+    .text "  V1.4.22 SFX/FM CLEANUP: REMOVE DEAD $DE00 PROBE (-280B)"
+    .byte 13
+    .byte $9E
+    .text "  V1.4.19 FM-YAM ROBUST: (STATUS & $E0) == 0"
+    .byte 13
+    .byte $9E
+    .text "  V1.4.13 SFX 3-OCTAVE MELODY MATCHING SID"
+    .byte 13
+    .byte $9E
+    .text "  V1.4.09 FIX OPL /IRQ STORM HANG"
+    .byte 13
+    .byte $9E
+    .text "  V1.4.06 MOVE OPL TO $DF40/$DF50/$DF60 (XENTAX)"
+    .byte 13
+    .byte $9E
+    .text "  V1.4.01 FIX PLOT CARRY (A/B GHOSTS)"
     .byte 13
     .byte $9E
     .text "  V1.3.95 FIX IS_U64 FALSE POS; FIKTIVLOOP SKIP+LIST INIT"
