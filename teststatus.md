@@ -1,8 +1,8 @@
 # SID Detector — Test Status
 
 **Last updated:** 2026-04-18  
-**Build:** `$2400–$5E4C` (code) `$6000–$943D` (data)  
-**Version:** V1.4.21  
+**Build:** `$2400–$5D34` (code) `$6000–$9976` (data)  
+**Version:** V1.4.22  
 Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 
 ---
@@ -51,6 +51,10 @@ Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 | 38 | Platform | C128 PAL | correct detection | 🟢 | |
 | 39 | Platform | C128 NTSC | correct detection | 🟢 | |
 | 40 | Platform | TC64 | correct detection | 🟢 | |
+| 41 | FM expansion | CBM SFX Sound Expander @ `$DF40`/`$DF50`/`$DF60` | `DF40 SFX/FM FOUND` | 🟢 | V1.4.22 real HW verified on U64: `fmyam_detected=$01`, `dfx_preread=$06` passes `(status & $E0) == 0` |
+| 42 | FM expansion | FM-YAM (XeNTaX YM3812) @ same ports | `DF40 SFX/FM FOUND` | 🟢 | V1.4.22 real HW: 5/5 consecutive `make remote` runs detected — same chip-level interface as CBM SFX |
+| 43 | FM expansion | No FM hardware present | row 17 empty (no false positive) | 🟢 | V1.4.22 real HW: 5/5 runs with card removed all show `fmyam_detected=$00`, `dfx_preread=$FF` |
+| 44 | FM expansion | VICE SFX Sound Expander emulation (`-sfxse -sfxsetype 3812`) | `DF40 SFX/FM FOUND` | 🟢 | V1.4.22 verified — detection state matches real HW (`fmyam=$01, dfx_preread=$06`) |
 
 ---
 

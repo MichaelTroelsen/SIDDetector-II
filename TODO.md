@@ -2,7 +2,7 @@
 
 ## New chips to detect
 
-- [x] **CBM SFX Sound Expander + FM-YAM (shared chip)** — V1.4.06+: detected at standard `$DF40/$DF50/$DF60` (XeNTaX reference) via `checkfmyam`. Both products use Yamaha OPL family (YM3526 / YM3812) with identical port decoding; one detection path covers both. V1.4.09: T1 started with IRQ masked (`$04=$41`) + RST on exit to avoid OPL-/IRQ CPU storm that was hanging real hardware. V1.4.19: detection uses `(status & $E0) == 0` on two reads — real OPL drives status into `$00-$1F` range; open bus has high bits set (`$FF, $D1, $C5`). V1.4.20: screen label neutralized to `DF40 SFX/FM FOUND`. Legacy `$DE00` probe disabled (false positives). Verified on U64 with FM-YAM installed/removed and CBM SFX Sound Expander.
+- [x] **CBM SFX Sound Expander + FM-YAM (shared chip)** — V1.4.06+: detected at standard `$DF40/$DF50/$DF60` (XeNTaX reference) via `checkfmyam`. Both products use Yamaha OPL family (YM3526 / YM3812) with identical port decoding; one detection path covers both. V1.4.09: T1 started with IRQ masked (`$04=$41`) + RST on exit to avoid OPL-/IRQ CPU storm that was hanging real hardware. V1.4.19: detection uses `(status & $E0) == 0` on two reads — real OPL drives status into `$00-$1F` range; open bus has high bits set (`$FF, $D1, $C5`). V1.4.20: screen label neutralized to `DF40 SFX/FM FOUND`. V1.4.22: legacy `checksfxexpander` at `$DE00` removed entirely (had been disabled in V1.4.18 due to bus-noise false positives); `opl_write_reg` simplified to a single jmp to `cfm_write_reg`; dead vars `sfxexp_detected`/`sfx_port_mode`/`opl_tmp_reg/val`/`dse_s2b/6b/2b_b` removed. Verified on U64 with FM-YAM installed/removed and CBM SFX Sound Expander — see teststatus rows 41-44.
 - [x] **OPL sound test** — V1.4.13+: Sound test (T) plays the same 7-note C-major arpeggio (`C E G C G E C`) across 3 octaves per instrument, matching SID's 3-voice pattern. Three FM instruments: Flute (pure sine, no FM), Organ (FM sustained w/ feedback), Bell (FM percussive). Global OPL init sequence (`$01=$20`, `$08=$00`, `$BD=$C0`) per XeNTaX edlib player. V1.4.14: SID pulse width table reorder fix — pulse was silent after waveform reorder. V1.4.15: three FM instruments added.
 - [x] **KungFuSID** — Detected via D41D echo: write $A5, read back. Old firmware returns $A5 (register echo); new firmware returns $5A (FW_UPDATE_START_ACK). Both accepted. Detection placed after all other hardware checks (position 5b). `data1=$0C`.
 - [x] **SIDKick-pico** — Detected via config mode VERSION_STR: write $FF to D41F, $E0 to D41E, skip 20 bytes from D41D, read 'S'/$53 + 'K'/$4B (data1=$0B)
@@ -63,8 +63,7 @@
 - [x] ARM2SID SFX+SID: emul_mode=$02 (T29)
 - [x] SKpico FM Sound Expander: skpico_fm=$04 (T30) / $05 (T31)
 - [x] FM-YAM OPL2: fmyam_detected=$01 (T32)
-- [x] CBM SFX disabled: sfxexp_detected=$00 → none (T33)
-- [x] CBM SFX enabled: sfxexp_detected=$01 → found (T34)
+- [x] CBM SFX dispatch: flag=$00 → none (T33) / flag=$01 → found (T34) — dispatch-logic tests only (uses a fake flag var since V1.4.22 removed the live `sfxexp_detected` + `$DE00` probe)
 
 ### Not yet testable in VICE (require real hardware)
 - [ ] `Checkarmsid` hardware probe — SID register echo depends on chip model
@@ -104,7 +103,7 @@ The value is shown on the debug screen ("SID"/"SFX"/"BOT") but not surfaced else
 - [x] **Skip $D418 decay scan when hardware SID detected** — removed from scope: decay scan still runs but result is overridden by hardware detection; no user-visible benefit in skipping it
 - [x] **ARMSID2 detection** — second generation distinguished from ARMSID
 - [~] **Save results to disk** — WONTFIX: niche use case, 1541 not always present
-- [x] **REU / GeoRAM conflict handling** — accepted limitation: documented as known false positive; no fix planned since DE00/DF00 conflict is environment-specific and rare
+- [x] **REU / GeoRAM conflict handling** — mostly moot since V1.4.06 moved OPL detection to the standard `$DF40/$DF50/$DF60` XeNTaX ports (REU lives at `$DF00-$DF0F`, so no overlap). The `$DE00` legacy probe that could have conflicted with IO1 cartridges was removed entirely in V1.4.22.
 - [x] **ULTISID detection improvement** — WONTFIX: U64 firmware registers not publicly documented; current $D418 decay fingerprint detection is sufficient
 - [x] **ULTISID main screen display** — V1.3.45: shows "8580 INT"/"6581 INT" instead of filter curve names (teststatus #15/#16 fixed)
 - [x] **D418 decay table accuracy** — timing constants re-measured and updated
