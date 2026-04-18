@@ -164,6 +164,9 @@ start:
                 sta data4               // init: no HW SID type saved yet
                 sta res_zp              // init: no tentative SwinSID Nano result
                 sta retry_zp            // init: no retries yet
+                sta sfxexp_detected     // init: SFX not detected (reset on every restart)
+                sta fmyam_detected      // init: FM-YAM not detected (reset on every restart)
+                sta sfx_port_mode       // init: no OPL port mode selected
 init_sid_list:                          // zero the 8-slot SID result tables (A=$00)
                 sta sid_list_h,x        // SID address high byte ($D4/$D5 ...)
                 sta sid_list_l,x        // SID address low byte  ($00/$20 ...)
@@ -189,6 +192,7 @@ init_sid_list:                          // zero the 8-slot SID result tables (A=
                 txs                     // KERNAL cursor call uses X/Y; TXS preserves X
                 ldx #13                 // row 13 = "pal/ntsc..:" screen line
                 ldy #13                 // col 13 = result field
+                clc
                 jsr $E50C               // KERNAL $E50C: position cursor (row=X, col=Y)
                 tsx
                 lda #<pal_text
@@ -199,6 +203,7 @@ cntsc:
                 txs
                 ldx #13
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<ntsc_text
@@ -214,6 +219,7 @@ check_cbmtype:
                 txs
                 ldx #13                 // same row as PAL/NTSC; col 30 for machine label
                 ldy #30
+                clc
                 jsr $E50C
                 tsx
                 lda za7
@@ -319,6 +325,7 @@ step0_real_skip:
                 txs
                 ldx #$0E               // row 14 = "USID64.....:"
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<usid64f
@@ -343,6 +350,7 @@ step1_sidfx:
                 txs
                 ldx #12                // row 12 = "sidfx......:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<sidfxu
@@ -480,6 +488,7 @@ step2_after_armsid:
                 txs
                 ldx #03                // row 3 = "swinsid...:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<swinsidUf
@@ -504,6 +513,7 @@ armsid:
                 txs
                 ldx #02                // row 2 = "armsid....:" line
                 ldy #13
+                clc
                 jsr $E50C
                 // emul_mode=0: "ARM2SID FOUND V3.xx L 6581"
                 // emul_mode=1: "ARM2SID +SFX  V3.xx L"        (SFX only — no SID type)
@@ -537,6 +547,7 @@ armsidlo:
                 txs
                 ldx #02
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<armsidf
@@ -562,6 +573,7 @@ checkpdsid_step:
                 txs
                 ldx #10                // row 10 = "PD SID....:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<pdsidf
@@ -584,6 +596,7 @@ checkbacksid_step:
                 txs
                 ldx #08                // row 8 = "BACKSID....:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<backsidf
@@ -609,6 +622,7 @@ cskp_disp:
                 txs                    // save data1 ($0B/$0E) in SP
                 ldx #07                // row 7 = "SIDKICK....:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx                    // restore data1 to X
                 cpx #$0E               // 6581?
@@ -652,6 +666,7 @@ fpgasid:
                 txs
                 ldx #04                // row 4 = "fpgasid...:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<fpgasidf_8580u
@@ -665,6 +680,7 @@ fpgasidf_6581_l:
                 txs
                 ldx #04
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<fpgasidf_6581u
@@ -684,6 +700,7 @@ checkusid64_entry:
                 txs
                 ldx #$0E               // row 14 = "USID64.....:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<usid64f
@@ -714,6 +731,7 @@ checkphysical:
                 txs
                 ldx #05                // row 5 = "6581 sid..:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<l6581f
@@ -728,6 +746,7 @@ checkphysical_8580:
                 txs
                 ldx #06                // row 6 = "8550 sid..:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<l8580f
@@ -750,6 +769,7 @@ checkphysical2:
                 txs
                 ldx #11                // row 11 = "nosid......:" (shows UNKNOWN here)
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<unknownsid
@@ -767,6 +787,7 @@ swinmicro:
                 bne check_swin_nano
                 ldx #09                // row 9 = "KUNGFUSID.:" line
                 ldy #13
+                clc
                 jsr $E50C
                 lda #<kungfusidf
                 ldy #>kungfusidf
@@ -785,6 +806,7 @@ check_swin_nano:
                 txs
                 ldx #03                // row 3 = "swinsid...:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<swinsidnanof
@@ -795,6 +817,7 @@ nosound:                               // no SID chip detected
                 txs
                 ldx #11                // row 11 = "nosid......:" line
                 ldy #13
+                clc
                 jsr $E50C
                 tsx
                 lda #<nosoundf
@@ -954,6 +977,7 @@ funny_print:
                 sta $0658
                 ldx #15                 // row 15 = "$d418 decay:" line
                 ldy #13
+                clc
                 jsr $E50C
                 jsr checktypeandprint   // classify and print the decay fingerprint
                 jmp after_decay
@@ -969,14 +993,9 @@ skip_decay:
                 sta $0667
 
 after_decay:
-                // cursor cleanup via $AB1E removed: we now write directly to screen RAM,
-                // so no KERNAL cursor artifact exists at row 0 to erase.
-
-                // Probe $DF00 for OPL2 (FM-YAM / SFX Sound Expander).
-                // Done here (after all screen writes) because OPL2 access at $DF40/$DF50
-                // can interfere with KERNAL print routines if done earlier.
+                // Probe $DF40/$DF50/$DF60 for OPL2 (FM-YAM / SFX Sound Expander).
                 jsr checkfmyam
-                // Display "DF00 FM-YAM FOUND" on next available stereo row if detected.
+                // Display "DF40 FM-YAM FOUND" on next available stereo row if detected.
                 // sidnum_zp entries occupy rows 16..15+sidnum_zp; next row = 16+sidnum_zp.
                 lda fmyam_detected
                 beq fmyam_disp_skip
@@ -987,18 +1006,17 @@ after_decay:
                 adc #$10                // row = 16 + sidnum_zp
                 tax
                 ldy #13
-                sec                     // PLOT requires carry SET to write position
+                clc
                 jsr $E50C
                 lda #$44; jsr $FFD2     // 'D'
                 lda #$46; jsr $FFD2     // 'F'
-                lda #$30; jsr $FFD2     // '0'
+                lda #$34; jsr $FFD2     // '4'
                 lda #$30; jsr $FFD2     // '0'
                 lda #$20; jsr $FFD2     // ' '
                 lda #<fmyamf
                 ldy #>fmyamf
                 jsr $AB1E
 fmyam_disp_skip:
-
                 // Probe $DE00 for OPL2 (CBM SFX Sound Expander at IO1).
                 jsr checksfxexpander
                 // Display "DE00 +CBM SFX   " on next available stereo row if detected.
@@ -1014,7 +1032,7 @@ sfxexp_row_ok:  cmp #$18                // guard: beyond row 23
                 bcs sfxexp_disp_skip
                 tax
                 ldy #13
-                sec                     // PLOT requires carry SET to write position
+                clc
                 jsr $E50C
                 lda #$44; jsr $FFD2     // 'D'
                 lda #$45; jsr $FFD2     // 'E'
@@ -1025,11 +1043,7 @@ sfxexp_row_ok:  cmp #$18                // guard: beyond row 23
                 ldy #>cbmsfxf
                 jsr $AB1E
 sfxexp_disp_skip:
-
                 jsr colorize_rows       // colour-code result rows in $D800
-
-//debugm2         jsr readkeyboard
-//                beq debugm2
 
 // Install a raster IRQ at line 0 for the colour-wash animation and
 // spacebar detection.  The IRQ fires once per frame (~50/60 Hz).
@@ -3124,6 +3138,8 @@ snd_extra_done:
            // Restore st_soundtest to D400 for next T-press
            lda #$D4
            jsr snd_patch_page
+           // SFX/FM-YAM test (only if OPL detected)
+           jsr sfx_soundtest
            // Print "DONE - PRESS SPACE"
            lda #<snd_done
            sta $FE
@@ -3200,7 +3216,7 @@ st_p3:     sta $D405               // VOICE_1_ATK_DEC
 st_p4:     sta $D406               // VOICE_1_SUS_VOL_REL
            lda #$00
 st_p5:     sta $D412               // VOICE_3_CTRL = 0
-           lda #$03                // outer iteration counter (3=saw, 2=tri, 1=pulse, 0=noise)
+           lda #$03                // outer counter: Y=3 saw → Y=2 tri → Y=1 pulse → Y=0 noise (last)
 st_mainloop:
            pha                     // save outer counter
            ldx #$06                // inner: 7 notes (X=6..0)
@@ -3302,6 +3318,165 @@ st_p31:    sta $D412               // gate off
            jmp st_mainloop
 st_done:
            rts
+
+// ============================================================
+// SFX / FM-YAM SOUND TEST — plays two OPL instruments alternately.
+// Called from sound_test_entry after SID test completes.
+// Skips if no OPL was detected.
+// Routes writes to correct port based on sfx_port_mode:
+//   1 = CBM SFX $DE00, real-HW order (cse_write_a)
+//   2 = CBM SFX $DE00, VICE order    (cse_write_b)
+//   3 = FM-YAM $DF00                 (cfm_write_reg)
+// ============================================================
+sfx_soundtest:
+           // Always run the FM/SFX test — opl_write_reg sends to both $DF40 and $DE00
+           // so whichever port the user's hardware responds at plays audibly.
+           // Print "NOW TESTING: DF40 FM"
+           lda #<snd_now_testing
+           sta $FE
+           lda #>snd_now_testing
+           sta $FF
+           jsr dbg_str
+           lda #$DF
+           ldx #$40
+sfx_snd_addr:
+           jsr print_hex             // high byte
+           txa
+           jsr print_hex             // low byte
+           lda #$20; jsr $FFD2       // ' '
+           lda #$46; jsr $FFD2       // 'F'
+           lda #$4D; jsr $FFD2       // 'M'
+           // Global init — three writes per XeNTaX edlibv200_player reference:
+           lda #$01; ldx #$20; jsr opl_write_reg    // reg $01=$20: allow multiple waveforms
+           lda #$08; ldx #$00; jsr opl_write_reg    // reg $08=$00: FM music mode (no CSM)
+           lda #$BD; ldx #$C0; jsr opl_write_reg    // reg $BD=$C0: disable rhythm, AM 4.8dB, vib 14c
+           // --- Instrument 3: clean flute/sine (no FM modulation — carrier only) ---
+           lda #$20; ldx #$01; jsr opl_write_reg    // Mod: EGT=0, MULT=1
+           lda #$23; ldx #$01; jsr opl_write_reg    // Car: EGT=0, MULT=1
+           lda #$40; ldx #$3F; jsr opl_write_reg    // Mod level = SILENT (no FM depth)
+           lda #$43; ldx #$00; jsr opl_write_reg    // Car level = 0 (loudest)
+           lda #$60; ldx #$F8; jsr opl_write_reg    // Mod AR=F, DR=8 (unused, mod silent)
+           lda #$63; ldx #$A0; jsr opl_write_reg    // Car AR=A medium, DR=0
+           lda #$80; ldx #$00; jsr opl_write_reg    // Mod SL=0, RR=0 (unused)
+           lda #$83; ldx #$08; jsr opl_write_reg    // Car SL=0 loud, RR=8 medium release
+           lda #$C0; ldx #$00; jsr opl_write_reg    // FB=0, algo=FM
+           jsr sfx_play_melody
+           // --- Instrument 2: organ (EGT=1 sustain, slow release) ---
+           lda #$20; ldx #$21; jsr opl_write_reg    // Mod: EGT=1 sustain, MULT=1
+           lda #$23; ldx #$21; jsr opl_write_reg    // Car: EGT=1 sustain, MULT=1
+           lda #$40; ldx #$00; jsr opl_write_reg    // Mod level = 0 (loud FM)
+           lda #$43; ldx #$00; jsr opl_write_reg    // Car level = 0 (loudest)
+           lda #$60; ldx #$64; jsr opl_write_reg    // Mod AR=6 medium, DR=4
+           lda #$63; ldx #$64; jsr opl_write_reg    // Car AR=6 medium, DR=4
+           lda #$80; ldx #$01; jsr opl_write_reg    // Mod SL=0 loud, RR=1 slow release
+           lda #$83; ldx #$01; jsr opl_write_reg    // Car SL=0 loud, RR=1 slow release
+           lda #$C0; ldx #$01; jsr opl_write_reg    // feedback
+           jsr sfx_play_melody
+           // --- Instrument 1: bell (FM percussive — bright tinkling pluck) ---
+           lda #$20; ldx #$01; jsr opl_write_reg    // Mod: EGT=0 percussive, MULT=1
+           lda #$23; ldx #$01; jsr opl_write_reg    // Car: EGT=0 percussive, MULT=1
+           lda #$40; ldx #$00; jsr opl_write_reg    // Mod level = 0 (full FM depth)
+           lda #$43; ldx #$00; jsr opl_write_reg    // Car level = 0 (loudest)
+           lda #$60; ldx #$FA; jsr opl_write_reg    // Mod AR=F fast, DR=A medium
+           lda #$63; ldx #$FA; jsr opl_write_reg    // Car AR=F fast, DR=A medium
+           lda #$80; ldx #$05; jsr opl_write_reg    // Mod SL=0 loud, RR=5 med-fast release
+           lda #$83; ldx #$05; jsr opl_write_reg    // Car SL=0 loud, RR=5 med-fast release
+           lda #$C0; ldx #$02; jsr opl_write_reg    // feedback level 1 (metallic harmonics)
+           jsr sfx_play_melody
+           // Silence: key-off + max attenuation on both ops
+           lda #$B0; ldx #$00; jsr opl_write_reg
+           lda #$40; ldx #$3F; jsr opl_write_reg
+           lda #$43; ldx #$3F; jsr opl_write_reg
+           rts
+
+// Play full 3-octave SID-style melody: V1 (C4), V2 (C5), V3 (C6).
+// Each "voice" is the same 7-note C-major arpeggio shifted up one octave.
+// Octave shift = add $04 to the block field in $B0 value.
+sfx_play_melody:
+           lda #$00                 // V1: C4 octave (no shift)
+           jsr sfx_play_notes
+           lda #$04                 // V2: C5 octave (+1 block)
+           jsr sfx_play_notes
+           lda #$08                 // V3: C6 octave (+2 blocks)
+           jsr sfx_play_notes
+           rts
+
+// Play one 7-note arpeggio. A = octave offset (added to $B0 value).
+// Timing matches SID: ~81ms per note via rp_delay #$6a.
+sfx_play_notes:
+           sta sfx_oct_offset
+           ldy #$00
+sfx_pn_loop:
+           // Write freq-lo (reg $A0)
+           lda sfx_notes_lo,y
+           tax
+           tya; pha
+           lda #$A0
+           jsr opl_write_reg
+           pla; tay
+           // Write freq-hi + key-on (reg $B0) with octave shift
+           lda sfx_notes_hi,y
+           clc
+           adc sfx_oct_offset
+           tax
+           tya; pha
+           lda #$B0
+           jsr opl_write_reg
+           pla; tay
+           // Hold the note ~81ms
+           tya; pha
+           lda #$6a
+           jsr rp_delay
+           pla; tay
+           // Key off
+           lda sfx_notes_hi_ko,y
+           clc
+           adc sfx_oct_offset
+           tax
+           tya; pha
+           lda #$B0
+           jsr opl_write_reg
+           pla; tay
+           iny
+           cpy #$07
+           bne sfx_pn_loop
+           rts
+
+// OPL write dispatcher — A=reg, X=value. Y preserved.
+// For the sound test we write to BOTH standard OPL locations so that whichever
+// the user's hardware actually responds at produces audio:
+//   1. $DF40/$DF50 — CBM SFX Sound Expander / FM-YAM / U64 built-in (XeNTaX standard)
+//   2. $DE00/$DE01 — alternative clone location, if detected there
+// Writes to $DF40+ are REU-safe (REU lives at $DF00-$DF0F).
+opl_write_reg:
+           sta opl_tmp_reg
+           stx opl_tmp_val
+           // Always write to $DF40/$DF50 (standard OPL address)
+           jsr cfm_write_reg
+           // Also write to $DE00 variant if SFX detected there
+           lda sfxexp_detected
+           beq owr_done
+           lda sfx_port_mode
+           cmp #$02
+           beq owr_sfx_b
+           lda opl_tmp_reg
+           ldx opl_tmp_val
+           jmp cse_write_a
+owr_sfx_b: lda opl_tmp_reg
+           ldx opl_tmp_val
+           jmp cse_write_b
+owr_done:  rts
+
+// 7-note melody matching the SID test pattern: C E G C(8va) G E C
+// (C major arpeggio with octave jump — same notes the SID plays)
+// OPL2 F-numbers computed: F_num = freq × 2^(20-block) / 49716
+//   C4 (262 Hz, block 4): F_num=$159, A0=$59, B0=$31
+//   E4 (330 Hz, block 4): F_num=$1B3, A0=$B3, B0=$31
+//   G4 (392 Hz, block 4): F_num=$205, A0=$05, B0=$32  (F-hi bits 1-0 = 10)
+//   C5 (523 Hz, block 5): F_num=$159, A0=$59, B0=$35
+sfx_notes_lo:    .byte $59,$B3,$05,$59,$05,$B3,$59  // C4 E4 G4 C5 G4 E4 C4
+sfx_notes_hi:    .byte $31,$31,$32,$35,$32,$31,$31  // key-on (bit5=1)
+sfx_notes_hi_ko: .byte $11,$11,$12,$15,$12,$11,$11  // key-off (bit5=0)
 
 // ============================================================
 // colorize_rows: write green/red/yellow to color RAM for result rows.
@@ -6526,11 +6701,15 @@ sfx_skp_miss:
 // Sets fmyam_detected = $01 if OPL2 found, $00 otherwise.
 // Trashes A, X, Y.
 //--------------------------------------------------------------------------------------------------
-cfm_write_reg:  // helper: write OPL2 reg. On entry: A=reg#, X=value. Trashes A,X.
-                sta $DF00               // select register (addr port A0=0)
-                nop; nop; nop; nop; nop // tAS >= 3.3μs (10 cycles)
-                stx $DF01               // write value (data port A0=1)
-                ldx #$06                // tAH >= 23μs: ~30 cycles
+cfm_write_reg:  // helper: write OPL reg. On entry: A=reg#, X=value. Trashes A,X.
+                // FM-YAM / CBM SFX Sound Expander ports (XeNTaX reference):
+                //   $DF40 = register address (write-only)
+                //   $DF50 = register data    (write-only)
+                //   $DF60 = chip status      (read-only)
+                sta $DF40               // select register
+                nop; nop; nop; nop; nop // tAS ~10 cycles
+                stx $DF50               // write value
+                ldx #$18                // tAH ≥ 16 cycles recommended; ~120μs safe for YM3526
 cfm_tah:        dex
                 bne cfm_tah
                 rts
@@ -6555,40 +6734,44 @@ cfm_g3:         // Guard: ARM2SID SFX- slot at DF00 (armsid_map_h2 lo nibble = 3
                 cmp #$03
                 bne cfm_body; rts       // = 3: ARM2SID owns $DF00
 cfm_body:
-                // Step 1: stop timers. Bit7=0: REU-safe write to $DF01.
-                lda #$04; ldx #$60; jsr cfm_write_reg
-                // Step 2: read baseline; capture for debug page (SFX:XX).
-                lda $DF00
+                php                     // save caller's interrupt-disable state
+                sei                     // IRQs off: OPL /IRQ on T1-fire would storm otherwise
+                lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
+                lda #$04; ldx #$80; jsr cfm_write_reg    // RST all flags
+                lda $DF60
                 sta dfx_preread
-                // $FF = open-bus or VICE lazy-init (OPL not yet responsive); proceed to timer test.
-                // For any other value: T1 bit (bit 6) must be clear; stuck IRQ (bit 7) is ignored.
-                cmp #$FF
-                beq cfm_start_timer     // pre-init: skip baseline T1 check
-                and #$40
-                bne cfm_done            // T1 already set → cannot measure delta
 cfm_start_timer:
-                // Step 3: reg $02 = $7F — Timer 1 period (REU-safe).
-                lda #$02; ldx #$7F; jsr cfm_write_reg
-                // Step 4: reg $04 = $21 — start Timer 1 (REU-safe).
-                lda #$04; ldx #$21; jsr cfm_write_reg
-                // Step 5: Wait ~15ms (12 × 256 × 5 cycles ≈ 15.4ms > 10.4ms timer period)
+                lda #$02; ldx #$7F; jsr cfm_write_reg    // T1 period (~10ms)
+                // Start T1 with IRQ MASKED ($04=$41 = MASK_T1 + ST_T1).
+                // T1 still counts + sets T1_FLAG (bit 6), but /IRQ stays high.
+                // Prevents OPL /IRQ storm through KERNAL handler.
+                lda #$04; ldx #$41; jsr cfm_write_reg
                 ldx #$0C
 cfm_wait_o:     ldy #$00
 cfm_wait_i:     dey
                 bne cfm_wait_i
                 dex
                 bne cfm_wait_o
-                // Step 6: read post-timer status.
-                // $FF = still open-bus (no OPL present); real OPL status never has all bits set.
-                lda $DF00
-                cmp #$FF
-                beq cfm_done            // open-bus → no OPL at $DF00
-                and #$40
-                beq cfm_done            // T1 not set → timer didn't fire → no FM-YAM
+                lda $DF60
+                sta dfx_postread
+                // Clear OPL IRQ flags (RST) BEFORE re-enabling CPU IRQs.
+                lda #$04; ldx #$80; jsr cfm_write_reg
+                lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
+                // Signature: T1_FLAG (bit 6) set, T2 (bit 5) clear, reserved bits clear.
+                // Since IRQ was masked, bit 7 always 0; require exact $40 (only T1 fired).
+                lda dfx_postread
+                and #$60
+                cmp #$40
+                bne cfm_rst_done
                 lda #$01
                 sta fmyam_detected
-cfm_cleanup:    lda #$04; ldx #$60; jsr cfm_write_reg
-cfm_done:       rts
+                lda sfx_port_mode                        // prefer SFX if already detected
+                bne cfm_rst_done
+                lda #$03
+                sta sfx_port_mode                        // 3 = FM-YAM @ $DF40/$DF50
+cfm_rst_done:
+                plp                     // restore caller's IRQ-disable state
+                rts
 
 //--------------------------------------------------------------------------------------------------
 // checksfxexpander: probe $DE00/$DE01 for OPL (CBM SFX Sound Expander at IO1 = $DE00-$DEFF).
@@ -6605,10 +6788,12 @@ cfm_done:       rts
 // Trashes A, X, Y.
 //--------------------------------------------------------------------------------------------------
 // Write helper A: real-hardware port order — addr→$DE00, data→$DE01
+// tAH >= 85μs for YM3526 (CBM SFX); YM3812 (FM-YAM) only needs 23μs.
+// ldx #$18 → 24*5-1 = 119 cycles ≈ 119μs → safe for both chips.
 cse_write_a:    sta $DE00               // reg# to OPL address port (A0=0)
                 nop; nop; nop; nop; nop // tAS >= 3.3μs
                 stx $DE01               // data to OPL data port (A0=1)
-                ldx #$06
+                ldx #$18
 cse_tah_a:      dex
                 bne cse_tah_a
                 rts
@@ -6617,7 +6802,7 @@ cse_tah_a:      dex
 cse_write_b:    sta $DE01               // reg# to OPL address port (VICE: odd = address)
                 nop; nop; nop; nop; nop // tAS >= 3.3μs
                 stx $DE00               // data to OPL data port (VICE: even = data)
-                ldx #$06
+                ldx #$18
 cse_tah_b:      dex
                 bne cse_tah_b
                 rts
@@ -6626,34 +6811,72 @@ checksfxexpander:
                 lda #$00
                 sta sfxexp_detected
                 // Guard: SIDFX ($30) — $DE00 area conflicts with SIDFX SCI bus
-                // Guard: emulator/unknown ($F0) — VICE maps OPL regardless of SFX setting
-                lda data4; cmp #$30; bne cse_g1; rts   // SIDFX: exit
-cse_g1:         cmp #$F0; bne cse_try_a; rts           // emulator: exit
+                lda data4; cmp #$30; bne cse_try_a; rts   // SIDFX: exit
 
                 // === OPL1 timer probe: standard port order (addr→$DE00, data→$DE01) ===
                 // After RST (write $80 to reg 4), real OPL1 clears status to $00.
                 // Real C64 open bus ($FF) and unmapped IO1 do not respond → remain ≠ $00.
+// Signature check: (status & $E1) == $C0 → IRQ+T1 set, T2 clear, bit 0 clear.
+// Accepts real OPL ($C0) and VICE emulation ($D4).
+// Rejects bus noise like $C5, $D1, $C3 (all have bit 0 set).
 cse_try_a:
-                lda #$04; ldx #$60; jsr cse_write_a    // stop timers
-                lda #$04; ldx #$80; jsr cse_write_a    // RST: clear all IRQ/timer flags
-                lda $DE00; sta dse_s2b                  // capture for debug
-                bne cse_done                            // ≠ $00 → OPL not mapped → not SFX
-                // OPL responded with $00 → start T1 and measure
-                lda #$02; ldx #$7F; jsr cse_write_a    // timer 1 period = $7F (~10ms)
-                lda #$04; ldx #$01; jsr cse_write_a    // start T1 (unmasked)
-                ldx #$20                                // wait ~41ms (>4× T1 period)
-cse_wait_ao:    ldy #$00
-cse_wait_ai:    dey; bne cse_wait_ai; dex; bne cse_wait_ao
-                lda $DE00; sta dse_s6b                  // capture post-timer for debug
-                // Real OPL1: T1 overflow sets both IRQ (bit7) and T1_FLAG (bit6) → $C0 or $C5.
-                and #$C0; cmp #$C0; beq cse_found       // both bits → real OPL1 confirmed
-                lda #$04; ldx #$60; jsr cse_write_a    // cleanup: stop timers
-cse_done:       rts
+                php                                     // save caller IRQ state
+                sei                                     // block OPL /IRQ storm
+                lda #$04; ldx #$00; jsr cse_write_a    // stop all timers
+                lda #$04; ldx #$80; jsr cse_write_a    // RST flags
+                lda $DE00; sta dse_s2b
+                lda #$02; ldx #$7F; jsr cse_write_a    // T1 period
+                lda #$04; ldx #$41; jsr cse_write_a    // start T1 with IRQ MASKED
+                ldx #$80
+cse_poll_o:     ldy #$00
+cse_poll_i:     lda $DE00
+                sta dse_s6b
+                and #$60
+                cmp #$40
+                beq cse_found                           // T1 set, T2 clear → OPL
+                dey; bne cse_poll_i
+                dex; bne cse_poll_o
+                lda #$04; ldx #$80; jsr cse_write_a    // clear OPL IRQ flags
+                lda #$04; ldx #$00; jsr cse_write_a    // stop timers
+                // fall through: try_a failed → try VICE port order
+
+                // === Try B: VICE port order (addr→$DE01, data→$DE00) ===
+cse_try_b:
+                lda #$04; ldx #$00; jsr cse_write_b
+                lda #$04; ldx #$80; jsr cse_write_b
+                lda $DE00; sta dse_s2b_b
+                lda #$02; ldx #$7F; jsr cse_write_b
+                lda #$04; ldx #$41; jsr cse_write_b    // start T1 with IRQ MASKED
+                ldx #$80
+cse_poll_bo:    ldy #$00
+cse_poll_bi:    lda $DE00
+                sta dse_s6b
+                and #$60
+                cmp #$40
+                beq cse_found_b
+                dey; bne cse_poll_bi
+                dex; bne cse_poll_bo
+                lda #$04; ldx #$80; jsr cse_write_b    // clear OPL IRQ
+                lda #$04; ldx #$00; jsr cse_write_b
+cse_done:       plp                                     // restore caller IRQ state
+                rts
 
 cse_found:      lda #$01
                 sta sfxexp_detected
-                lda #$04; ldx #$60; jsr cse_write_a    // stop timers
-cse_exit:       rts
+                lda #$01
+                sta sfx_port_mode                      // 1 = SFX @ $DE00, real-HW order
+                lda #$04; ldx #$80; jsr cse_write_a    // clear OPL IRQ
+                lda #$04; ldx #$00; jsr cse_write_a    // stop timers
+                plp
+                rts
+cse_found_b:    lda #$01
+                sta sfxexp_detected
+                lda #$02
+                sta sfx_port_mode                      // 2 = SFX @ $DE00, VICE order
+                lda #$04; ldx #$80; jsr cse_write_b    // clear OPL IRQ
+                lda #$04; ldx #$00; jsr cse_write_b    // stop timers
+                plp
+                rts
 
 //--------------------------------------------------------------------------------------------------
 sfx_probe_dis_echo:
@@ -7836,8 +8059,14 @@ backsid_d41f:        .byte 0     // D41F readback from checkbacksid ($42 = BackS
 skpico_fm:           .byte 0     // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
 fmyam_detected:      .byte 0     // 1 = OPL2 found at $DF00 via timer probe (FM-YAM or compatible)
 sfxexp_detected:     .byte 0     // 1 = OPL found at $DE00 via timer probe (CBM SFX Sound Expander)
-dse_s2b:             .byte $FF   // raw $DE00 at try-B step 2 ($FF=not reached; $00=OPL clear; else=not OPL/stuck)
-dse_s6b:             .byte $FF   // raw $DE00 at step 6 of try B ($FF=not reached, $C0=detected, else=timer failed)
+sfx_port_mode:       .byte 0     // 0=none, 1=SFX $DE00 real-HW, 2=SFX $DE00 VICE, 3=FM-YAM $DF00
+opl_tmp_reg:         .byte 0     // scratch: reg# for opl_write_reg dispatcher
+opl_tmp_val:         .byte 0     // scratch: value for opl_write_reg dispatcher
+sfx_oct_offset:      .byte 0     // octave shift added to $B0 value (0/4/8 = V1/V2/V3)
+dfx_postread:        .byte $FF   // raw $DF00 status after T1 wait (debug/diagnostic)
+dse_s2b:             .byte $EE   // raw $DE00 after try-A RST ($EE=not reached; $00=OPL clear; else=not OPL)
+dse_s6b:             .byte $EE   // raw $DE00 last poll read ($EE=not reached; $C0=OPL timer fired; else=bus noise)
+dse_s2b_b:           .byte $EE   // raw $DE00 after try-B RST (VICE port order; $EE=not reached)
 dfx_preread:         .byte $FF   // raw $DF00 value at checkfmyam pre-read ($FF = not reached)
 MODE6581:     .byte $f0,$f1,$f0,$f0,$f2,$f1,$f2,$f2,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f0
 MODE8580:     .byte $f0,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f2,$f2,$f1,$f2,$f0,$f0,$f1,$f0
@@ -7873,7 +8102,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.3.100 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.16 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8209,7 +8438,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.3.100"
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.16 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8986,7 +9215,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.3.100 README"
+    .text "SIDDETECTOR V1.4.16 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9149,7 +9378,23 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
-    .text "  V1.3.100 FIX SFX: SKIP EMULATOR; SEC BEFORE $E50C; POST-RST $00"
+    .text "  V1.4.16 VERSION BUMP — CONSOLIDATE SOUND TEST (SID + 3 FM INSTRUMENTS)"
+    .text "  V1.4.15 ADD SFX INSTR 1 (BELL): 3 FM INSTRUMENTS NOW — BELL/ORG/FLUTE"
+    .text "  V1.4.14 FIX SID PULSE: PW TABLE REORDER MATCHED WAVEFORM REORDER     "
+    .text "  V1.4.13 SFX 3-OCTAVE MELODY (C4/C5/C6) MATCHING SID V1/V2/V3 VOICES "
+    .text "  V1.4.12 OPL INIT: $08=0 FM MODE + $BD=C0 DISABLE RHYTHM (XENTAX REF) "
+    .text "  V1.4.11 SFX TEST: ALWAYS WRITE $DF40+$DE00 (WHICHEVER HW IS THERE)  "
+    .text "  V1.4.10 SFX MELODY: C4 E4 G4 C5 G4 E4 C4 (ARPEGGIO MATCHING SID)    "
+    .text "  V1.4.09 FIX HANG: OPL /IRQ STORM — SEI+MASKED T1 ($04=$41)+RST ACK  "
+    .text "  V1.4.08 SFX INSTR 3 (PURE SINE/FLUTE) + INSTR 2 (ORGAN); MELODY x7   "
+    .text "  V1.4.07 SFX MELODY: 7 NOTES (C D E C8VA E D C) MATCHING SID PATTERN "
+    .text "  V1.4.06 FM-YAM/SFX AT $DF40/$DF50/$DF60 (XENTAX); SFX TEST NOW AUDIO"
+    .text "  V1.4.05 FM SOUND: FIX SL=0 LOUD (WAS SILENT); SIG (STATUS&E1)==C0   "
+    .text "  V1.4.04 SID NOISE LAST; OPL SOUND FIX (WAVE-SEL $01=$20, F0/FF ENV) "
+    .text "  V1.4.03 SOUND TEST: PLAY OPL IF SFX/FM PRESENT, 2 INSTRUMENTS      "
+    .text "  V1.4.02 SFX/FM STRICT: (STATUS&E0)==C0; YM3526 TAH 120US; A/B FIX  "
+    .text "  V1.4.01 FIX PLOT CARRY (A/B GHOSTS); SFX PORT FALLBACK; RM DBG    "
+    .text "  V1.4.00 FIX SFX DETECT: POST-RST CHECK BITS 6-5; TIMER BITS 7|6   "
     .byte 13
     .byte $9E
     .text "  V1.3.95 FIX IS_U64 FALSE POS; FIKTIVLOOP SKIP+LIST INIT"
@@ -9250,7 +9495,7 @@ snd_title:
     .byte 13
     .text "TESTING ALL 3 SID VOICES."
     .byte 13
-    .text "SAWTOOTH, TRIANGLE, PULSE WAVEFORMS."
+    .text "SAW, TRIANGLE, PULSE, NOISE WAVEFORMS."
     .byte 13
     .byte 13
     .text "NOW TESTING: "
@@ -9284,9 +9529,9 @@ st_sound3: .byte $22,$2b,$33,$44,$33,$2b,$22
 st_sound4: .byte $4b,$34,$61,$95,$61,$34,$4b
 st_sound5: .byte $44,$56,$66,$89,$66,$56,$44
 st_sound6: .byte $95,$69,$c2,$2b,$c2,$69,$95
-st_sound7: .byte $45,$11,$25,$81      // pulse+ring+gate, triangle+gate, saw+ring+gate, noise+gate
-st_sound8: .byte $00,$00,$00,$00      // pulse width Lo (unused for saw/tri/noise)
-st_sound9: .byte $08,$00,$00,$09,$00,$28,$ff,$1f  // pulse width Hi
+st_sound7: .byte $81,$45,$11,$25      // Y=0 noise (last), Y=1 pulse+ring, Y=2 tri, Y=3 saw+ring (first)
+st_sound8: .byte $00,$00,$00,$00      // pulse width Lo (all 0 = low byte of $0800)
+st_sound9: .byte $00,$08,$00,$00      // pulse width Hi — Y=1 (pulse) needs $08 → PW=$0800 (50% duty)
 
 // fiktivloop_d400: initialise sptr_zp/cnt1_zp/cnt2_zp for a D400-rooted scan
 // then tail-call fiktivloop. D400 must already be pre-populated in sid_list[1].
@@ -9325,6 +9570,7 @@ bpf_found:
                 // row 8: print "BACKSID FOUND" at column 13
                 ldx #08
                 ldy #13
+                clc
                 jsr $E50C
                 lda #<backsidf
                 ldy #>backsidf

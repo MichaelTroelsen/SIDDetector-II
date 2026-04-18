@@ -24,7 +24,7 @@ $(PRG): $(SRC)
 	$(KICKASS) $(SRC) -o $(PRG)
 
 run: $(PRG)
-	$(VICE) -autostart $(PRG)
+	$(VICE) -autostart $(PRG) -sfxse -sfxsetype 3812
 
 remote: $(PRG)
 	$(U64REMOTE) $(U64IP) run $(PRG)

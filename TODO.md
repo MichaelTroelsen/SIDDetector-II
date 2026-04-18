@@ -2,7 +2,7 @@
 
 ## New chips to detect
 
-- [x] **CBM SFX Sound Expander** — V1.3.97: `checksfxexpander` detects OPL1 (YM3526) at $DE00 (IO1). Try A (standard port order: addr→$DE00, data→$DE01) handles both real hardware and VICE. VICE quirk: IRQ bit (bit7) may be stuck high before timer fires — baseline check uses bits 6-5 only (`and #$60`); post-timer uses bits 7-6 (`and #$C0`) to accept either T1_FLAG or IRQ. Real hardware uses standard OPL1 clear+timer; VICE OPL1 does not properly set T1_FLAG (bit6) on overflow but does set IRQ (bit7). Try B (swapped ports) kept as fallback for unusual custom hardware.
+- [x] **CBM SFX Sound Expander** — V1.4.00: `checksfxexpander` detects OPL1 (YM3526) at $DE00 (IO1). Port order: addr→$DE00, data→$DE01. After RST, read $DE00 with mask `and #$60` (bits 6-5 only; ignores stuck IRQ bit7). After T1 start, polls $DE00 in tight loop (128×256 iterations, ~32ms timeout) until `and #$C0` is non-zero — VICE sets bit7 ($A9), real hardware sets bit6 or both. Polling drives VICE's lazy OPL evaluation for reliable detection. `sfxexp_detected` and `fmyam_detected` reset at every restart (`start:` block). CI: T33 (sfxexp=$00→none) and T34 (sfxexp=$01→found) — 34 tests total.
 - [x] **KungFuSID** — Detected via D41D echo: write $A5, read back. Old firmware returns $A5 (register echo); new firmware returns $5A (FW_UPDATE_START_ACK). Both accepted. Detection placed after all other hardware checks (position 5b). `data1=$0C`.
 - [x] **SIDKick-pico** — Detected via config mode VERSION_STR: write $FF to D41F, $E0 to D41E, skip 20 bytes from D41D, read 'S'/$53 + 'K'/$4B (data1=$0B)
 - [x] **BackSID** — Detected via register echo: write $42 to D41C, $B5 to D41D, $1D to D41E, read D41F; if D41F==$42 → BackSID (data1=$0A)
@@ -37,7 +37,7 @@
 
 ## Testing
 
-### Covered by test suite (tests/test_suite.asm — 27 tests)
+### Covered by test suite (tests/test_suite.asm — 34 tests)
 - [x] Machine type dispatch: C64 / C128 / TC64 (T01–T03)
 - [x] SIDFX dispatch: found / not found (T04–T05)
 - [x] Swinsid Ultimate dispatch: data1=$04 (T06)
@@ -58,6 +58,12 @@
 - [x] BackSID dispatch: data1=$0A (T25)
 - [x] SIDKick-pico dispatch: data1=$0B (T26)
 - [x] KungFuSID dispatch: data1=$0C (T27)
+- [x] ARM2SID SFX-only: emul_mode=$01 (T28)
+- [x] ARM2SID SFX+SID: emul_mode=$02 (T29)
+- [x] SKpico FM Sound Expander: skpico_fm=$04 (T30) / $05 (T31)
+- [x] FM-YAM OPL2: fmyam_detected=$01 (T32)
+- [x] CBM SFX disabled: sfxexp_detected=$00 → none (T33)
+- [x] CBM SFX enabled: sfxexp_detected=$01 → found (T34)
 
 ### Not yet testable in VICE (require real hardware)
 - [ ] `Checkarmsid` hardware probe — SID register echo depends on chip model
