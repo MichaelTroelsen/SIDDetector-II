@@ -18,8 +18,7 @@
 //   S9  New chips     (T24–T27)   PDsid/$09 / BackSID/$0A / SKpico/$0B / KungFu/$0C
 //   S10 ARM2SID SFX   (T28–T29)   emul_mode=$01 → SFX only / $02 → SID+SFX
 //   S11 SKpico FM     (T30–T31)   skpico_fm=$04/$05 → FM Sound Expander at $DF00
-//   S12 FM-YAM OPL2   (T32)       fmyam_detected=$01 → FM-YAM/OPL2 found at $DF00
-//   S13 CBM SFX       (T33–T34)   sfxexp_detected=$00 → none / $01 → SFX found
+//   S12 FM-YAM OPL2   (T32)       fmyam_detected=$01 → FM-YAM/OPL2 found at $DF40
 //
 // Pass count written to $07E8 on completion.
 // 34 = all tests passed.
@@ -73,8 +72,7 @@
 .const RES_FMYAM          = $16   // FM-YAM / OPL2 Sound Expander at $DF00
 
 // CBM SFX Sound Expander variables (absolute addresses from siddetector.sym)
-.const sfxexp_detected_var = $571f  // 1 = OPL1 found at $DE00 via timer probe
-.const RES_SFXEXP         = $17   // CBM SFX Sound Expander detected at $DE00
+// (sfxexp_detected_var / RES_SFXEXP removed in V1.4.22 — legacy $DE00 probe retired)
 
 * = $0801
     .word $0801
@@ -802,54 +800,14 @@ t32:
     ldy #>str_t32_pass
     jsr show_result
     inc pass_count
-    jmp t33
+    jmp test_done
 t32_fail:
     lda #<str_t32_fail
     ldy #>str_t32_fail
     jsr show_result
 
-// ============================================================
-// S13: CBM SFX SOUND EXPANDER FLAG DISPATCH  (T33–T34)
-// Mirrors sfxexp_detected check in siddetector display path.
-// T33: sfxexp_detected=$00 → no SFX (negative case)
-// T34: sfxexp_detected=$01 → SFX found at $DE00
-// ============================================================
-
-t33:
-    // T33: sfxexp_detected=$00 → not found
-    lda #$00
-    sta sfxexp_detected_var
-    jsr dispatch_sfxexp
-    lda #RES_NONE
-    jsr assert_eq
-    bne t33_fail
-    lda #<str_t33_pass
-    ldy #>str_t33_pass
-    jsr show_result
-    inc pass_count
-    jmp t34
-t33_fail:
-    lda #<str_t33_fail
-    ldy #>str_t33_fail
-    jsr show_result
-
-t34:
-    // T34: sfxexp_detected=$01 → SFX found
-    lda #$01
-    sta sfxexp_detected_var
-    jsr dispatch_sfxexp
-    lda #RES_SFXEXP
-    jsr assert_eq
-    bne t34_fail
-    lda #<str_t34_pass
-    ldy #>str_t34_pass
-    jsr show_result
-    inc pass_count
-    jmp test_done
-t34_fail:
-    lda #<str_t34_fail
-    ldy #>str_t34_fail
-    jsr show_result
+// (T33/T34 CBM SFX dispatch tests removed in V1.4.22 — the live
+//  $DE00 probe they mirrored was retired.)
 
 // ============================================================
 // SUMMARY
@@ -859,7 +817,7 @@ test_done:
     ldy #>str_divider
     jsr show_result
     lda pass_count
-    cmp #34
+    cmp #32
     bne td_fail
     lda #<str_all_pass
     ldy #>str_all_pass
@@ -1148,18 +1106,7 @@ dispatch_fmyam:
 dfmy_exit:
     rts
 
-// ---- dispatch_sfxexp -----------------------------------------
-// Source: sfxexp_detected check in siddetector display path.
-// Reads sfxexp_detected (absolute $571F): non-zero → RES_SFXEXP
-dispatch_sfxexp:
-    lda #RES_NONE
-    sta dispatch_result
-    lda sfxexp_detected_var
-    beq dsfx_exit           // $00 → not found
-    lda #RES_SFXEXP
-    sta dispatch_result
-dsfx_exit:
-    rts
+// (dispatch_sfxexp removed in V1.4.22 along with the $DE00 probe.)
 
 // ---- dispatch_skpico_fm --------------------------------------
 // Source: cskp_fm_disp in siddetector.asm
@@ -1403,17 +1350,9 @@ str_t32_pass: .text "T32 PASS: FMYAM=$01 -> FM-YAM"
               .byte 0
 str_t32_fail: .text "T32 FAIL: FMYAM=$01 -> FM-YAM"
               .byte 0
-str_t33_pass: .text "T33 PASS: SFX=$00 -> NONE"
-              .byte 0
-str_t33_fail: .text "T33 FAIL: SFX=$00 -> NONE"
-              .byte 0
-str_t34_pass: .text "T34 PASS: SFX=$01 -> CBM SFX"
-              .byte 0
-str_t34_fail: .text "T34 FAIL: SFX=$01 -> CBM SFX"
-              .byte 0
 str_divider:  .text "--------------------------------------"
               .byte 0
-str_all_pass: .text "ALL 34 TESTS PASSED"
+str_all_pass: .text "ALL 32 TESTS PASSED"
               .byte 0
 str_some_fail:.text "SOME TESTS FAILED - CHECK ABOVE"
               .byte 0

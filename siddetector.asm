@@ -2161,7 +2161,7 @@ dbg_sidfx_skip:
            jsr print_hex
            lda #$0D
            jsr $FFD2
-           // Line: SFX:XX  (dfx_preread: raw $DF00 at pre-read; $FF=not reached, $00=OPL2 idle, $C0=timer still set)
+           // Line: SFX:XX XX  (dfx_preread + dfx_postread: raw $DF60 on two reads; (value & $E0)==0 → OPL present)
            lda #<dbg_s_sfx
            ldy #>dbg_s_sfx
            jsr $AB1E
@@ -3287,10 +3287,8 @@ st_done:
 // SFX / FM-YAM SOUND TEST — plays two OPL instruments alternately.
 // Called from sound_test_entry after SID test completes.
 // Skips if no OPL was detected.
-// Routes writes to correct port based on sfx_port_mode:
-//   1 = CBM SFX $DE00, real-HW order (cse_write_a)
-//   2 = CBM SFX $DE00, VICE order    (cse_write_b)
-//   3 = FM-YAM $DF00                 (cfm_write_reg)
+// All OPL writes go through cfm_write_reg ($DF40 addr / $DF50 data) —
+// the XeNTaX-standard CBM SFX / FM-YAM I/O map.
 // ============================================================
 sfx_soundtest:
            // Always run the FM/SFX test — opl_write_reg sends to both $DF40 and $DE00
@@ -6620,29 +6618,29 @@ sfx_skp_miss:
 // the target echo. Skip ACK when lo=0 and hi=$D4 (D400 slot).
 //--------------------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------------------
-// checkfmyam: probe $DF00/$DF01 for OPL2/YM3812 (FM-YAM / SFX Sound Expander or compatible).
-// Standard AdLib OPL2 I/O map (IO2 = $DF00-$DFFF):
-//   $DF00 = register select (write OPL2 register number here; also status read)
-//   $DF01 = data write (write OPL2 register value here)
-// Detection algorithm (REU-safe — ALL writes to $DF01 have bit7=0):
-//   Pre-read: $DF00 & $E0 must be $00 (VICE open-bus=$FF→$E0≠0 exits here)
-//   Step 1: reg $04 = $60 — stop timers (bit7=0, safe)
-//   Step 2: Read status → must still be $00
-//   Step 3: reg $02 = $7F — Timer 1 period (bit7=0; fires after ~10.3ms)
-//   Step 4: reg $04 = $21 — start Timer 1 masked (bit7=0, safe)
-//   Step 5: Wait ~15ms (nested loop: 12×256×5 ≈ 15,360 cycles)
-//   Step 6: Read status & $E0 → must be $C0 (IRQ + T1 fired)
-// OPL2 timing requirements per YM3812 datasheet:
-//   tAS: addr write → data write ≥ 3.3μs  (5 NOPs = 10 cycles)
-//   tAH: data write → next addr write ≥ 23μs  (cfm_tah loop ≈ 30 cycles)
-// REU safety: $DF01 is the REU COMMAND register; bit7=1 triggers DMA EXECUTE.
-//   All values written here ($60,$7F,$21) have bit7=0 → no REU DMA in any path.
+// checkfmyam: probe $DF40/$DF50/$DF60 for OPL (CBM SFX Sound Expander / FM-YAM).
+// XeNTaX-standard I/O map (IO2 sub-range used by CBM Sound Expander decoder):
+//   $DF40 = register select / address  (write-only)
+//   $DF50 = register data              (write-only)
+//   $DF60 = chip status                (read-only)
+// Detection algorithm (V1.4.19+):
+//   Step 1: reg $04 = $00 — stop all timers, unmask
+//   Step 2: reg $04 = $80 — RST (clears IRQ/T1_FLAG/T2_FLAG, self-clearing bit)
+//   Step 3: Read $DF60 twice; require (status & $E0) == 0 on both reads.
+//           Real OPL drives status to $00-$1F after RST; open bus returns $FF / bus-noise
+//           patterns with high bits set ($D1, $C5, $BB, $A4, $B7).
+// OPL /IRQ safety: PHP/SEI at entry; RST on exit; PLP restores caller I flag.
+//   Without SEI, T1 firing would assert /IRQ → KERNAL $EA31 handler doesn't ACK the
+//   OPL → infinite IRQ storm → hang.
+// Timing requirements (YM3526 is stricter than YM3812):
+//   tAS: addr→data ≥ 3.3μs  (5 NOPs = 10 cycles)
+//   tAH: data→next addr ≥ 85μs  (cfm_tah: ldx #$18 → ~120μs safe for both chips)
 // Guards:
 //   - is_u64 != 0: Ultimate64 uses $DF00-$DFFF for UCI; FM-YAM can't coexist (exp port taken)
 //   - data4=$30: SIDFX detected — $DF00 area conflicts; FM-YAM + SIDFX combo unsupported
 //   - skpico_fm >= 4: SIDKick Pico is the OPL2 source at $DF00 (already detected)
 //   - arm2sid_map_h2 lo nibble == 3: ARM2SID SFX- slot at DF00 (already detected)
-// Sets fmyam_detected = $01 if OPL2 found, $00 otherwise.
+// Sets fmyam_detected = $01 if OPL found, $00 otherwise.
 // Trashes A, X, Y.
 //--------------------------------------------------------------------------------------------------
 cfm_write_reg:  // helper: write OPL reg. On entry: A=reg#, X=value. Trashes A,X.
