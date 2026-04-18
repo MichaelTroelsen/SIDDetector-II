@@ -164,9 +164,7 @@ start:
                 sta data4               // init: no HW SID type saved yet
                 sta res_zp              // init: no tentative SwinSID Nano result
                 sta retry_zp            // init: no retries yet
-                sta sfxexp_detected     // init: SFX not detected (reset on every restart)
-                sta fmyam_detected      // init: FM-YAM not detected (reset on every restart)
-                sta sfx_port_mode       // init: no OPL port mode selected
+                sta fmyam_detected      // init: FM-YAM / SFX not detected (reset on every restart)
 init_sid_list:                          // zero the 8-slot SID result tables (A=$00)
                 sta sid_list_h,x        // SID address high byte ($D4/$D5 ...)
                 sta sid_list_l,x        // SID address low byte  ($00/$20 ...)
@@ -1017,34 +1015,9 @@ after_decay:
                 ldy #>fmyamf
                 jsr $AB1E
 fmyam_disp_skip:
-                // $DE00 legacy probe disabled — standard CBM SFX / FM-YAM lives at $DF40
-                // (XeNTaX reference). The $DE00 clone variant is rare and the probe is
-                // fragile (bus-noise false positives on real hardware).
-                // jsr checksfxexpander
-                // Display "DE00 +CBM SFX   " on next available stereo row if detected.
-                lda sfxexp_detected
-                beq sfxexp_disp_skip
-                lda sidnum_zp
-                clc
-                adc #$10                // base: row 16 + sidnum_zp
-                ldx fmyam_detected      // shift +1 if FM-YAM also occupies a row
-                beq sfxexp_row_ok
-                adc #$01
-sfxexp_row_ok:  cmp #$18                // guard: beyond row 23
-                bcs sfxexp_disp_skip
-                tax
-                ldy #13
-                clc
-                jsr $E50C
-                lda #$44; jsr $FFD2     // 'D'
-                lda #$45; jsr $FFD2     // 'E'
-                lda #$30; jsr $FFD2     // '0'
-                lda #$30; jsr $FFD2     // '0'
-                lda #$20; jsr $FFD2     // ' '
-                lda #<cbmsfxf
-                ldy #>cbmsfxf
-                jsr $AB1E
-sfxexp_disp_skip:
+                // Legacy $DE00 SFX Sound Expander probe removed in V1.4.22 —
+                // standard CBM SFX and FM-YAM both live at $DF40/$DF50/$DF60
+                // (handled above by checkfmyam).
                 jsr colorize_rows       // colour-code result rows in $D800
 
 // Install a raster IRQ at line 0 for the colour-wash animation and
@@ -2194,19 +2167,8 @@ dbg_sidfx_skip:
            jsr $AB1E
            lda dfx_preread
            jsr print_hex
-           lda #$0D
-           jsr $FFD2
-           // Line: CSE:XX  (dse_s6b: raw $DE00 at try-B step 6; $FF=not reached, $C0=OPL timer fired)
-           lda #<dbg_s_cse
-           ldy #>dbg_s_cse
-           jsr $AB1E
-           lda dse_s6b
-           jsr print_hex
            lda #$20; jsr $FFD2     // space
-           lda #<dbg_s_sfxdet
-           ldy #>dbg_s_sfxdet
-           jsr $AB1E
-           lda sfxexp_detected
+           lda dfx_postread
            jsr print_hex
            lda #$0D
            jsr $FFD2
@@ -3444,30 +3406,10 @@ sfx_pn_loop:
            bne sfx_pn_loop
            rts
 
-// OPL write dispatcher — A=reg, X=value. Y preserved.
-// For the sound test we write to BOTH standard OPL locations so that whichever
-// the user's hardware actually responds at produces audio:
-//   1. $DF40/$DF50 — CBM SFX Sound Expander / FM-YAM / U64 built-in (XeNTaX standard)
-//   2. $DE00/$DE01 — alternative clone location, if detected there
-// Writes to $DF40+ are REU-safe (REU lives at $DF00-$DF0F).
+// OPL write dispatcher — A=reg, X=value. Thin wrapper around cfm_write_reg.
+// Standard OPL I/O at $DF40/$DF50 per XeNTaX. REU-safe (REU is $DF00-$DF0F).
 opl_write_reg:
-           sta opl_tmp_reg
-           stx opl_tmp_val
-           // Always write to $DF40/$DF50 (standard OPL address)
-           jsr cfm_write_reg
-           // Also write to $DE00 variant if SFX detected there
-           lda sfxexp_detected
-           beq owr_done
-           lda sfx_port_mode
-           cmp #$02
-           beq owr_sfx_b
-           lda opl_tmp_reg
-           ldx opl_tmp_val
-           jmp cse_write_a
-owr_sfx_b: lda opl_tmp_reg
-           ldx opl_tmp_val
-           jmp cse_write_b
-owr_done:  rts
+           jmp cfm_write_reg
 
 // 7-note melody matching the SID test pattern: C E G C(8va) G E C
 // (C major arpeggio with octave jump — same notes the SID plays)
@@ -6755,116 +6697,14 @@ cfm_body:
                 bne cfm_rst_done                         // noisy → reject
                 lda #$01
                 sta fmyam_detected
-                lda sfx_port_mode                        // prefer SFX if already detected
-                bne cfm_rst_done
-                lda #$03
-                sta sfx_port_mode                        // 3 = FM-YAM @ $DF40/$DF50
 cfm_rst_done:
                 plp                     // restore caller's IRQ-disable state
                 rts
 
-//--------------------------------------------------------------------------------------------------
-// checksfxexpander: probe $DE00/$DE01 for OPL (CBM SFX Sound Expander at IO1 = $DE00-$DEFF).
-// Uses the same AdLib timer algorithm as checkfmyam.
-// Port order note: VICE swaps the OPL write ports relative to real YM3526 hardware:
-//   Real HW: addr→$DE00 (A0=0), data→$DE01 (A0=1)   (standard YM3526 pinout)
-//   VICE:    addr→$DE01 (A0=1), data→$DE00 (A0=0)   (VICE sfx_soundexpander.c)
-// Status reads ($DE00) are identical in both.
-// Detection uses two tries: Try A (real HW order), then Try B (VICE order).
-// Guards:
-//   - data4=$30: SIDFX present — $DE00 area conflicts
-//   - pre-read $DE00 & $E0 ≠ $00: open-bus ($FF) or pending IRQ → exit
-// Sets sfxexp_detected = $01 if OPL found, $00 otherwise.
-// Trashes A, X, Y.
-//--------------------------------------------------------------------------------------------------
-// Write helper A: real-hardware port order — addr→$DE00, data→$DE01
-// tAH >= 85μs for YM3526 (CBM SFX); YM3812 (FM-YAM) only needs 23μs.
-// ldx #$18 → 24*5-1 = 119 cycles ≈ 119μs → safe for both chips.
-cse_write_a:    sta $DE00               // reg# to OPL address port (A0=0)
-                nop; nop; nop; nop; nop // tAS >= 3.3μs
-                stx $DE01               // data to OPL data port (A0=1)
-                ldx #$18
-cse_tah_a:      dex
-                bne cse_tah_a
-                rts
-
-// Write helper B: VICE port order — addr→$DE01, data→$DE00
-cse_write_b:    sta $DE01               // reg# to OPL address port (VICE: odd = address)
-                nop; nop; nop; nop; nop // tAS >= 3.3μs
-                stx $DE00               // data to OPL data port (VICE: even = data)
-                ldx #$18
-cse_tah_b:      dex
-                bne cse_tah_b
-                rts
-
-checksfxexpander:
-                lda #$00
-                sta sfxexp_detected
-                // Guard: SIDFX ($30) — $DE00 area conflicts with SIDFX SCI bus
-                lda data4; cmp #$30; bne cse_try_a; rts   // SIDFX: exit
-
-                // === OPL1 timer probe: standard port order (addr→$DE00, data→$DE01) ===
-                // After RST (write $80 to reg 4), real OPL1 clears status to $00.
-                // Real C64 open bus ($FF) and unmapped IO1 do not respond → remain ≠ $00.
-// Signature check: (status & $E1) == $C0 → IRQ+T1 set, T2 clear, bit 0 clear.
-// Accepts real OPL ($C0) and VICE emulation ($D4).
-// Rejects bus noise like $C5, $D1, $C3 (all have bit 0 set).
-cse_try_a:
-                php                                     // save caller IRQ state
-                sei                                     // block OPL /IRQ storm
-                lda #$04; ldx #$00; jsr cse_write_a    // stop all timers
-                lda #$04; ldx #$80; jsr cse_write_a    // RST flags
-                lda $DE00; sta dse_s2b
-                lda #$02; ldx #$7F; jsr cse_write_a    // T1 period
-                lda #$04; ldx #$41; jsr cse_write_a    // start T1 with IRQ MASKED
-                ldx #$80
-cse_poll_o:     ldy #$00
-cse_poll_i:     lda $DE00
-                sta dse_s6b
-                cmp #$40                                 // exact $40 only (T1 fired, masked, reserved=0)
-                beq cse_found
-                dey; bne cse_poll_i
-                dex; bne cse_poll_o
-                lda #$04; ldx #$80; jsr cse_write_a    // clear OPL IRQ flags
-                lda #$04; ldx #$00; jsr cse_write_a    // stop timers
-                // fall through: try_a failed → try VICE port order
-
-                // === Try B: VICE port order (addr→$DE01, data→$DE00) ===
-cse_try_b:
-                lda #$04; ldx #$00; jsr cse_write_b
-                lda #$04; ldx #$80; jsr cse_write_b
-                lda $DE00; sta dse_s2b_b
-                lda #$02; ldx #$7F; jsr cse_write_b
-                lda #$04; ldx #$41; jsr cse_write_b    // start T1 with IRQ MASKED
-                ldx #$80
-cse_poll_bo:    ldy #$00
-cse_poll_bi:    lda $DE00
-                sta dse_s6b
-                cmp #$40                                 // exact $40 only
-                beq cse_found_b
-                dey; bne cse_poll_bi
-                dex; bne cse_poll_bo
-                lda #$04; ldx #$80; jsr cse_write_b    // clear OPL IRQ
-                lda #$04; ldx #$00; jsr cse_write_b
-cse_done:       plp                                     // restore caller IRQ state
-                rts
-
-cse_found:      lda #$01
-                sta sfxexp_detected
-                lda #$01
-                sta sfx_port_mode                      // 1 = SFX @ $DE00, real-HW order
-                lda #$04; ldx #$80; jsr cse_write_a    // clear OPL IRQ
-                lda #$04; ldx #$00; jsr cse_write_a    // stop timers
-                plp
-                rts
-cse_found_b:    lda #$01
-                sta sfxexp_detected
-                lda #$02
-                sta sfx_port_mode                      // 2 = SFX @ $DE00, VICE order
-                lda #$04; ldx #$80; jsr cse_write_b    // clear OPL IRQ
-                lda #$04; ldx #$00; jsr cse_write_b    // stop timers
-                plp
-                rts
+// (checksfxexpander / cse_write_a / cse_write_b removed in V1.4.22 —
+//  the legacy $DE00 clone probe kept giving bus-noise false positives.
+//  Standard CBM SFX Sound Expander and FM-YAM both live at $DF40/$DF50/$DF60
+//  per XeNTaX reference and are handled by checkfmyam above.)
 
 //--------------------------------------------------------------------------------------------------
 sfx_probe_dis_echo:
@@ -8045,17 +7885,10 @@ arm2sid_shortf:      .text "ARM2SID "
                      .byte 0                         // prefix for stereo SID entries
 backsid_d41f:        .byte 0     // D41F readback from checkbacksid ($42 = BackSID present)
 skpico_fm:           .byte 0     // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
-fmyam_detected:      .byte 0     // 1 = OPL2 found at $DF00 via timer probe (FM-YAM or compatible)
-sfxexp_detected:     .byte 0     // 1 = OPL found at $DE00 via timer probe (CBM SFX Sound Expander)
-sfx_port_mode:       .byte 0     // 0=none, 1=SFX $DE00 real-HW, 2=SFX $DE00 VICE, 3=FM-YAM $DF00
-opl_tmp_reg:         .byte 0     // scratch: reg# for opl_write_reg dispatcher
-opl_tmp_val:         .byte 0     // scratch: value for opl_write_reg dispatcher
+fmyam_detected:      .byte 0     // 1 = CBM SFX / FM-YAM detected at $DF40/$DF50/$DF60
 sfx_oct_offset:      .byte 0     // octave shift added to $B0 value (0/4/8 = V1/V2/V3)
-dfx_postread:        .byte $FF   // raw $DF00 status after T1 wait (debug/diagnostic)
-dse_s2b:             .byte $EE   // raw $DE00 after try-A RST ($EE=not reached; $00=OPL clear; else=not OPL)
-dse_s6b:             .byte $EE   // raw $DE00 last poll read ($EE=not reached; $C0=OPL timer fired; else=bus noise)
-dse_s2b_b:           .byte $EE   // raw $DE00 after try-B RST (VICE port order; $EE=not reached)
-dfx_preread:         .byte $FF   // raw $DF00 value at checkfmyam pre-read ($FF = not reached)
+dfx_preread:         .byte $FF   // raw $DF60 value at checkfmyam first read (debug/diagnostic)
+dfx_postread:        .byte $FF   // raw $DF60 value at checkfmyam second read (debug/diagnostic)
 MODE6581:     .byte $f0,$f1,$f0,$f0,$f2,$f1,$f2,$f2,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f0
 MODE8580:     .byte $f0,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f2,$f2,$f1,$f2,$f0,$f0,$f1,$f0
 MODEUNKN:     .byte $f0,$f0,$f0,$f0,$f0,$f0,$f0,$f2,$f0,$f0,$f0,$f2,$f0,$f1,$f1,$f0
@@ -8090,7 +7923,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.21 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.22 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8426,7 +8259,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.21 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.22 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8536,12 +8369,6 @@ dbg_s_fmyam:
     .byte 0
 dbg_s_sfx:
     .text "SFX:"
-    .byte 0
-dbg_s_cse:
-    .text "CSE:"
-    .byte 0
-dbg_s_sfxdet:
-    .text " SFXD:"
     .byte 0
 dbg_s_d418:
     .text "D418:"
@@ -9203,7 +9030,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.21 README"
+    .text "SIDDETECTOR V1.4.22 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9366,6 +9193,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.22 CLEANUP: REMOVE DEAD $DE00 PROBE + 5 DEBUG VARS (-280B CODE)"
     .text "  V1.4.21 VERSION BUMP + DOCS — SFX/FM DETECTION + SOUND TEST COMPLETE"
     .text "  V1.4.20 NEUTRAL LABEL 'SFX/FM FOUND' (CBM SFX + FM-YAM SHARE CHIP)   "
     .text "  V1.4.19 FM-YAM ROBUST DETECT: (STATUS & \$E0) == 0 (ACCEPTS \$00-\$1F)  "
