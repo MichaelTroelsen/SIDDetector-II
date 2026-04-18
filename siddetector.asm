@@ -1626,9 +1626,15 @@ info_sup_held:
            beq info_sup_again
            jmp info_kbdloop
 
-// Scroll down: increment offset and fast-redraw content
+// Scroll down: increment offset and fast-redraw content.
+// Before advancing, check that the NEW scroll position still has at least
+// ~18 body lines remaining (21 visible rows − 3-blank tolerance); if not,
+// we'd be scrolling into mostly empty space so the scroll is refused.
 info_scroll_dn:
 info_sdn_again:
+           jsr info_lines_remaining  // A = lines remaining from (buf_zp + 1)
+           cmp #18
+           bcc info_sdn_held         // < 18 lines left → don't scroll
            inc buf_zp
            sei
            jsr sip_redraw_content  // protect redraw from $1806 ZP clobber
@@ -1642,6 +1648,52 @@ info_sdn_held:
            and #$20                // S still held?
            beq info_sdn_again
            jmp info_kbdloop
+
+// info_lines_remaining: scan the current info page and return in A the
+// number of CR-terminated body lines after skipping (2 header + buf_zp + 1)
+// CRs. Caps at 255. Uses $FE/$FF and tmp2_zp as scratch. Trashes Y.
+info_lines_remaining:
+           ldy tmp1_zp
+           lda info_page_lo,y
+           sta $FE
+           lda info_page_hi,y
+           sta $FF
+           // CRs to skip: 2 header + (buf_zp + 1) = buf_zp + 3
+           lda buf_zp
+           clc
+           adc #$03
+           sta tmp2_zp
+           ldy #$00
+ilr_skip:
+           lda ($FE),y
+           beq ilr_zero             // hit null before finishing skip
+           iny
+           bne ilr_sk_ok
+           inc $FF
+ilr_sk_ok:
+           cmp #$0D
+           bne ilr_skip
+           dec tmp2_zp
+           bne ilr_skip
+           // Now count CRs remaining until null
+           ldx #$00                 // X = CR count
+ilr_count:
+           lda ($FE),y
+           beq ilr_done
+           iny
+           bne ilr_ct_ok
+           inc $FF
+ilr_ct_ok:
+           cmp #$0D
+           bne ilr_count
+           inx
+           bne ilr_count            // cap at 255
+ilr_done:
+           txa
+           rts
+ilr_zero:
+           lda #$00
+           rts
 
 info_do_space:
            jmp start
@@ -7921,7 +7973,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.23 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.24 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8257,7 +8309,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.23 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.24 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9028,7 +9080,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.23 README"
+    .text "SIDDETECTOR V1.4.24 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9191,6 +9243,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.24 INFO PAGE SCROLL BOUND"
+    .byte 13
+    .byte $9E
     .text "  V1.4.23 FIX README SCROLLER"
     .byte 13
     .byte $9E
@@ -9201,9 +9256,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.13 3-OCTAVE SFX MELODY"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.09 FIX OPL /IRQ STORM HANG"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
