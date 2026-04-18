@@ -44,6 +44,7 @@ The short version of the lessons:
 20. [Detection Chain Order — Why Sequence Matters](#20-detection-order)
 21. [Results Summary](#21-results)
 22. [Known Limitations](#22-limitations)
+23. [FM Expansion Detection — CBM SFX Sound Expander & FM-YAM (V1.4.x)](#23-fm-expansion-detection--cbm-sfx-sound-expander--fm-yam-v14x)
 
 ---
 
@@ -1045,6 +1046,60 @@ Step 5b   — $D418 decay fingerprint (calcandloop / ArithmeticMean)
 **FPGASID in SIDFX SID1 slot:** SIDFX drives D419/D41A (POT X/Y registers) with real joystick values from its own hardware, continuously overwriting any value the detector writes there. FPGASID's identify protocol requires reading `$1D`/`$F5` back from D419/D41A after writing the magic cookie — but SIDFX's joystick refresh makes those reads return joystick position instead. Additionally, SIDFX's SCI state machine monitors all writes to D41D/D41E/D41F; `checkfpgasid`'s write of `$80` to D41E to enter identify mode is treated as a protocol byte. Both problems are hardware constraints with no software workaround. FPGASID in SIDFX SID1 will always be reported as "unknown SID type".
 
 **6510 I/O port trap:** The C64's 6510 CPU has an internal I/O port at addresses `$0000` (direction register) and `$0001` (data register). Bit 2 of `$0001` is the CHAREN bit: if cleared, the I/O area `$D000`–`$DFFF` is remapped to character ROM, silently redirecting all SID reads to ROM data. **Never use `$0001` as a scratch register in SID detection code.** Use zero-page addresses `$A2`–`$AF` or `$F6`–`$FF` instead. This caused a subtle debugging session when `sty $01` was accidentally used during development, causing all SID reads to return ROM bytes.
+
+---
+
+## 23. FM Expansion Detection — CBM SFX Sound Expander & FM-YAM (V1.4.x)
+
+Detecting the OPL-based FM expansion cartridges — CBM's 1984 *Sound Expander* (YM3526) and XeNTaX's modern *FM-YAM* (YM3812) — turned out to be the single largest rabbit hole in the detector's history. Three separate issues compounded before detection finally stabilized.
+
+### The wrong address
+
+AdLib documentation, online references, and even the user's own example code all pointed at `$DF00`/`$DF01` for OPL register and data ports. Early V1.4 versions wrote there, detected nothing, and produced no audio — despite the hardware being physically installed. The breakthrough came from [XeNTaX's FM-YAM timing article](https://c64.xentax.com/index.php/15-testing-ym3812-register-write-timing):
+
+> The three ports in the IOL2 space are:
+> `$DF40` — register select/address, `$DF50` — data write, `$DF60` — chip status.
+> "VICE doesn't know this" and requires these standard addresses.
+
+The CBM Sound Expander cartridge decodes bit 4 of the address as the data-write strobe and bit 5 as the status-read strobe. `$DF00`/`$DF01` miss both decoders entirely — writes go to REU command register (if present) or open bus; reads return bus noise. Moving to `$DF40`/`$DF50`/`$DF60` fixed both detection and audio.
+
+### The OPL /IRQ storm
+
+Once writes started landing, detection still hung the entire machine on real hardware. The classic AdLib timer test (set Timer 1 period, start unmasked, wait 15 ms, read status for T1 flag) triggered an infinite IRQ loop:
+
+1. T1 fires 10 ms into the wait → OPL asserts `/IRQ` on cartridge bus
+2. `/IRQ` wired directly to CPU `/IRQ` → KERNAL IRQ handler at `$EA31` runs
+3. `$EA31` only acknowledges CIA1 (reads `$DC0D`) — doesn't touch the OPL
+4. OPL keeps `/IRQ` asserted → IRQ fires again immediately → hang
+
+The `$EA31` handler has no concept of a cartridge IRQ source. Fix: start T1 with its IRQ masked (`reg $04 = $41` — `MASK_T1 | ST_T1`). Timer still counts and sets `T1_FLAG` (bit 6 of status) so detection works, but the chip never asserts `/IRQ`. Before returning, always issue `$04 = $80` (RST) to clear any flags set during the probe, then `PLP` to restore the caller's I flag exactly.
+
+### The signature heuristic
+
+With timing and addresses fixed, the next challenge was reading back a reliable detection signature. Spec says status should be `$00` after RST and exactly `$40` after masked T1 fires. But real FM-YAM on the test rig returned `$06`, `$04`, sometimes `$00` — not `$40`, not `$FF`. Several candidate checks were tested:
+
+- `== $00` exact match: worked sometimes, missed the chip on noisy reads
+- `(status & $E1) == $C0`: worked for VICE emulation (`$D4`) but false-positived on bus-noise `$D1` when no chip present
+- `(status & $60) == $40`: false-positive on any bus-noise pattern that happened to set bit 6
+
+The working heuristic is **`(status & $E0) == 0` on two reads**. Interpretation:
+
+| State | Typical `$DF60` | `(& $E0)` | Verdict |
+|-------|----------------|-----------|---------|
+| Chip present, clean | `$00` | `$00` | ✓ detect |
+| Chip present, noisy | `$06`, `$04`, `$12` | `$00` | ✓ detect |
+| No chip, pure open bus | `$FF` | `$E0` | ✓ reject |
+| No chip, bus noise | `$D1`, `$C5`, `$BB`, `$A4`, `$B7` | `$80`–`$E0` | ✓ reject |
+
+The physical intuition: a real OPL drives the status bus actively, pulling it into the low-value range. Undriven bus noise on the C64 usually reflects the last CPU fetch or VIC data byte — which in practice almost always has at least one of bits 5–7 set.
+
+### One label for two chips
+
+Detection cannot distinguish YM3526 from YM3812 — both respond identically at `$DF40`/`$DF50`/`$DF60`, both accept the same timer and envelope registers, both report the same post-RST/post-timer status. OPL2's waveform-select (reg `$01 = $20`, reg `$E0`–`$F5`) is the only functional difference and is ignored by OPL1, producing no side effect the CPU can observe. After initially labelling the detection as "FM-YAM FOUND", the label was changed to the neutral `DF40 SFX/FM FOUND` — accurate for either card.
+
+### Result
+
+After settling at V1.4.19 the detector correctly identifies both CBM SFX Sound Expander and FM-YAM on real hardware across boot/restart/screen-visit cycles, with no false positives when the cartridge is unplugged. The `make hw_test` smoke suite covers the detection; the `T` sound test plays a 7-note arpeggio across 3 octaves with 3 FM instruments (Flute/Organ/Bell), matching the SID test's pattern voice-for-voice.
 
 ---
 
