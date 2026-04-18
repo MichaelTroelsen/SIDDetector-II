@@ -7996,7 +7996,7 @@ pdsidf:         .text "PD SID FOUND"
                 .byte 0
 backsidf:       .text "BACKSID FOUND"
                 .byte 0
-fmyamf:         .text "FM-YAM FOUND"
+fmyamf:         .text "SFX/FM FOUND"
                 .byte 0
 cbmsfxf:        .text "+CBM SFX    "
                 .byte 0
@@ -8090,7 +8090,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.19 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.20 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8426,7 +8426,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.19 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.20 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9203,7 +9203,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.19 README"
+    .text "SIDDETECTOR V1.4.20 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9366,6 +9366,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.20 NEUTRAL LABEL 'SFX/FM FOUND' (CBM SFX + FM-YAM SHARE CHIP)   "
     .text "  V1.4.19 FM-YAM ROBUST DETECT: (STATUS & \$E0) == 0 (ACCEPTS \$00-\$1F)  "
     .text "  V1.4.18 FIX FM/SFX FALSE POSITIVE: STRICT $00 POST-RST; DISABLE DE00 "
     .text "  V1.4.17 FIX FM-YAM DETECT ON REAL HW: CHECK $DF60 != $FF (2 READS)  "
