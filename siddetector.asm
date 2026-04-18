@@ -8812,7 +8812,7 @@ ip_sidfx:
     .text " SIMULTANEOUSLY FOR DUAL-SID SETUPS."
     .byte 13
     .byte 13
-    .text " MORE INFO: SIDFX.DE"
+    .text " MORE INFO: SIDFX.DK"
     .byte 0
 
 ip_ulti:
