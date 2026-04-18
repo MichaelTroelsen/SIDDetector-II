@@ -6735,17 +6735,23 @@ cfm_g3:         // Guard: ARM2SID SFX- slot at DF00 (armsid_map_h2 lo nibble = 3
                 bne cfm_body; rts       // = 3: ARM2SID owns $DF00
 cfm_body:
                 php                     // save caller's interrupt-disable state
-                sei                     // IRQs off: OPL /IRQ on T1-fire would storm otherwise
+                sei                     // IRQs off during probe
                 lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
                 lda #$04; ldx #$80; jsr cfm_write_reg    // RST all flags
+                // Detection: if $DF60 ever returns != $FF across a few reads,
+                // something is driving the status bus → OPL present.
+                // FM-YAM boards may return noisy values ($00, $06, etc.) but NEVER $FF
+                // when the chip is installed and active. Pure open bus stays at $FF.
                 lda $DF60
                 sta dfx_preread
-cfm_start_timer:
-                lda #$02; ldx #$7F; jsr cfm_write_reg    // T1 period (~10ms)
-                // Start T1 with IRQ MASKED ($04=$41 = MASK_T1 + ST_T1).
-                // T1 still counts + sets T1_FLAG (bit 6), but /IRQ stays high.
-                // Prevents OPL /IRQ storm through KERNAL handler.
-                lda #$04; ldx #$41; jsr cfm_write_reg
+                cmp #$FF
+                bne cfm_confirmed_chip
+                lda $DF60
+                cmp #$FF
+                bne cfm_confirmed_chip
+                // Still $FF on both reads → try the timer fallback
+                lda #$02; ldx #$7F; jsr cfm_write_reg    // T1 period
+                lda #$04; ldx #$41; jsr cfm_write_reg    // T1 start masked
                 ldx #$0C
 cfm_wait_o:     ldy #$00
 cfm_wait_i:     dey
@@ -6754,15 +6760,14 @@ cfm_wait_i:     dey
                 bne cfm_wait_o
                 lda $DF60
                 sta dfx_postread
-                // Clear OPL IRQ flags (RST) BEFORE re-enabling CPU IRQs.
-                lda #$04; ldx #$80; jsr cfm_write_reg
+                lda #$04; ldx #$80; jsr cfm_write_reg    // clear OPL IRQ
                 lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
-                // Signature: T1_FLAG (bit 6) set, T2 (bit 5) clear, reserved bits clear.
-                // Since IRQ was masked, bit 7 always 0; require exact $40 (only T1 fired).
                 lda dfx_postread
-                and #$60
-                cmp #$40
-                bne cfm_rst_done
+                cmp #$FF
+                beq cfm_rst_done                         // still $FF after timer → no OPL
+cfm_confirmed_chip:
+                lda #$04; ldx #$80; jsr cfm_write_reg    // clear any OPL IRQ
+                lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
                 lda #$01
                 sta fmyam_detected
                 lda sfx_port_mode                        // prefer SFX if already detected
@@ -8102,7 +8107,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.16 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.17 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8438,7 +8443,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.16 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.17 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9215,7 +9220,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.16 README"
+    .text "SIDDETECTOR V1.4.17 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9378,6 +9383,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.17 FIX FM-YAM DETECT ON REAL HW: CHECK $DF60 != $FF (2 READS)  "
     .text "  V1.4.16 VERSION BUMP — CONSOLIDATE SOUND TEST (SID + 3 FM INSTRUMENTS)"
     .text "  V1.4.15 ADD SFX INSTR 1 (BELL): 3 FM INSTRUMENTS NOW — BELL/ORG/FLUTE"
     .text "  V1.4.14 FIX SID PULSE: PW TABLE REORDER MATCHED WAVEFORM REORDER     "
