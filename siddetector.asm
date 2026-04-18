@@ -1773,11 +1773,18 @@ sip_rc_scrl_ok:
            bne sip_rc_scrl
            dec tmp2_zp
            bne sip_rc_scrl
-           // Print up to 21 lines of body (rows 2-22)
+           // Print up to 21 lines of body (rows 2-22).
+           // HARD row bound: exit if cursor row ($D6) reaches 23, no matter
+           // what the CR budget says. This prevents a 40-char auto-wrap line
+           // from pushing text into row 23 and triggering KERNAL screen scroll
+           // (which destroys the fixed header and footer).
 sip_rc_print_start:
            lda #21
            sta tmp2_zp             // line counter
 sip_rc_print:
+           lda $D6                 // current cursor row
+           cmp #23
+           bcs sip_rc_done         // row >= 23 → stop; header/footer must stay intact
            lda ($FE),y
            beq sip_rc_done         // null: end of page
            cmp #$0D
@@ -7973,7 +7980,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.24 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.25 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8309,7 +8316,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.24 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.25 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8730,7 +8737,7 @@ ip_fpga8580:
     .byte 13
     .text "----------------------------------------"
     .byte 13
-    .text " THE FPGASID IS A MODERN SID REPLACEMENT"
+    .text " THE FPGASID IS A MODERN SID REPLACER"
     .byte 13
     .text " IMPLEMENTED IN AN ALTERA FPGA."
     .byte 13
@@ -8757,7 +8764,7 @@ ip_fpga6581:
     .byte 13
     .text "----------------------------------------"
     .byte 13
-    .text " THE FPGASID IS A MODERN SID REPLACEMENT"
+    .text " THE FPGASID IS A MODERN SID REPLACER"
     .byte 13
     .text " IMPLEMENTED IN AN ALTERA FPGA."
     .byte 13
@@ -9080,7 +9087,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.24 README"
+    .text "SIDDETECTOR V1.4.25 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9243,6 +9250,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.25 FIX INFO PAGE HDR/FTR SCROLL"
+    .byte 13
+    .byte $9E
     .text "  V1.4.24 INFO PAGE SCROLL BOUND"
     .byte 13
     .byte $9E
@@ -9253,9 +9263,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.19 FM-YAM ROBUST DETECTION"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.13 3-OCTAVE SFX MELODY"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
