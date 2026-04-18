@@ -2663,8 +2663,8 @@ dbg_str_done:
 // Separator (row 22) and nav hint (row 24) are written directly
 // to screen + colour RAM.
 // ============================================================
-.const README_LINES      = 92    // actual CR count in readme_text
-.const README_MAX_SCROLL = 71    // README_LINES - 21 visible rows
+.const README_LINES      = 73    // actual CR count in readme_text
+.const README_MAX_SCROLL = 52    // README_LINES - 21 visible rows
 
 readme_entry:
            lda #$00
@@ -9191,100 +9191,19 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
-    .text "  V1.4.23 FIX README SCROLL PAST CSDB LINE"
+    .text "  V1.4.23 FIX README SCROLLER"
     .byte 13
     .byte $9E
-    .text "  V1.4.22 SFX/FM CLEANUP: REMOVE DEAD $DE00 PROBE (-280B)"
+    .text "  V1.4.22 CLEAN UP DEAD $DE00 PROBE"
     .byte 13
     .byte $9E
-    .text "  V1.4.19 FM-YAM ROBUST: (STATUS & $E0) == 0"
+    .text "  V1.4.19 FM-YAM ROBUST DETECTION"
     .byte 13
     .byte $9E
-    .text "  V1.4.13 SFX 3-OCTAVE MELODY MATCHING SID"
+    .text "  V1.4.13 3-OCTAVE SFX MELODY"
     .byte 13
     .byte $9E
     .text "  V1.4.09 FIX OPL /IRQ STORM HANG"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.06 MOVE OPL TO $DF40/$DF50/$DF60 (XENTAX)"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.01 FIX PLOT CARRY (A/B GHOSTS)"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.95 FIX IS_U64 FALSE POS; FIKTIVLOOP SKIP+LIST INIT"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.94 DBG SFX: ROW; CAPTURE DFX_PREREAD ($DF00)"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.93 FM-YAM: ALL WRITES BIT7=0; PRE-READ GUARD"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.92 FM-YAM: FIX REU/VICE GARBAGE; DBG FMYAM ROW"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.86 SIDKICK-PICO FM SOUND EXPANDER DETECTION"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.85 ARM2SID SFX MODE ON MAIN + INFO SCREENS"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.84 ARMSID+SIDFX D420 BUS CONTAMINATION FIX"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.83 SIDKICK-PICO D420 SIDFX DETECTION"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.82 RETRY INDICATOR ON MAIN SCREEN"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.81 MULTI-SID FULL MELODY SOUND TEST"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.80 ARMSID+SWINSID STEREO D5XX FIX"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.79 SWINSID FIKTIVLOOP+STEREO FIX"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.78 DEBUG PAGE 1 VERSION STRING"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.77 C25/C26 ARMSID D5XX FIX"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.73 8580+ARMSID MIXSID C09 STEREO"
-    .byte 13
-    .byte $9E
-    .text "  V1.3.45 PDSID BACKSID SKPICO KUNGFUSID"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.17 BACKSID DETECTION POLLING LOOP"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.16 BACKSID MAIN CHAIN + STEREO FIX"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.15 ARM2SID PETSCII FIX + TEST STATUS"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.14 SCREEN ROW REORDER"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.13 ARMSID/ARM2SID FIRMWARE VERSION"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.4  INFO PAGES  B/M KEYS  CI/CD"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.3  SIDKICK/PD SID RENAME"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.2  BACKSID  STEREO DE00-DFFF"
-    .byte 13
-    .byte $9E
-    .text "  V1.2.1  INITIAL RELEASE"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
