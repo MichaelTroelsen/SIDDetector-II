@@ -1,8 +1,8 @@
 # SID Detector — Test Status
 
-**Last updated:** 2026-04-16  
-**Build:** `$2400–$57D0` (code) `$6000–$8CFE` (data)  
-**Version:** V1.3.85  
+**Last updated:** 2026-04-18  
+**Build:** `$2400–$5E4C` (code) `$6000–$943D` (data)  
+**Version:** V1.4.21  
 Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 
 ---
