@@ -1377,6 +1377,12 @@ ie_not0D:
            lda #8                  // IP_SIDFX
            bne ie_show
 ie_nosidfx:
+           // No specific SID: if FM / SFX expansion is present, show that info.
+           lda fmyam_detected
+           beq ie_use_decay
+           lda #18                 // IP_FMYAM
+           bne ie_show
+ie_use_decay:
            // No specific HW SID - determine emulator page from decay values
            jsr get_emu_page        // returns page number in A
 ie_show:
@@ -1586,19 +1592,20 @@ info_kbd_no_space:
            lda $DC01
            and #$80                // bit7 = LEFT SHIFT
            bne info_crsr_right
+// 19 info pages (indices 0..18). Wrap at last index.
 info_prev_page:
            lda tmp1_zp
            beq info_wrap_last
            dec tmp1_zp
            jmp show_info_page
 info_wrap_last:
-           lda #16
+           lda #18                 // last valid index (was #16 — skipped pages 17,18)
            sta tmp1_zp
            jmp show_info_page
 info_crsr_right:
 info_next_page:
            lda tmp1_zp
-           cmp #16
+           cmp #18                 // last valid index (was #16 — skipped pages 17,18)
            bcs info_wrap_first
            inc tmp1_zp
            jmp show_info_page
@@ -7980,7 +7987,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.25 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.26 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8293,19 +8300,21 @@ sidfx_sec_lo: .byte $00, $20, $00
 //      10=VICE  11=HOXS  12=SIDKPIC  13=PUBDOM  14=BACKSID
 //      15=KUNGFUSID  16=UNKNOWN  17=USID64
 // ============================================================
+// 19 info pages (indices 0-18). Order must match IP_* constants used by
+// info_entry and info_next_page/info_prev_page wrap logic.
 info_page_lo:
     .byte <ip_nosid,    <ip_6581,    <ip_8580,     <ip_armsid
     .byte <ip_swinu,    <ip_swinano, <ip_fpga8580,  <ip_fpga6581
     .byte <ip_sidfx,    <ip_ulti,    <ip_vice,     <ip_hoxs
     .byte <ip_sidkpic,  <ip_pubdom,  <ip_backsid,  <ip_kungfusid
-    .byte <ip_unknown,  <ip_usid64
+    .byte <ip_unknown,  <ip_usid64,  <ip_fmyam
 
 info_page_hi:
     .byte >ip_nosid,    >ip_6581,    >ip_8580,     >ip_armsid
     .byte >ip_swinu,    >ip_swinano, >ip_fpga8580,  >ip_fpga6581
     .byte >ip_sidfx,    >ip_ulti,    >ip_vice,     >ip_hoxs
     .byte >ip_sidkpic,  >ip_pubdom,  >ip_backsid,  >ip_kungfusid
-    .byte >ip_unknown,  >ip_usid64
+    .byte >ip_unknown,  >ip_usid64,  >ip_fmyam
 
 // Navigation hint shown at row 24 of all info pages
 info_nav_hint:
@@ -8316,7 +8325,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.25 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.26 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8775,17 +8784,19 @@ ip_fpga6581:
     .byte 0
 
 ip_sidfx:
-    .text "        SIDFX SWITCHER CARTRIDGE"
+    .text "        SIDFX DUAL-SID ADAPTER"
     .byte 13
     .text "----------------------------------------"
     .byte 13
-    .text " THE SIDFX IS AN EXPANSION CARTRIDGE"
+    .text " SIDFX IS A SOLDERLESS ADAPTER BOARD"
     .byte 13
-    .text " THAT INSTALLS BETWEEN THE SID SOCKET"
+    .text " THAT REPLACES THE C64 SID SOCKET AND"
     .byte 13
-    .text " AND THE SID CHIP. IT ALLOWS SWITCHING"
+    .text " HOSTS TWO REAL SID CHIPS (6581/8580)"
     .byte 13
-    .text " BETWEEN TWO SID CHIPS IN SOFTWARE."
+    .text " WITH SOFTWARE SWITCHING.  NOT AN"
+    .byte 13
+    .text " EXPANSION-PORT CARTRIDGE."
     .byte 13
     .byte 13
     .text " DETECTED VIA AN SCI SERIAL PROTOCOL"
@@ -8795,9 +8806,9 @@ ip_sidfx:
     .text " IS READ BACK AFTER A PNP LOGIN."
     .byte 13
     .byte 13
-    .text " SIDFX CAN HOST BOTH A 6581 AND 8580"
+    .text " BOTH SIDS APPEAR SIMULTANEOUSLY AS"
     .byte 13
-    .text " SIMULTANEOUSLY FOR DUAL-SID SETUPS."
+    .text " STEREO OR DUAL-SID SETUPS."
     .byte 13
     .byte 13
     .text " MORE INFO: SIDFX.DK"
@@ -8918,6 +8929,11 @@ ip_sidkpic:
     .text " BYTES FROM D41D. READS 'S' + 'K'."
     .byte 13
     .byte 13
+    .text " +FM: OPTIONAL OPL2 FM EXPANSION AT"
+    .byte 13
+    .text " $DF40 (SEE SFX/FM INFO PAGE)."
+    .byte 13
+    .byte 13
     .text " OPEN SOURCE PROJECT ON GITHUB"
     .byte 0
 
@@ -9010,19 +9026,22 @@ ip_unknown:
     .text " ADDRESS BUT COULD NOT BE IDENTIFIED."
     .byte 13
     .byte 13
-    .text " THIS CAN HAPPEN WHEN:"
+    .text " EMULATORS WITHOUT A UNIQUE $D418"
     .byte 13
-    .text "  - A NEW OR UNSUPPORTED SID VARIANT"
+    .text " DECAY FINGERPRINT LAND HERE:"
     .byte 13
-    .text "    IS INSTALLED"
+    .text "  - FRODO"
     .byte 13
-    .text "  - AN EMULATOR WITH AN UNUSUAL $D418"
+    .text "  - YACE64"
     .byte 13
-    .text "    DECAY SIGNATURE IS RUNNING"
+    .text "  - EMU64"
     .byte 13
-    .text "  - HARDWARE TIMING DIFFERENCES CAUSE"
     .byte 13
-    .text "    THE DETECTION TO BE INCONCLUSIVE"
+    .text " ALSO POSSIBLE:"
+    .byte 13
+    .text "  - NEW OR UNSUPPORTED SID VARIANT"
+    .byte 13
+    .text "  - TIMING DIFFERENCE MASKING TESTS"
     .byte 13
     .byte 13
     .text " IF YOU KNOW WHAT THIS IS, PLEASE"
@@ -9065,6 +9084,43 @@ ip_usid64:
     .text " SO IT IS CLEANLY REJECTED."
     .byte 0
 
+ip_fmyam:
+    .text "      CBM SFX / FM-YAM (OPL FM)"
+    .byte 13
+    .text "----------------------------------------"
+    .byte 13
+    .text " OPTIONAL FM SYNTHESIS EXPANSION."
+    .byte 13
+    .text " CBM SFX SOUND EXPANDER (1984) AND"
+    .byte 13
+    .text " FM-YAM (XENTAX) USE THE SAME YAMAHA"
+    .byte 13
+    .text " OPL CHIP (YM3526 OR YM3812) AT THE"
+    .byte 13
+    .text " SAME I/O ADDRESSES:"
+    .byte 13
+    .byte 13
+    .text "   $DF40  REGISTER SELECT (WRITE)"
+    .byte 13
+    .text "   $DF50  DATA PORT      (WRITE)"
+    .byte 13
+    .text "   $DF60  CHIP STATUS    (READ)"
+    .byte 13
+    .byte 13
+    .text " DETECTION: AFTER OPL RST, STATUS AT"
+    .byte 13
+    .text " $DF60 READS $00-$1F (CHIP DRIVES"
+    .byte 13
+    .text " BUS LOW). OPEN BUS STAYS $FF."
+    .byte 13
+    .byte 13
+    .text " AUDIO: OPL OUTPUT JACK ON THE CART"
+    .byte 13
+    .text " ITSELF. LOOP TO C64 AUDIO-IN FOR"
+    .byte 13
+    .text " SPEAKER OUT. SEE XENTAX.COM."
+    .byte 0
+
 // ============================================================
 // README TEXT
 // Flat text blob for the README viewer. Each line ends with
@@ -9075,7 +9131,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.25 README"
+    .text "SIDDETECTOR V1.4.26 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9238,6 +9294,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.26 ADD FM INFO PAGE; SIDFX DESC FIX"
+    .byte 13
+    .byte $9E
     .text "  V1.4.25 FIX INFO PAGE HDR/FTR SCROLL"
     .byte 13
     .byte $9E
@@ -9248,9 +9307,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.22 CLEAN UP DEAD $DE00 PROBE"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.19 FM-YAM ROBUST DETECTION"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
