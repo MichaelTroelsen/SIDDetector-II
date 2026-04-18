@@ -1017,8 +1017,10 @@ after_decay:
                 ldy #>fmyamf
                 jsr $AB1E
 fmyam_disp_skip:
-                // Probe $DE00 for OPL2 (CBM SFX Sound Expander at IO1).
-                jsr checksfxexpander
+                // $DE00 legacy probe disabled — standard CBM SFX / FM-YAM lives at $DF40
+                // (XeNTaX reference). The $DE00 clone variant is rare and the probe is
+                // fragile (bus-noise false positives on real hardware).
+                // jsr checksfxexpander
                 // Display "DE00 +CBM SFX   " on next available stereo row if detected.
                 lda sfxexp_detected
                 beq sfxexp_disp_skip
@@ -6738,36 +6740,18 @@ cfm_body:
                 sei                     // IRQs off during probe
                 lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
                 lda #$04; ldx #$80; jsr cfm_write_reg    // RST all flags
-                // Detection: if $DF60 ever returns != $FF across a few reads,
-                // something is driving the status bus → OPL present.
-                // FM-YAM boards may return noisy values ($00, $06, etc.) but NEVER $FF
-                // when the chip is installed and active. Pure open bus stays at $FF.
+                // STRICT detection: real OPL returns status = $00 EXACTLY after RST.
+                // Open bus and bus noise never settle to exact $00 on removed HW.
+                // Read twice; require BOTH == $00 to avoid transient bus glitches.
                 lda $DF60
                 sta dfx_preread
-                cmp #$FF
-                bne cfm_confirmed_chip
+                cmp #$00
+                bne cfm_rst_done                         // not $00 → no OPL
                 lda $DF60
-                cmp #$FF
-                bne cfm_confirmed_chip
-                // Still $FF on both reads → try the timer fallback
-                lda #$02; ldx #$7F; jsr cfm_write_reg    // T1 period
-                lda #$04; ldx #$41; jsr cfm_write_reg    // T1 start masked
-                ldx #$0C
-cfm_wait_o:     ldy #$00
-cfm_wait_i:     dey
-                bne cfm_wait_i
-                dex
-                bne cfm_wait_o
-                lda $DF60
-                sta dfx_postread
-                lda #$04; ldx #$80; jsr cfm_write_reg    // clear OPL IRQ
-                lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
-                lda dfx_postread
-                cmp #$FF
-                beq cfm_rst_done                         // still $FF after timer → no OPL
-cfm_confirmed_chip:
-                lda #$04; ldx #$80; jsr cfm_write_reg    // clear any OPL IRQ
-                lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
+                cmp #$00
+                bne cfm_rst_done                         // 2nd read not $00 → noise
+                // Both reads were $00 → OPL confirmed
+                sta dfx_postread                         // $00 for diagnostic
                 lda #$01
                 sta fmyam_detected
                 lda sfx_port_mode                        // prefer SFX if already detected
@@ -6836,9 +6820,8 @@ cse_try_a:
 cse_poll_o:     ldy #$00
 cse_poll_i:     lda $DE00
                 sta dse_s6b
-                and #$60
-                cmp #$40
-                beq cse_found                           // T1 set, T2 clear → OPL
+                cmp #$40                                 // exact $40 only (T1 fired, masked, reserved=0)
+                beq cse_found
                 dey; bne cse_poll_i
                 dex; bne cse_poll_o
                 lda #$04; ldx #$80; jsr cse_write_a    // clear OPL IRQ flags
@@ -6856,8 +6839,7 @@ cse_try_b:
 cse_poll_bo:    ldy #$00
 cse_poll_bi:    lda $DE00
                 sta dse_s6b
-                and #$60
-                cmp #$40
+                cmp #$40                                 // exact $40 only
                 beq cse_found_b
                 dey; bne cse_poll_bi
                 dex; bne cse_poll_bo
@@ -8107,7 +8089,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.17 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.18 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8443,7 +8425,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.17 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.18 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9220,7 +9202,7 @@ ip_usid64:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.17 README"
+    .text "SIDDETECTOR V1.4.18 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9383,6 +9365,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.18 FIX FM/SFX FALSE POSITIVE: STRICT $00 POST-RST; DISABLE DE00 "
     .text "  V1.4.17 FIX FM-YAM DETECT ON REAL HW: CHECK $DF60 != $FF (2 READS)  "
     .text "  V1.4.16 VERSION BUMP — CONSOLIDATE SOUND TEST (SID + 3 FM INSTRUMENTS)"
     .text "  V1.4.15 ADD SFX INSTR 1 (BELL): 3 FM INSTRUMENTS NOW — BELL/ORG/FLUTE"
