@@ -8629,41 +8629,29 @@ ip_armsid:
     .byte 13
     .text "----------------------------------------"
     .byte 13
-    .text " THE ARMSID IS A MODERN SID CHIP"
+    .text " MODERN SID-COMPATIBLE CHIP BUILT ON"
     .byte 13
-    .text " REPLACEMENT BASED ON AN ARM CORTEX"
+    .text " AN ARM CORTEX MICROCONTROLLER. FITS"
     .byte 13
-    .text " MICROCONTROLLER. IT FITS IN THE SAME"
-    .byte 13
-    .text " 28-PIN DIP SOCKET AS THE ORIGINAL."
+    .text " A STANDARD 28-PIN DIP SOCKET."
     .byte 13
     .byte 13
-    .text " IT CAN EMULATE BOTH 6581 AND 8580"
-    .byte 13
-    .text " MODES AND IS HIGHLY COMPATIBLE."
+    .text " EMULATES BOTH 6581 AND 8580 MODES."
     .byte 13
     .byte 13
-    .text " ARM2SID IS THE SECOND GENERATION:"
+    .text " ARM2SID: 2 ARMS (L+R) IN ONE PKG,"
     .byte 13
-    .text " TWO ARM CHIPS (L+R) IN ONE PACKAGE,"
+    .text " SUPPORTS STEREO, 3-SID, AND SFX"
     .byte 13
-    .text " SUPPORTING STEREO, 3-SID, AND SFX"
-    .byte 13
-    .text " CARTRIDGE EMULATION. ONLY ARM2SID"
-    .byte 13
-    .text " SUPPORTS 3-SID AND SFX MODES."
+    .text " CARTRIDGE EMULATION (ARM2SID ONLY)."
     .byte 13
     .byte 13
-    .text " STEREO: MIXSID BOARD SLOTS ARMSID AT"
+    .text " STEREO VIA MIXSID: ARMSID AT D420"
     .byte 13
-    .text " D420 (CS2) ALONGSIDE A REAL SID AT"
-    .byte 13
-    .text " D400 (CS1). BOTH ARE DETECTED."
+    .text " ALONGSIDE A REAL SID AT D400."
     .byte 13
     .byte 13
     .text " MADE BY: ARMSID.COM"
-    .byte 13
-    .text " FIRMWARE UPDATES: ARMSID.COM"
     .byte 0
 
 ip_swinu:
