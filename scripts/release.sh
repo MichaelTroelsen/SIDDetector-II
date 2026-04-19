@@ -12,12 +12,15 @@
 #   4. Bump version — increment patch in all files, add debug.md changelog row
 #   5. Final build  — rebuild siddetector.prg with new version string
 #   6. Git release  — commit all changed files, tag, push
+#   7. GitHub release — create release on GitHub with siddetector.prg asset
+#                       (skipped if `gh` is not installed / not authenticated)
 #
 # Requirements:
 #   - Git Bash (or WSL) on Windows
 #   - Java (for KickAssembler)
 #   - WinVICE x64sc at C:/winvice/bin/x64sc.exe
 #   - GNU sed (bundled with Git for Windows)
+#   - gh CLI, authenticated (optional — stage 7 is skipped if missing)
 # =============================================================================
 set -euo pipefail
 
@@ -80,9 +83,10 @@ git add \
     siddetector.vs \
     Makefile \
     README.md \
-    CHIPS.md \
-    debug.md \
-    TODO.md
+    TODO.md \
+    docs/CHIPS.md \
+    docs/debug.md \
+    docs/teststatus.md
 
 # Stage test outputs if they changed
 git add tests/test_suite.prg tests/test_suite.dbg \
@@ -93,15 +97,30 @@ release: ${NEW_VER}
 
 ${DESCRIPTION}
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 
-git tag "$NEW_VER"
+# Tag convention is lowercase-v (v1.4.27). `.version` contains an
+# uppercase-V version string (e.g. V1.4.27) — strip and lowercase here.
+TAG="v${NEW_VER#V}"
+git tag -a "$TAG" -m "${NEW_VER}: ${DESCRIPTION}"
 
 echo "=== RELEASE: pushing to origin ==="
 git push origin master
-git push origin "$NEW_VER"
+git push origin "$TAG"
+
+# ---- 7. GitHub release -----------------------------------------------------
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    echo "=== RELEASE: creating GitHub release ==="
+    gh release create "$TAG" \
+        --title "SID Detector II ${TAG}" \
+        --notes "${DESCRIPTION}" \
+        siddetector.prg
+else
+    echo "=== RELEASE: skipping GitHub release (gh not installed or not authenticated) ==="
+    echo "    Create manually with: gh release create ${TAG} --title \"SID Detector II ${TAG}\" --notes \"...\" siddetector.prg"
+fi
 
 rm -f .version
 
