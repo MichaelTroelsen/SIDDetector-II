@@ -78,7 +78,6 @@
 - [ ] **C01–C04** — real SID + real SID combos at D420 (6581/8580 × 6581/8580): different detection path (not ARMSID); low priority, expected to work
 - [x] **C08** — 6581@D400 + ARMSID@D420: fixed V1.3.74: single CS2-DIS window in step2_armsid (pre-clean voice3+D41F, enter CS2-DIS once, checkrealsid inside window, dispatch BEFORE cleanup to avoid false uSID64 via U64 FPGA); hw_test 10/10 *(teststatus C08 — 🟢)*
 - [x] **C09** — 8580@D400 + ARMSID@D420: fixed V1.3.73 *(teststatus C09 — 🟢)*
-- [ ] **C10–C20** — misc MixSID combos (FPGASID, SwinSID Nano, SIDKick Pico, KungFuSID as primary or secondary at D420): untested, various code paths
 
 ### SIDFX secondary detection for ARMSID and SIDKick Pico at D420 (LFT slot)
 - [x] **SIDFX + ARMSID at D420** (SW1=LFT): ARMSID firmware does not activate DIS detection from CS2 slot — DIS writes to D43F/D43E/D43D produce no echo at D43B or D41B (confirmed hw: 8580@D400 + ARMSID@D420). ARMSID only responds to DIS via CS1. SIDFX reports ARMSID (8580-mode) as 8580 — same as real 8580, undetectable. WONTFIX: falls back to SIDFX-reported type. V1.3.84 guards prevent false positives.

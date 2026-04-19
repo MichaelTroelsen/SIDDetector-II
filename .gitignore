@@ -9,5 +9,32 @@ screen_dump.txt
 # hw_test result logs (generated, not source)
 tests/hw_test_result_*.txt
 
+# Probe build artifacts (sources live as tests/probe_*.asm)
+tests/probe_*.prg
+tests/probe_*.dbg
+tests/probe_*.sym
+tests/probe_*.vs
+/probe_*.prg
+
+# Test dumps / VICE captures
+tests/vice_*.bin
+tests/ci_result.bin
+tests/debug_*.bin
+tests/debug_*.mon
+tests/dump_*.txt
+
+# Root-level debug artifacts
+/monitor.log
+/screen_*.png
+/screen[0-9].png
+/physicalTest.xlsx
+
+# Downloaded vendor binaries
+bin/*.zip
+bin/*.exe
+
+# Python cache
+__pycache__/
+
 # Build lock
 .version
