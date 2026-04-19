@@ -14,10 +14,18 @@
 #   5. Writes the new version string to .version for use by release.sh
 #
 # Files updated:
-#   siddetector.asm  — screen text (V1.2.X uppercase) + top comment (v1.2.X lowercase)
-#   README.md        — heading, screen layout section
-#   CHIPS.md         — intro paragraph
-#   debug.md         — new row in version history table
+#   siddetector.asm    — screen title, file-header comment, debug-info title,
+#                        README screen title (4 strings)
+#   README.md          — heading + screenshot caption
+#   docs/CHIPS.md      — intro paragraph
+#   docs/debug.md      — new row at top of version history table
+#   docs/teststatus.md — Version: header field
+#
+# Note: this script does NOT maintain the in-app readme scroller
+# (siddetector.asm readme_text block). When you add a new release, also
+# prepend a scroller entry and age off the oldest to keep the rolling
+# window at 5 entries — see siddetector.asm around the `readme_text:`
+# label.
 # =============================================================================
 set -euo pipefail
 
@@ -45,24 +53,31 @@ NEW_VER="${MAJOR}.${MINOR}.${NEW_PATCH}"
 echo "Bumping v${CURRENT} → v${NEW_VER}"
 
 # ---- siddetector.asm -------------------------------------------------------
-# Screen text: "           SIDDETECTOR V1.2.4           "
+# Screen title:      "SIDDETECTOR V1.2.4 FUNFUN/TRIANGLE 3532"
+# Readme-page title: "SIDDETECTOR V1.2.4 README"
 sed -i "s/SIDDETECTOR V${CURRENT}/SIDDETECTOR V${NEW_VER}/g" siddetector.asm
-# Top comment: // SID Detector v1.2.x
+# Debug-info page title: "    SID DETECTOR - DEBUG INFO   V1.2.4 "
+sed -i "s/DEBUG INFO   V${CURRENT}/DEBUG INFO   V${NEW_VER}/g" siddetector.asm
+# File-header comment: // SID Detector v1.2.x
 sed -i "s|// SID Detector v[0-9]*\.[0-9]*\.[0-9]*|// SID Detector v${NEW_VER}|" siddetector.asm
 
 # ---- README.md -------------------------------------------------------------
 sed -i "s/# SID Detector v${CURRENT}/# SID Detector v${NEW_VER}/g" README.md
+sed -i "s/SID Detector v${CURRENT} running in VICE/SID Detector v${NEW_VER} running in VICE/g" README.md
 sed -i "s/siddetector v${CURRENT}/siddetector v${NEW_VER}/g" README.md
 sed -i "s/(v${CURRENT})/(v${NEW_VER})/g" README.md
 
-# ---- CHIPS.md --------------------------------------------------------------
-sed -i "s/SID Detector v${CURRENT}/SID Detector v${NEW_VER}/g" CHIPS.md
+# ---- docs/CHIPS.md ---------------------------------------------------------
+sed -i "s/SID Detector v${CURRENT}/SID Detector v${NEW_VER}/g" docs/CHIPS.md
 
-# ---- debug.md: insert new row after the table separator -------------------
+# ---- docs/teststatus.md: version field -------------------------------------
+sed -i "s/^\\*\\*Version:\\*\\* V${CURRENT}/\\*\\*Version:\\*\\* V${NEW_VER}/" docs/teststatus.md
+
+# ---- docs/debug.md: insert new row after the table separator --------------
 if [ -n "$DESCRIPTION" ]; then
-    sed -i "/^|---------|/a | V${NEW_VER}  | ${DESCRIPTION} |" debug.md
+    sed -i "/^|---------|/a | V${NEW_VER}  | ${DESCRIPTION} |" docs/debug.md
 else
-    sed -i "/^|---------|/a | V${NEW_VER}  | (no description provided) |" debug.md
+    sed -i "/^|---------|/a | V${NEW_VER}  | (no description provided) |" docs/debug.md
 fi
 
 # ---- Write version file for release.sh ------------------------------------
