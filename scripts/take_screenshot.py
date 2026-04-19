@@ -73,8 +73,14 @@ def main():
         resp = recv_until_prompt(sock, timeout=10)
         print(f"Connected. CPU paused at: {resp[-30:].strip()!r}")
 
-        # Take screenshot directly — screen RAM is already drawn
-        send(sock, f'screenshot PNG "{output_png}"')
+        # Take screenshot. VICE monitor syntax is:
+        #   screenshot "<filename>" [<format>]
+        # where format is a NUMBER (default=BMP, 1=PCX, 2=PNG, 3=GIF, 4=IFF).
+        # Earlier this script sent "screenshot PNG ..." which VICE parsed as
+        # filename=PNG with the intended path as a nonsense format token — the
+        # command was silently ignored. Format 2 = PNG is what we actually
+        # want here.
+        send(sock, f'screenshot "{output_png}" 2')
         resp = recv_until_prompt(sock, timeout=5)
         print(f"Screenshot response: {resp.strip()!r}")
 
