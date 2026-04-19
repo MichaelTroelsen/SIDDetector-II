@@ -15,17 +15,18 @@
 #
 # Files updated:
 #   siddetector.asm    — screen title, file-header comment, debug-info title,
-#                        README screen title (4 strings)
+#                        README screen title, readme scroller (prepend new
+#                        entry + age off oldest to keep rolling 5-entry
+#                        window)
 #   README.md          — heading + screenshot caption
 #   docs/CHIPS.md      — intro paragraph
 #   docs/debug.md      — new row at top of version history table
 #   docs/teststatus.md — Version: header field
 #
-# Note: this script does NOT maintain the in-app readme scroller
-# (siddetector.asm readme_text block). When you add a new release, also
-# prepend a scroller entry and age off the oldest to keep the rolling
-# window at 5 entries — see siddetector.asm around the `readme_text:`
-# label.
+# The DESCRIPTION argument flows into the debug.md row AND the in-app
+# scroller entry (uppercased for screencode_upper). Keep it ≤28 chars so
+# the scroller line "  Vx.y.zz DESCRIPTION" stays within the C64's
+# 40-column screen width.
 # =============================================================================
 set -euo pipefail
 
@@ -60,6 +61,42 @@ sed -i "s/SIDDETECTOR V${CURRENT}/SIDDETECTOR V${NEW_VER}/g" siddetector.asm
 sed -i "s/DEBUG INFO   V${CURRENT}/DEBUG INFO   V${NEW_VER}/g" siddetector.asm
 # File-header comment: // SID Detector v1.2.x
 sed -i "s|// SID Detector v[0-9]*\.[0-9]*\.[0-9]*|// SID Detector v${NEW_VER}|" siddetector.asm
+
+# Readme scroller: prepend new entry + age off oldest (rolling 5-entry window).
+# Entry block format:
+#     .byte $9E
+#     .text "  V1.2.4 DESCRIPTION"
+#     .byte 13
+# The block is matched by the .text line carrying a version marker; the
+# surrounding $9E and 13 bytes are handled via getline so we don't touch
+# other $9E bytes elsewhere in the file.
+DESC_UPPER=$(echo "${DESCRIPTION:-NO DESCRIPTION}" | tr '[:lower:]' '[:upper:]')
+awk -v new="V${NEW_VER}" -v desc="${DESC_UPPER}" '
+BEGIN { seen = 0 }
+/^    \.byte \$9E$/ {
+    saved = $0
+    if ((getline text_line) <= 0) { print saved; exit }
+    if (text_line ~ /^    \.text "  V[0-9]+\.[0-9]+\.[0-9]+ /) {
+        if ((getline tail_line) <= 0) { print saved; print text_line; exit }
+        seen++
+        if (seen == 1) {
+            print "    .byte $9E"
+            printf "    .text \"  %s %s\"\n", new, desc
+            print "    .byte 13"
+        }
+        if (seen < 5) {
+            print saved
+            print text_line
+            print tail_line
+        }
+        next
+    }
+    print saved
+    print text_line
+    next
+}
+{ print }
+' siddetector.asm > siddetector.asm.tmp && mv siddetector.asm.tmp siddetector.asm
 
 # ---- README.md -------------------------------------------------------------
 sed -i "s/# SID Detector v${CURRENT}/# SID Detector v${NEW_VER}/g" README.md
