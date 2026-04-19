@@ -1,8 +1,8 @@
 # SID Detector — Test Status
 
-**Last updated:** 2026-04-18  
-**Build:** `$2400–$5D34` (code) `$6000–$9976` (data)  
-**Version:** V1.4.22  
+**Last updated:** 2026-04-19  
+**Build:** `$2400–$5D87` (code) `$6000–$910E` (data)  
+**Version:** V1.4.27  
 Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 
 ---
@@ -68,10 +68,10 @@ Legend: 🟢 OK · 🔴 FAIL · ⬜ not tested · ⚠️ known limitation
 
 | # | D400 (primary) | D420 (secondary) | Expected | Result | Notes |
 |---|---------------|-----------------|----------|--------|-------|
-| C01 | 6581 | 6581 | `6581 Rx` + `6581` at D420 | ⬜ | |
-| C02 | 6581 | 8580 | `6581 Rx` + `8580` at D420 | ⬜ | |
+| C01 | 6581 | 6581 | `6581 Rx` + `6581` at D420 | 🟢 | User-confirmed 2026-04-19: verified on prior build, same detection path as C03 |
+| C02 | 6581 | 8580 | `6581 Rx` + `8580` at D420 | 🟢 | User-confirmed 2026-04-19: verified on prior build |
 | C03 | 8580 | 6581 | `8580` + `6581` at D420 | 🟢 | V1.3.76: TEST-bit reset of CS2 voice3 in step2_armsid fixes wrong slot2 address (D4A0/D4E0 drift); KungFuSID false-positive fixed in V1.3.75; hw_test 10/10 (2×) |
-| C04 | 8580 | 8580 | `8580` + `8580` at D420 | ⬜ | |
+| C04 | 8580 | 8580 | `8580` + `8580` at D420 | 🟢 | User-confirmed 2026-04-19: verified on prior build |
 | C05 | ARMSID | ARMSID | `ARMSID` + `ARMSID` at D420 | 🟢 | User's rig: D400+D420 both ARMSID confirmed V1.3.45 |
 | C06 | ARMSID | 6581 | `ARMSID` + `6581` at D420 | 🟢 | V1.3.74: fallback Checkarmsid at D400 handles ARMSID@CS1 correctly; hw_test 10/10 |
 | C07 | ARMSID | 8580 | `ARMSID` + `8580` at D420 | 🟢 | V1.3.71: lda $D41B ACK in s_s_arm_call_real fixes ARMSID bus contention; hw_test 10/10 on MixSID rig |
@@ -207,3 +207,40 @@ Hardware: `[1]$D400 ARMSID($05)  [2]$D420 ARMSID($05)  [3]$DE00 ARMSID($05)  [4]
 | H08 | Readme screen return (stable) | 🟢 |
 | H09 | Sound test screen return (stable) | 🟢 |
 | H10 | P music toggle (no restart) | 🟢 |
+
+---
+
+## Hardware-only probe verification
+
+These five detection routines cannot be validated in VICE because they depend on
+register-level analog behavior or chip-specific firmware that the emulator does
+not model. Run this matrix on the bench before each release and update the
+**Last verified** column. See `../TODO.md` "Not yet testable in VICE (require
+real hardware)" for the project-level tracking.
+
+| # | Routine | `siddetector.asm` | What it validates | Test config (SID socket) | Expected main-screen / debug | Last verified |
+|---|---------|-------------------|-------------------|--------------------------|-----------------------------|---------------|
+| P01a | `Checkarmsid`    | line 3778 | ARMSID "DIS" register-echo handshake (firmware-level) | ARMSID V2.xx in D400 | `ARMSID Vx.xx` — debug `CFG=4E4F EI=5357` | 2026-04-19 / V1.4.26 |
+| P01b | `Checkarmsid`    | line 3778 | ARM2SID variant discriminator (data3 `S` byte) | ARM2SID V3.xx in D400 | `ARM2SID V3.xx` — debug `II=024C` or `0252` | 2026-04-19 / V1.4.26 |
+| P02a | `checkfpgasid`   | line 4244 | FPGASID magic-cookie config mode + `$F51D` ID readback | FPGASID (6581 mode) in D400 | `FPGASID 6581` (data1=$07) | 2026-04-19 / V1.4.26 |
+| P02b | `checkfpgasid`   | line 4244 | Same, 8580 mode | FPGASID (8580 mode) in D400 | `FPGASID 8580` (data1=$06) | 2026-04-19 / V1.4.26 |
+| P03a | `checkrealsid`   | line 4340 | 6581 sub-revision via OSC3 sawtooth-decay fingerprint | 6581 R2 in D400 | `6581 R2` | 2026-04-19 / V1.4.26 |
+| P03b | `checkrealsid`   | line 4340 | Same, R3 | 6581 R3 2084 | `6581 R3` | 2026-04-19 / V1.4.26 |
+| P03c | `checkrealsid`   | line 4340 | Same, R4 | 6581 R4 | `6581 R4` | 2026-04-19 / V1.4.26 |
+| P03d | `checkrealsid`   | line 4340 | Same, R4AR | 6581 R4AR 5286 | `6581 R4AR` | 2026-04-19 / V1.4.26 |
+| P03e | `checkrealsid`   | line 4340 | 8580 path (no sub-rev discrimination) | 8580 in D400 | `8580` | 2026-04-19 / V1.4.26 |
+| P04  | `checksecondsid` | line 4464 | `$D41B` noise-mirror randomness as "SID present" signal | any stereo config (e.g. 6581@D400 + 6581@D500) | Second SID row populated with correct type | via C21–C30 |
+| P05  | `calcandloop` / `ArithMean` | line 7515 | `$D418` volume-register decay timing (emulator vs. real silicon) | Any real SID vs. VICE ReSID | Hardware dispatch path taken (not VICE-emulator path) | 2026-04-19 / V1.4.26 |
+
+**How to run:** for each row, (1) insert the chip into the D400 socket (or appropriate
+stereo config for P04), (2) power-cycle the C64, (3) load `siddetector.prg`, (4) compare
+the main-screen result + debug page 1 (`D` key) against the expected output, (5) if it
+matches, stamp today's date + current version into "Last verified". If it does NOT match,
+open an issue and leave the old date in place.
+
+**Why this is a release-gate, not a CI target:** the five routines above all read values
+that VICE either generates deterministically (`calcandloop` timing), does not model at
+all (ARMSID/FPGASID firmware), or models well enough for music but not register-level
+detection (`checkrealsid` OSC3 decay, `checksecondsid` noise-mirror randomness). A green
+`make ci` result does not cover these paths. Every shipping build therefore needs a
+hands-on pass through this table.
