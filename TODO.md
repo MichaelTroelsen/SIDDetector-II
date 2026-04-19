@@ -19,7 +19,7 @@
 ### Per-chip information pages
 - [x] After detection, add an info screen for each detected chip (press a key to step through)
 - [x] Show chip name, variant, known quirks, audio quality rating, and firmware/upgrade info
-- [x] Include "where to buy" pointer (see CHIPS.md) on-screen where space allows
+- [x] Include "where to buy" pointer (see docs/CHIPS.md) on-screen where space allows
 
 ## Bugs to fix
 
@@ -28,7 +28,7 @@
 - [x] **FPGASID stereo address not scanned** — fixed: removed `fiktivloop` (noise-mirror, wrong method for FPGASID) and `jsr s_s_l3` (premature return) from `s_s_lfpgasid`/`s_s_lfpgasid_2`; outer loop now continues scanning all addresses with `checkfpgasid`
 - [x] **SIDFX stereo capability not reported** — fixed: pre-populated D400 in `end_pre_d400` block ($30 case) + added `sidFXf` dispatch in `sidstereo_print`; stereo row now shows "D400 SIDFX FOUND"
 - [x] **Swinsid Nano (NOPAD variant) indistinguishable** — no reliable discriminant found; accepted as limitation
-- [x] **NOSID+U2+ indistinguishable from SwinSID Nano** — exhaustively probed 10+ discriminants (D41B, D41C, D419/D41A, D41F, freq variation, waveform, interrupt context, monotone counting, write-to-read). All overlap. U2+ FPGA generates bus noise at ~44 kHz identical to SwinSID Nano oscillator. Accepted limitation; documented in FINDINGS.md.
+- [x] **NOSID+U2+ indistinguishable from SwinSID Nano** — exhaustively probed 10+ discriminants (D41B, D41C, D419/D41A, D41F, freq variation, waveform, interrupt context, monotone counting, write-to-read). All overlap. U2+ FPGA generates bus noise at ~44 kHz identical to SwinSID Nano oscillator. Accepted limitation; documented in docs/FINDINGS.md.
 - [x] **D400+D500 mixed Swinsid/real-SID** — fixed: at D5xx–D7xx in sidtype=$05 stereo scan, DIS echo (`sfx_probe_dis_echo`) is now tried before `checkrealsid` when primary is a real SID ($01/$02). Returns type $04 (SwinSID U) or $05 (ARMSID) instead of misidentifying as 6581/8580. Guard prevents triggering when ARMSID is primary (snoops all writes). *(teststatus #21 — needs hw verification)*
 - [x] **D400+D500 mixed ARMSID/real-SID** — fixed V1.3.73: jmp s_s_l3 in s_s_add for sidtype=$05 exits ARMSID scan early, preventing U64/ULTISID false entries from D5xx-DFxx scan; 8580@D400 + ARMSID@D420 hw_test 10/10 *(teststatus C09 — 🟢)*
 - [x] **Stereo ARMSID / SwinSID U detection skipped** — fixed V1.3.80: `s_s_arm_call_real` now allows `data4=$05` (ARMSID primary) to reach `sfx_probe_dis_echo` for D5xx+ candidates. `sfx_probe_dis_echo` reads from `candidate+$1B` (not D41B), so D400 ARMSID snooping the DIS writes does not corrupt the result. The cleanup writes and existing `s_s_skip_dis: lda $D41B` ACK handle residual tristate. *(requires hardware with dual ARMSID/SwinSID U config to verify — teststatus: add C50+)*
@@ -75,7 +75,7 @@
 
 ### MixSID hardware combination tests (require physical chip swaps)
 - [x] **C06** — ARMSID@D400 + 6581@D420: confirmed V1.3.74: fallback Checkarmsid at D400 handles ARMSID@CS1 correctly; 6581 at D420 found via sidstereostart s_s_arm_call_real; hw_test 10/10 *(teststatus C06 — 🟢)*
-- [ ] **C01–C04** — real SID + real SID combos at D420 (6581/8580 × 6581/8580): different detection path (not ARMSID); low priority, expected to work
+- [x] **C01–C04** — real SID + real SID combos at D420 (6581/8580 × 6581/8580): verified on hardware
 - [x] **C08** — 6581@D400 + ARMSID@D420: fixed V1.3.74: single CS2-DIS window in step2_armsid (pre-clean voice3+D41F, enter CS2-DIS once, checkrealsid inside window, dispatch BEFORE cleanup to avoid false uSID64 via U64 FPGA); hw_test 10/10 *(teststatus C08 — 🟢)*
 - [x] **C09** — 8580@D400 + ARMSID@D420: fixed V1.3.73 *(teststatus C09 — 🟢)*
 
@@ -126,7 +126,7 @@ The value is shown on the debug screen ("SID"/"SFX"/"BOT") but not surfaced else
 - [x] **Releases** — v1.3.77–v1.3.82 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
 - [x] **GitHub README** — updated to v1.3.82; Known issues updated with V1.3.83 retry indicator
 - [x] **CI** — removed; use `make ci` locally (Ubuntu VICE too many ROM/autostart quirks)
-- [ ] **Photos of chips and boards** — take pictures of the real-hardware test rig (SIDs, FPGASID, ARMSID/ARM2SID cartridges, FM-YAM / CBM SFX, SIDKick-pico, BackSID, SwinSID Nano/Ultimate, KungFuSID, uSID64, SIDFX, Ultimate64 + C128, etc.) and add them to a `pictures/` folder in the repo. Useful for README, STORY.md, and CSDb page. Each photo should be labelled with the chip/board name and socket position.
+- [ ] **Photos of chips and boards** — take pictures of the real-hardware test rig (SIDs, FPGASID, ARMSID/ARM2SID cartridges, FM-YAM / CBM SFX, SIDKick-pico, BackSID, SwinSID Nano/Ultimate, KungFuSID, uSID64, SIDFX, Ultimate64 + C128, etc.) and add them to a `pictures/` folder in the repo. Useful for README, docs/STORY.md, and CSDb page. Each photo should be labelled with the chip/board name and socket position.
 
 ## Stereo config error cases (wrong result reported)
 

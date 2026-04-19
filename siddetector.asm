@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.3.72  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.26  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware

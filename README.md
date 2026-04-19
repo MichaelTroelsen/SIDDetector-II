@@ -1,4 +1,4 @@
-# SID Detector v1.4.21
+# SID Detector v1.4.26
 
 A Commodore 64 diagnostic utility that identifies 24+ variants of the SID (Sound Interface Device) chip — including real hardware, FPGA clones, microcontroller emulators, and PC emulators.
 
@@ -6,13 +6,13 @@ Original release: https://csdb.dk/release/?id=176909
 Author: funfun/triangle 3532
 Syntax: KickAssembler (converted from ACME original)
 
-**[STORY.md](STORY.md)** — Full technical article: detection methods, reverse-engineered protocols, SIDFX secondary probing, self-modifying code patterns, hardware testing methodology, and lessons learned. For sceners, SID musicians, and hardware developers.
+**[STORY.md](docs/STORY.md)** — Full technical article: detection methods, reverse-engineered protocols, SIDFX secondary probing, self-modifying code patterns, hardware testing methodology, and lessons learned. For sceners, SID musicians, and hardware developers.
 
 ---
 
 ## Screenshot
 
-![SID Detector v1.4.21 running in VICE](screenshot.png)
+![SID Detector v1.4.26 running in VICE](screenshot.png)
 
 ---
 
