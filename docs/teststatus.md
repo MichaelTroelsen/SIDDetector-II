@@ -34,9 +34,9 @@ Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 | 21 | Replacement | uSID64 | `USID64 FOUND` | 🟢 | D41F two-read stability: $F0,$10,$63,$00,$FF → read twice, both $E0-$FC, stable within $02. Verified 5/5 on real hardware. |
 | 22 | Stereo slot | Second SID at D500 | second SID shown | 🟢 | Confirmed V1.3.45 hw_test baseline: ULTISID $20 at D500 |
 | 23 | Stereo slot | Second SID at D600 | second SID shown | 🟢 | Confirmed V1.3.45 hw_test baseline: ULTISID $20 at D600 |
-| 24 | Stereo slot | Second SID at D700 | second SID shown | ⬜ | Not tested |
+| 24 | Stereo slot | Second SID at D700 | second SID shown | 🟢 | User-confirmed 2026-04-19 / V1.4.27 |
 | 25 | Stereo slot | Second SID at DE00 | second SID shown | 🟢 | Confirmed V1.3.45 hw_test baseline: ARMSID $05 at DE00 |
-| 26 | Stereo slot | Second SID at DF00 | second SID shown | ⬜ | Not tested |
+| 26 | Stereo slot | Second SID at DF00 | second SID shown | 🟢 | User-confirmed 2026-04-19 / V1.4.27 |
 | 27 | Emulator | VICE ResID 6581 | `VICE C64 EMULATOR` | 🟢 | |
 | 28 | Emulator | VICE ResID 8580 | `VICE C64 EMULATOR` | 🟢 | |
 | 29 | Emulator | VICE FastSID 6581 | `VICE C64 EMULATOR` | 🟢 | |
@@ -220,17 +220,17 @@ real hardware)" for the project-level tracking.
 
 | # | Routine | `siddetector.asm` | What it validates | Test config (SID socket) | Expected main-screen / debug | Last verified |
 |---|---------|-------------------|-------------------|--------------------------|-----------------------------|---------------|
-| P01a | `Checkarmsid`    | line 3778 | ARMSID "DIS" register-echo handshake (firmware-level) | ARMSID V2.xx in D400 | `ARMSID Vx.xx` — debug `CFG=4E4F EI=5357` | 2026-04-19 / V1.4.26 |
-| P01b | `Checkarmsid`    | line 3778 | ARM2SID variant discriminator (data3 `S` byte) | ARM2SID V3.xx in D400 | `ARM2SID V3.xx` — debug `II=024C` or `0252` | 2026-04-19 / V1.4.26 |
-| P02a | `checkfpgasid`   | line 4244 | FPGASID magic-cookie config mode + `$F51D` ID readback | FPGASID (6581 mode) in D400 | `FPGASID 6581` (data1=$07) | 2026-04-19 / V1.4.26 |
-| P02b | `checkfpgasid`   | line 4244 | Same, 8580 mode | FPGASID (8580 mode) in D400 | `FPGASID 8580` (data1=$06) | 2026-04-19 / V1.4.26 |
-| P03a | `checkrealsid`   | line 4340 | 6581 sub-revision via OSC3 sawtooth-decay fingerprint | 6581 R2 in D400 | `6581 R2` | 2026-04-19 / V1.4.26 |
-| P03b | `checkrealsid`   | line 4340 | Same, R3 | 6581 R3 2084 | `6581 R3` | 2026-04-19 / V1.4.26 |
-| P03c | `checkrealsid`   | line 4340 | Same, R4 | 6581 R4 | `6581 R4` | 2026-04-19 / V1.4.26 |
-| P03d | `checkrealsid`   | line 4340 | Same, R4AR | 6581 R4AR 5286 | `6581 R4AR` | 2026-04-19 / V1.4.26 |
-| P03e | `checkrealsid`   | line 4340 | 8580 path (no sub-rev discrimination) | 8580 in D400 | `8580` | 2026-04-19 / V1.4.26 |
+| P01a | `Checkarmsid`    | line 3778 | ARMSID "DIS" register-echo handshake (firmware-level) | ARMSID V2.xx in D400 | `ARMSID Vx.xx` — debug `CFG=4E4F EI=5357` | 2026-04-19 / V1.4.27 |
+| P01b | `Checkarmsid`    | line 3778 | ARM2SID variant discriminator (data3 `S` byte) | ARM2SID V3.xx in D400 | `ARM2SID V3.xx` — debug `II=024C` or `0252` | 2026-04-19 / V1.4.27 |
+| P02a | `checkfpgasid`   | line 4244 | FPGASID magic-cookie config mode + `$F51D` ID readback | FPGASID (6581 mode) in D400 | `FPGASID 6581` (data1=$07) | 2026-04-19 / V1.4.27 |
+| P02b | `checkfpgasid`   | line 4244 | Same, 8580 mode | FPGASID (8580 mode) in D400 | `FPGASID 8580` (data1=$06) | 2026-04-19 / V1.4.27 |
+| P03a | `checkrealsid`   | line 4340 | 6581 sub-revision via OSC3 sawtooth-decay fingerprint | 6581 R2 in D400 | `6581 R2` | 2026-04-19 / V1.4.27 |
+| P03b | `checkrealsid`   | line 4340 | Same, R3 | 6581 R3 2084 | `6581 R3` | 2026-04-19 / V1.4.27 |
+| P03c | `checkrealsid`   | line 4340 | Same, R4 | 6581 R4 | `6581 R4` | 2026-04-19 / V1.4.27 |
+| P03d | `checkrealsid`   | line 4340 | Same, R4AR | 6581 R4AR 5286 | `6581 R4AR` | 2026-04-19 / V1.4.27 |
+| P03e | `checkrealsid`   | line 4340 | 8580 path (no sub-rev discrimination) | 8580 in D400 | `8580` | 2026-04-19 / V1.4.27 |
 | P04  | `checksecondsid` | line 4464 | `$D41B` noise-mirror randomness as "SID present" signal | any stereo config (e.g. 6581@D400 + 6581@D500) | Second SID row populated with correct type | via C21–C30 |
-| P05  | `calcandloop` / `ArithMean` | line 7515 | `$D418` volume-register decay timing (emulator vs. real silicon) | Any real SID vs. VICE ReSID | Hardware dispatch path taken (not VICE-emulator path) | 2026-04-19 / V1.4.26 |
+| P05  | `calcandloop` / `ArithMean` | line 7515 | `$D418` volume-register decay timing (emulator vs. real silicon) | Any real SID vs. VICE ReSID | Hardware dispatch path taken (not VICE-emulator path) | 2026-04-19 / V1.4.27 |
 
 **How to run:** for each row, (1) insert the chip into the D400 socket (or appropriate
 stereo config for P04), (2) power-cycle the C64, (3) load `siddetector.prg`, (4) compare

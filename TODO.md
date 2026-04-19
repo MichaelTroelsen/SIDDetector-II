@@ -66,11 +66,11 @@
 - [x] CBM SFX dispatch: flag=$00 → none (T33) / flag=$01 → found (T34) — dispatch-logic tests only (uses a fake flag var since V1.4.22 removed the live `sfxexp_detected` + `$DE00` probe)
 
 ### Not yet testable in VICE (require real hardware)
-- [ ] `Checkarmsid` hardware probe — SID register echo depends on chip model
-- [ ] `checkfpgasid` magic-cookie config — only works on real FPGASID
-- [ ] `checkrealsid` OSC3 readback — sawtooth decay is hardware-specific
-- [ ] `checksecondsid` noise mirror — $D41B randomness is hardware-specific
-- [ ] `calcandloop` decay timing — emulator timing differs from hardware by design
+- [x] `Checkarmsid` hardware probe — user-confirmed 2026-04-19 / V1.4.27; see P01 in docs/teststatus.md
+- [x] `checkfpgasid` magic-cookie config — user-confirmed 2026-04-19 / V1.4.27; see P02 in docs/teststatus.md
+- [x] `checkrealsid` OSC3 readback — user-confirmed 2026-04-19 / V1.4.27; see P03 in docs/teststatus.md
+- [x] `checksecondsid` noise mirror — user-confirmed 2026-04-19 / V1.4.27; see P04 in docs/teststatus.md
+- [x] `calcandloop` decay timing — user-confirmed 2026-04-19 / V1.4.27; see P05 in docs/teststatus.md
 - [x] **PICOSid / BackBit SID / Public Domain SID** — detection implemented (SIDKick-pico config-mode, BackSID unlock protocol, PD SID echo); VICE unit tests T24–T27 added
 
 ### MixSID hardware combination tests (require physical chip swaps)
