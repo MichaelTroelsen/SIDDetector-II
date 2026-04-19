@@ -6,6 +6,33 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.4.27  | release: docs reorg into docs/ + hardware-only probe verification matrix (P01–P05) + stale version-string fix |
+| V1.4.26  | feat: ip_fmyam info page + fix SIDFX wording + unreachable pages |
+| V1.4.25  | fix: info page header/footer lost after cycling through pages |
+| V1.4.24  | fix: info page scroll stops before running into trailing blanks |
+| V1.4.23  | fix: readme scroll — 23-line unbreakable V1.4.xx block; version list trimmed to last 5 |
+| V1.4.22  | refactor: remove dead $DE00 SFX probe + debug vars; OPL moved to standard $DF40/$DF50/$DF60 |
+| V1.4.21  | docs: bump version + update README/TODO/teststatus |
+| V1.4.20  | rename: FM-YAM label → SFX/FM (covers both chips) |
+| V1.4.19  | fix: FM-YAM detect robustly via upper-bits-clear status check (`(status & $E0) == 0`) |
+| V1.4.18  | fix: eliminate FM-YAM/SFX false positives when hardware removed |
+| V1.4.17  | fix: FM-YAM detection on real hardware |
+| V1.4.00–V1.4.16 | feat: SFX/FM-YAM detection + sound test overhaul (bundled commit — 3 FM instruments: flute/organ/bell; SID pulse-width fix; OPL global init per XeNTaX edlib) |
+| V1.3.100 | fix: SFX display cursor bug + detection overhaul |
+| V1.3.99  | fix: SFX false positive — pre-check $DE00 & $3F == 0 before timer test |
+| V1.3.98  | fix: SFX false positive — require $C0 (both IRQ+T1_FLAG) not just bit7 |
+| V1.3.88–V1.3.97 | feat: CBM SFX Sound Expander detection at DE00 (bundled commit) |
+| V1.3.87  | feat: FM-YAM OPL2 detection + SKpico FM T31/T32 |
+| V1.3.86  | feat: SIDKick-pico FM Sound Expander detection |
+| V1.3.85  | feat: ARM2SID SFX mode display + T28/T29 unit tests |
+| V1.3.84  | bump: ARMSID+SIDFX D420 bus contamination fix |
+| V1.3.83  | bump: SIDKick Pico D420 SIDFX detection via D41D echo |
+| V1.3.82  | bump: checkrealsid retry confidence indicator (`*` suffix on main screen) |
+| V1.3.81  | bump: multi-SID full melody sound test (snd_patch_page self-modifies 31× `sta $D4xx`) |
+| V1.3.80  | bump: ARMSID stereo D5xx fix + 27 unit test suite |
+| V1.3.79  | bump: info screen, readme screen, stereo fixes |
+| V1.3.78  | bump: debug page 1 version string |
+| V1.3.77  | initial commit (SID Detector II V1.3.77) — rebuilt repository baseline |
 | V1.3.72  | docs: MixSID test coverage; SIDFX+ARMSID/PICO D420 TODOs; C41/C42 resolved as covered by C34f/C34g |
 | V1.3.71  | MixSID ARMSID+8580: read D41B ACK in s_s_arm_call_real fixes 8580 re-detection after restart/screen-exit |
 | V1.3.45  | fix dpf_lk_lp $AB1E register bug (A=lo,Y=hi): debug page 2 no longer hangs on UltiSID entries; UltiSID main screen shows "8580 INT"/"6581 INT" |
