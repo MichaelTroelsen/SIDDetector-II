@@ -126,7 +126,7 @@ The value is shown on the debug screen ("SID"/"SFX"/"BOT") but not surfaced else
 - [x] **Releases** — v1.3.77–v1.3.82 tagged and released on GitHub (MichaelTroelsen/SIDDetector-II)
 - [x] **GitHub README** — updated to v1.3.82; Known issues updated with V1.3.83 retry indicator
 - [x] **CI** — removed; use `make ci` locally (Ubuntu VICE too many ROM/autostart quirks)
-- [ ] **Photos of chips and boards** — take pictures of the real-hardware test rig (SIDs, FPGASID, ARMSID/ARM2SID cartridges, FM-YAM / CBM SFX, SIDKick-pico, BackSID, SwinSID Nano/Ultimate, KungFuSID, uSID64, SIDFX, Ultimate64 + C128, etc.) and add them to a `pictures/` folder in the repo. Useful for README, docs/STORY.md, and CSDb page. Each photo should be labelled with the chip/board name and socket position.
+- [x] **Photos of chips and boards** — 19 hardware photos added to `pictures/` (commit e645031): HEIC originals + JPEG web-ready previews in `pictures/jpeg/`. Cover bare C64/C128/U64/C64-Reloaded boards, 6581/8580 chip reference, ARMSID/ARM2SID, FPGASID, SwinSID Nano/Ultimate, SIDKick Pico, BackSID, PDSID, uSID64, FM-YAM + CBM SFX rig, and probe/test rigs. Selected photos embedded in README.md (Hardware test rig section) and docs/STORY.md §4, §6, §7, §10, §18.
 
 ## Stereo config error cases (wrong result reported)
 

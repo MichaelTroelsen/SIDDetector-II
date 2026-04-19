@@ -109,6 +109,10 @@ Rather than asking "does this value match?", ask "is the change rate increasing 
 
 ## 4. Real SID: OSC3 Readback and Sub-Revision Fingerprinting
 
+![6581 and 8580 reference chips](../pictures/jpeg/chips_6581_8580_reference.jpg)
+
+*6581 R4AR (top row, dates 5286 / 1838 / 1187), 6581 R3 silicon (middle, 5182 / 3484), and 8580 R5 (bottom, 5092 / 0788). The sub-revision differences decay-scan-visible on OSC3 are what this section describes.*
+
 The original MOS 6581 and CSG/MOS 8580 are identified using voice 3's hardware oscillator output.
 
 **What makes this work:** The SID's three oscillators are free-running hardware circuits. When you enable voice 3 with a sawtooth waveform and read D41B, you get the upper 8 bits of the 23-bit phase accumulator. The value depends on the oscillator's frequency, the gate bit state, and timing. Clone chips that emulate this in software often produce slightly different values, and certain emulators do not implement it at all.
@@ -179,6 +183,10 @@ This technique identifies emulators only — real hardware chips and all the mod
 
 ## 6. DIS Echo Protocol — ARMSID, ARM2SID, SwinSID Ultimate
 
+![ARMSID pair + BackSID + SIDKick Pico](../pictures/jpeg/backsid_skpico_armsid.jpg)
+
+*A pair of Nobomi ARMSID chips in a MixSID carrier (bottom), a BackBit BackSID (top-left, black PCB), and a SIDKick Pico bare board (top-right, green PCB). The DIS echo protocol described below identifies the ARMSID and ARM2SID family; BackSID and SIDKick Pico have their own detection paths covered in §9 and §10.*
+
 The most important technique for identifying modern replacements is the DIS echo test. It exploits a property that is common to most ARM- and AVR-based SID replacements.
 
 **The background:** Microcontroller-based SID clones store every write to a SID register into a RAM array. When the C64 code reads from a nominally write-only address (D41D–D41F), the microcontroller returns the last value stored in that RAM array slot — the value that was most recently written to that address. Real SID chips do not do this; the D41D–D41F addresses on a real SID have no readback path.
@@ -243,6 +251,10 @@ Nibble values: `0` = none, `1` = left SID, `2` = right SID, `3` = SFX expander, 
 ---
 
 ## 7. FPGASID: Magic Cookie Config Mode
+
+![FPGASID by andi6510 + SwinSID Ultimate pair](../pictures/jpeg/fpgasid_and_swinsid_ultimate.jpg)
+
+*FPGASID by andi6510 (top, green PCB with FPGA + CPLD) and a pair of SwinSID Ultimate boards (bottom). FPGASID is the board whose magic-cookie config mode this section covers; SwinSID Ultimate sits on the DIS-echo path from §6.*
 
 FPGASID takes a more explicit approach to self-identification. It responds to a specific two-byte "magic cookie" that no real SID write sequence would produce in normal use.
 
@@ -411,6 +423,10 @@ cbs_done:
 ---
 
 ## 10. SIDKick Pico: Config Mode with Manual String Pointer
+
+![SIDKick Pico 2350CR pair](../pictures/jpeg/sidkick_pico.jpg)
+
+*Two SIDKick Pico 2350CR boards (bare PCBs, before socketing). The RP2040 and its successor RP2350 drive this board — the config-mode protocol described below exposes the firmware's VERSION_STR and feature bits.*
 
 SIDKick Pico is based on the Raspberry Pi Pico (RP2040 dual-core processor). It exposes its identity via a config mode that the detector enters by writing `$FF` to D41F (the uppermost voice-3 register).
 
@@ -670,6 +686,10 @@ The most insidious challenge in SID detection is correctly identifying an empty 
 ---
 
 ## 18. Hardware Testing Methodology
+
+![C64 board under test with alligator probe clips](../pictures/jpeg/rig_c64_probes.jpg)
+
+*A C64 motherboard on the bench with probe clips attached to signal lines — the kind of setup used to validate timing-sensitive probes that VICE cannot emulate. The Hardware-only probe verification matrix (P01–P05) in `teststatus.md` is what this rig is for.*
 
 Software testing in VICE is necessary but not sufficient. Emulators do not model bus capacitance, clock jitter, open-bus float behaviour, or the timing quirks of real SID hardware. The only way to be confident in a detection probe is to test it on real hardware.
 

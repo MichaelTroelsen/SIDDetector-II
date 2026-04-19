@@ -16,6 +16,20 @@ Syntax: KickAssembler (converted from ACME original)
 
 ---
 
+## Hardware test rig
+
+Representative photos of the chips and boards the detector is validated against — see [`pictures/`](pictures/) for the full set.
+
+![6581 / 8580 reference chips](pictures/jpeg/chips_6581_8580_reference.jpg)
+
+*Reference chip collection: 6581 R2 / R3 / R4AR and 8580 R5 silicon on foam.*
+
+![C64 with FM-YAM and CBM SFX Sound Expander](pictures/jpeg/rig_c64_fmyam_sfx.jpg)
+
+*C64 with FM-YAM cartridge, Commodore FM Sound Module (SFX Sound Expander), and Ultimate II+ — used to verify the V1.4.x OPL `$DF40/$DF50/$DF60` detection path.*
+
+---
+
 ## What it does
 
 When run on a C64 (or emulator), the program probes SID hardware registers, measures timing characteristics, and displays the results on screen. It detects:
