@@ -17,7 +17,7 @@ import socket, sys, time, re, subprocess, os
 
 HOST = "127.0.0.1"
 TIMEOUT = 120
-VICE = "C:/winvice/bin/x64sc.exe"
+VICE = "C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
 PRG  = "siddetector.prg"
 MAX_FIRES = 200  # stop after this many watchpoint fires to avoid runaway
 

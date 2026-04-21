@@ -26,7 +26,7 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
 KICKASS="java -jar C:/debugger/kickasm/KickAss.jar"
-VICE="C:/winvice/bin/x64sc.exe"
+VICE="C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
 PYTHON="/c/Python314/python"
 EXPECTED_PASS=32   # $20 hex
 

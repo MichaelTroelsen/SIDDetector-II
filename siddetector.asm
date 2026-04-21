@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.27  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.28  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -1163,7 +1163,48 @@ do_tlr:
 do_restart:
            lda #$00
            sta sid_music_flag      // stop SID module before restart
+           // Clear row 24 (action bar) so the old legend doesn't sit behind
+           // the restart banner; fill with spaces (screen code $20).
+           ldx #$00
+dor_clr:   lda #$20
+           sta $07C0,x
+           inx
+           cpx #$28               // 40 columns
+           bne dor_clr
+           // Write "*** RESTARTING ***" at row 24, col 11 (~centered in 40 cols).
+           ldx #$00
+dor_cpy:   lda dor_msg,x
+           beq dor_clr_color      // 0 terminator → done writing text
+           sta $07CB,x             // row 24 * 40 = $07C0; +$0B = col 11
+           inx
+           bne dor_cpy             // infinite-guard: message < 256 bytes
+dor_clr_color:
+           // Paint the banner row yellow (colour code 7) so the user sees
+           // it against the usual green text.
+           ldx #$00
+dor_col:   lda #$07
+           sta $DBC0,x             // colour RAM row 24
+           inx
+           cpx #$28
+           bne dor_col
+           // ~2 s delay: 2 outer passes × 256 × loop1sek (~3.3 ms) ≈ 1.7 s,
+           // plus 128 extra calls to reach ~2 s.  `loop1sek` saves & restores Y
+           // internally so we can use Y as the inner counter safely.
+           ldx #$02
+dor_dout:
+           ldy #$00
+dor_din:   jsr loop1sek
+           dey
+           bne dor_din
+           dex
+           bne dor_dout
+           ldy #$80                // 128 extra calls → push total to ~2.0 s
+dor_d3:    jsr loop1sek
+           dey
+           bne dor_d3
            jmp start
+// "*** RESTARTING ***" in C64 screen codes (A=$01 … Z=$1A, space=$20, *=$2A).
+dor_msg:   .byte $2A,$2A,$2A,$20,$12,$05,$13,$14,$01,$12,$14,$09,$0E,$07,$20,$2A,$2A,$2A,$00
 
 do_quit:
            sei
@@ -4293,7 +4334,7 @@ checkfpgasid:
 cfs_D419:        sta $D419
                 lda #$65
 cfs_D41A:        sta $D41A
-                lda %10000000           // $80 = identify mode
+                lda #%10000000          // $80 = identify mode (was `lda %10000000` which compiled to LDA ZP $80 — harmless on real HW where ZP $80 happened to hold $80, but broken under WinVICE)
 cfs_D41E:        sta $d41e
                 // if F51D → FPGASID confirmed
 cfs_D419_1:      lda $D419
@@ -4509,7 +4550,7 @@ css_begin:
 css_hack1:
                 lda #$81        // activate noise waveform
 css_d412:        sta $d412
-                lda #$FF        // 
+                lda #$FF        //
 css_d40f:        sta $d40f
                 ldx #$00
 css_d41b:        lda $d41b
@@ -4519,7 +4560,7 @@ css_d41b:        lda $d41b
                 inx
                 cpx #10 // if random gets 0 for some times it means it's not a mirror of d41b
                 bne css_d41b
-cssfound:       
+cssfound:
                 ldx mptr_zp+1
                 ldy mptr_zp
                 lda #$10
@@ -4536,7 +4577,7 @@ cssfound:
 //       beq debugm1
 //                
 
-stopsrealsid:            
+stopsrealsid:
                 lda #$00
 css_d412_5:      sta $D412
 css_d40f_5:      sta $d40f
@@ -5016,6 +5057,14 @@ s_s_arm_mir_test:
 s_s_arm_mir_fh:  sta $D40F   // self-mod → found_sid[x]+$0F (freq_hi = max)
        lda #$21               // sawtooth + gate
 s_s_arm_mir_en:  sta $D412   // self-mod → found_sid[x]+$12 (ctrl)
+       // Settle delay (~1280 cy ≈ 1.3 ms): VICE ResID batches register writes
+       // on each sample-cycle boundary; without a gap the candidate D43B read
+       // can catch a stale OSC3 value and falsely flag an independent SID2
+       // as a mirror of D400.  On real HW a 3-read test still works because
+       // the extra cycles fall well inside one SID cycle.
+       ldy #$FF
+s_s_arm_mir_wait: dey
+       bne s_s_arm_mir_wait
        ldy #$1B
        lda (sptr_zp),y        // read candidate+$1B (OSC3) — 3 attempts
        bne s_s_arm_mir_hit
@@ -5023,6 +5072,7 @@ s_s_arm_mir_en:  sta $D412   // self-mod → found_sid[x]+$12 (ctrl)
        bne s_s_arm_mir_hit
        lda (sptr_zp),y
        bne s_s_arm_mir_hit
+       // not a mirror: cleanup found_sid[x] voice3 and continue checking
        // not a mirror: cleanup found_sid[x] voice3 and continue checking
        lda #$00
 s_s_arm_mir_cl:  sta $D412   // self-mod → stop ctrl
@@ -6746,21 +6796,71 @@ cfm_body:
                 sei                     // IRQs off during probe
                 lda #$04; ldx #$00; jsr cfm_write_reg    // stop timers
                 lda #$04; ldx #$80; jsr cfm_write_reg    // RST all flags
-                // Detection: real OPL after RST returns $00 or ($00-$1F) — reserved
-                // bits 4-0 may read back as chip-ID noise on some FM-YAM variants.
-                // Require (read & $E0) == 0 on TWO reads → upper bits clear.
-                // Bus noise (open-bus) typically has high bits set: $FF, $D1, $C5,
-                // $BB, $A4, $B7 — all fail the $E0 mask.
+
+                // Step A — T2-fire test (distinct from Step B's T1 test).
+                // Open bus on VICE returns the VIC-II data-bus byte, which is
+                // stable at a given read-phase.  Requiring bit 5 on a T2 fire
+                // AND bit 6 on a T1 fire — with different timings — is vanishingly
+                // unlikely to be matched by a single fixed VIC byte.
+                //
+                // Program T2 (slow timer, 320 μs per tick).  Counter $FF→overflow
+                // in 320 μs.  Mask T1, unmask T2 → status bit 5 must set on real
+                // OPL within ~500 μs.
+                lda #$03; ldx #$FF; jsr cfm_write_reg    // T2 counter = $FF
+                lda #$04; ldx #$42; jsr cfm_write_reg    // start T2, mask T1
+                ldx #$FF                // ~250 μs
+cfm_t2wait:     dex
+                bne cfm_t2wait
+                ldx #$FF                // another ~250 μs → total 500 μs > T2 period
+cfm_t2wait2:    dex
+                bne cfm_t2wait2
                 lda $DF60
                 sta dfx_preread
-                and #$E0
-                bne cfm_rst_done                         // high bits set → bus noise
-                lda $DF60                                // 2nd read — must also pass
+                and #$20                // isolate T2 flag
+                beq cfm_rst_done                         // T2 didn't fire → reject
+                // Stop T2 and clear flags before Step B
+                lda #$04; ldx #$00; jsr cfm_write_reg    // stop all timers
+                lda #$04; ldx #$80; jsr cfm_write_reg    // RST clears flags
+
+                // Step B — T1 fire + RST verification.
+                // A real YM3812/3526 responds deterministically; VICE open-bus on
+                // $DF60 reflects the VIC-II fetch byte, which varies with raster
+                // phase.  Three conditions must all hold:
+                //   (1) after starting T1 and waiting > T1 period, $DF60 bit 6 = 1
+                //   (2) after a second RST, $DF60 bit 6 = 0 (flag cleared)
+                //   (3) a second post-RST read still has bit 6 = 0 (stable latch)
+                // Open-bus can occasionally satisfy (1); adding (2) and (3) makes
+                // the false-positive window vanishingly small because the VIC
+                // fetch pattern doesn't correlate with our writes.
+                lda #$02; ldx #$FE; jsr cfm_write_reg    // T1 counter = $FE
+                lda #$04; ldx #$21; jsr cfm_write_reg    // start T1, mask T2
+                ldx #$FF                // ~250 μs wait loop (5 cy × 256 ≈ 256 μs)
+cfm_t1wait:     dex
+                bne cfm_t1wait
+                lda $DF60               // read status; T1 flag = bit 6
                 sta dfx_postread
-                and #$E0
-                bne cfm_rst_done                         // noisy → reject
+                and #$40                // isolate T1 overflow flag
+                beq cfm_cleanup         // flag not set → no OPL → reject
+
+                // Stop T1 before RST so the flag can't re-fire between reads.
+                // YM3812 RST is self-clearing and leaves the timer running; without
+                // stopping T1 first the flag sets again within another 160 μs.
+                lda #$04; ldx #$00; jsr cfm_write_reg    // stop T1/T2
+                lda #$04; ldx #$80; jsr cfm_write_reg    // RST clears flags
+                lda $DF60
+                and #$40
+                bne cfm_cleanup         // still set → not a real flag, open bus → reject
+                // Third read, also after RST — confirm latch stable at 0.
+                lda $DF60
+                and #$40
+                bne cfm_cleanup         // noisy → reject
+
                 lda #$01
                 sta fmyam_detected
+cfm_cleanup:
+                // Stop timers + RST flags so the chip is idle on exit.
+                lda #$04; ldx #$00; jsr cfm_write_reg
+                lda #$04; ldx #$80; jsr cfm_write_reg
 cfm_rst_done:
                 plp                     // restore caller's IRQ-disable state
                 rts
@@ -7073,7 +7173,7 @@ asl_even:       tax
 // Trashes A, X, Y, buf_zp, x_zp, y_zp, tmp_zp.
 //--------------------------------------------------------------------------------------------------
 arm2sid_print_extra:
-                lda #$0D            // CR: close static text's last line ("ARMSID.COM")
+                lda #$0D            // CR: close static text's last line ("NOBOMI.CZ/8BIT")
                 jsr $FFD2
                 lda #$0D            // blank separator
                 jsr $FFD2
@@ -7987,7 +8087,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.27 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.28 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8325,7 +8425,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.27 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.28 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -8660,7 +8760,7 @@ ip_armsid:
     .text " ALONGSIDE A REAL SID AT D400."
     .byte 13
     .byte 13
-    .text " MADE BY: ARMSID.COM"
+    .text " MADE BY: NOBOMI.CZ/8BIT"
     .byte 0
 
 ip_swinu:
@@ -9131,7 +9231,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.27 README"
+    .text "SIDDETECTOR V1.4.28 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9294,6 +9394,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.28 SIDVARIANT PROXY IN VICE 3.9"
+    .byte 13
+    .byte $9E
     .text "  V1.4.27 DOCS REORG; HW PROBE MATRIX"
     .byte 13
     .byte $9E
@@ -9304,9 +9407,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.24 INFO PAGE SCROLL BOUND"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.23 FIX README SCROLLER"
     .byte 13
     .byte 13
     .byte 0                         // null terminator

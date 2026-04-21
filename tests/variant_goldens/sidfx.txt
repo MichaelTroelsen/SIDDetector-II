@@ -1,0 +1,22 @@
+r01: 
+r02: ARMSID.....:
+r03: SWINSID....:
+r04: FPGASID....:
+r05: 6581 SID...:
+r06: 8580 SID...: 8580 FOUND
+r07: SIDKICK....:
+r08: BACKSID....:
+r09: KUNGFUSID..:
+r10: PD SID.....:
+r11: NOSID......:
+r12: SIDFX......: SIDFX FOUND
+r13: PAL/NTSC...: PAL-MACHINE FOUND C64
+r14: USID64.....:
+r16: STEREO SID.: D400 6581 FOUND
+r17: 
+r18: 
+r19: 
+r20: 
+r21: 
+r22: 
+r23: 

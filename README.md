@@ -1,4 +1,4 @@
-# SID Detector v1.4.27
+# SID Detector v1.4.28
 
 A Commodore 64 diagnostic utility that identifies 24+ variants of the SID (Sound Interface Device) chip — including real hardware, FPGA clones, microcontroller emulators, and PC emulators.
 
@@ -12,7 +12,7 @@ Syntax: KickAssembler (converted from ACME original)
 
 ## Screenshot
 
-![SID Detector v1.4.27 running in VICE](screenshot.png)
+![SID Detector v1.4.28 running in VICE](screenshot.png)
 
 ---
 
@@ -272,15 +272,58 @@ Press **I** to enter the info page for the detected chip. Navigate with CRSR LEF
 ## Build
 
 ```bash
-make        # assemble siddetector.asm → siddetector.prg  (requires Java + KickAss.jar)
-make run    # build and launch in WinVICE (x64sc)
-make clean  # remove siddetector.prg
+make          # assemble siddetector.asm → siddetector.prg  (requires Java + KickAss.jar)
+make run      # launch in the patched WinVICE 3.9
+make clean    # remove siddetector.prg
+
+# Variant-specific launches (patched VICE only)
+make run-armsid       make run-arm2sid      make run-swinu        make run-swinnano
+make run-fpgasid8580  make run-fpgasid6581  make run-pdsid        make run-kungfusid
+make run-backsid      make run-usid64       make run-sidfx        make run-skpico8580
+make run-skpico6581   make run-none
+
+# MixSID / stereo (8580 @ D400 + personality @ D420)
+make stereo-armsid    make stereo-arm2sid   make stereo-swinu
+make stereo-fpgasid   make stereo-sidfx
+
+# Regression harnesses
+make ci               # 32 unit tests       (~30 s)
+make ci-full          # ci + 14 variant goldens  (~4 min)
+make test-variants    # variant sweep alone
+make update-variant-goldens    # after intentional UI or personality change
 ```
 
 **Requirements:**
 - Java runtime
 - KickAssembler at `C:/debugger/kickasm/KickAss.jar`
-- WinVICE at `C:/winvice/bin/x64sc.exe`
+- **Patched WinVICE 3.9** at `C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe`  (build recipe: `docs/VICE_PROXY_BUILD.md`; patch: `patches/vice-sidvariant-v1.patch`).  All VICE-based tests and `make run-*` / `stereo-*` targets require this binary — the stock VICE doesn't know the `-sidvariant` flag.
+
+---
+
+## Chip-variant testing without hardware
+
+The repo ships a patched fork of **VICE 3.9** (in `../vice-sidvariant/`) with a
+`-sidvariant <name>` CLI flag.  Each emulated SID slot can wear a chip-family
+personality that responds to that chip's *detection magic-cookie* protocol —
+ARMSID, ARM2SID, SwinSID U/Nano, FPGASID 6581/8580, PDsid, KungFuSID,
+BackSID, SIDKick-pico 6581/8580, SIDFX, uSID64.  Audio still comes from ResID;
+only the detection protocol is intercepted.
+
+This makes CI exercise every chip family without plugging anything into a
+real C64.  The window title shows the active personality (e.g. `VICE
+(C64SC)  [SidVariant=sidfx]`) so you always know what's loaded.
+
+`make ci-full` runs 32 unit tests + a 14-case variant sweep that byte-diffs
+each variant's detection screen against a stored *golden* (in
+`tests/variant_goldens/`).  If a regression changes what a variant looks
+like, the diff is printed and CI fails loudly.
+
+Full design rationale and per-chip protocol tables:
+- `docs/ARMSID_PROXY_PLAN.md` — ultraplan with the 9-phase build-out.
+- `docs/VICE_PROXY_BUILD.md` — reproducible build from MSYS2.
+- `docs/VICE_PROXY_USAGE.md` — flag catalogue + make targets.
+- `patches/vice-sidvariant-v1.patch` — ~2 kLOC source diff against pristine
+  VICE 3.9 (upstream-ready, GPLv2+ inherited).
 
 ---
 

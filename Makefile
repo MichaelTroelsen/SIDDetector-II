@@ -1,5 +1,8 @@
 KICKASS   = java -jar C:/debugger/kickasm/KickAss.jar
-VICE      = C:/winvice/bin/x64sc.exe
+# Patched VICE 3.9 with -sidvariant personality layer (see docs/ARMSID_PROXY_PLAN.md).
+# Fall back to the upstream 3.7 install at C:/winvice/bin/x64sc.exe if the
+# patched build is not present.
+VICE      = C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe
 U64REMOTE = .\bin\u64remote.exe
 U64C64    = .\bin\c64u
 U64IP     = 192.168.1.64
@@ -16,15 +19,81 @@ TEST_DISP_PRG   = tests/test_dispatch.prg
 TEST_SUITE_SRC  = tests/test_suite.asm
 TEST_SUITE_PRG  = tests/test_suite.prg
 
-.PHONY: all run remote readresult screendump debug test test_dispatch test_suite ci hw_test release clean
+.PHONY: all run remote readresult screendump debug test test_dispatch test_suite ci ci-full hw_test release clean \
+	sfx run-none stereo-off \
+	run-armsid run-arm2sid run-swinu run-swinnano \
+	run-fpgasid8580 run-fpgasid6581 run-pdsid run-kungfusid \
+	run-backsid run-usid64 run-sidfx run-skpico8580 run-skpico6581 \
+	stereo-armsid stereo-arm2sid stereo-swinu stereo-sidfx stereo-fpgasid \
+	test-variants update-variant-goldens
 
 all: $(PRG)
 
 $(PRG): $(SRC)
 	$(KICKASS) $(SRC) -o $(PRG)
 
+# =========================================================================
+# Run targets — launch siddetector under the patched WinVICE 3.9 with a
+# specific SID-chip personality loaded.  See docs/ARMSID_PROXY_PLAN.md.
+# Every chip personality is exercised at the primary slot (D400); stereo-*
+# targets put a second personality at D420 for MixSID-style scenarios.
+# =========================================================================
+
 run: $(PRG)
+	$(VICE) -autostart $(PRG)
+
+sfx: $(PRG)
 	$(VICE) -autostart $(PRG) -sfxse -sfxsetype 3812
+
+# Plain vanilla 8580 at D400, no stereo, no SFX.  Useful as a regression
+# baseline after changes to the patched VICE.
+run-none stereo-off: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant none -sidextra 0
+
+# --- single-chip personality at D400 ---
+run-armsid: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant armsid    -sidextra 0
+run-arm2sid: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant arm2sid   -sidextra 0
+run-swinu: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant swinu     -sidextra 0
+run-swinnano: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant swinnano  -sidextra 0
+run-fpgasid8580: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant fpgasid8580 -sidextra 0
+run-fpgasid6581: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant fpgasid6581 -sidextra 0
+run-pdsid: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant pdsid     -sidextra 0
+run-kungfusid: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant kungfusid-new -sidextra 0
+run-backsid: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant backsid   -sidextra 0
+run-usid64: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant usid64    -sidextra 0
+run-sidfx: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant sidfx     -sidextra 0
+run-skpico8580: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant skpico-8580 -sidextra 0
+run-skpico6581: $(PRG)
+	$(VICE) -autostart $(PRG) -sidvariant skpico-6581 -sidextra 0
+
+# --- MixSID / stereo: 8580 at D400 + personality at D420 ---
+# SidStereo=1 + Sid2AddressStart=54304 ($D420), secondary wears the variant.
+stereo-armsid: $(PRG)
+	$(VICE) -autostart $(PRG) -sidextra 1 -sidvariant2 armsid
+stereo-arm2sid: $(PRG)
+	$(VICE) -autostart $(PRG) -sidextra 1 -sidvariant2 arm2sid
+stereo-swinu: $(PRG)
+	$(VICE) -autostart $(PRG) -sidextra 1 -sidvariant2 swinu
+stereo-fpgasid: $(PRG)
+	$(VICE) -autostart $(PRG) -sidextra 1 -sidvariant2 fpgasid8580
+stereo-sidfx: $(PRG)
+	$(VICE) -autostart $(PRG) -sidextra 1 -sidvariant2 sidfx
+
+# Run the full variant matrix headless and print pass/fail per variant.
+test-variants: $(PRG)
+	python scripts/variant_smoke.py
 
 remote: $(PRG)
 	$(U64REMOTE) $(U64IP) run $(PRG)
@@ -86,6 +155,18 @@ $(TEST_SUITE_PRG): $(TEST_SUITE_SRC)
 # tests/ci_result.bin (1-byte PRG containing pass_count), then quits.
 ci:
 	bash scripts/ci_test.sh
+
+# Full regression: unit tests + variant golden diff.  Use this as the pre-PR
+# / pre-release gate.  ~4 min total (30 s unit tests + 14 variant launches).
+ci-full: ci
+	@echo ""
+	@echo "=== SidVariant golden-diff sweep ==="
+	@python scripts/variant_smoke.py
+
+# Re-capture variant goldens after an intentional UI / detection change.
+# Commit the updated tests/variant_goldens/*.txt alongside the code change.
+update-variant-goldens: $(PRG)
+	python scripts/variant_smoke.py --update
 
 # Run automated hardware smoke test on real C64 via U64.
 # Deploys siddetector.prg, presses SPACE x3 (verifies detection stable),

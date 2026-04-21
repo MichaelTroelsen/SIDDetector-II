@@ -1,0 +1,2026 @@
+# VICE 3.9 → VICE 3.9 + SidVariant proxy layer
+#
+# Baseline: VICE 3.9 source tarball (https://vice-emu.sourceforge.io/index.html#download).
+# Apply with:
+#     cd vice-3.9/
+#     patch -p1 < vice-sidvariant-v1.patch
+#     ./autogen.sh && ./configure --enable-native-gtk3ui && make
+#
+# What this patch adds:
+#
+#   * Per-SID-chip "personality" layer driven by the SidVariant{,2..8} string
+#     resources and the -sidvariant{,2..8} command-line flags.
+#   * 10 built-in personalities:  armsid / arm2sid / swinu / swinnano /
+#     fpgasid8580 / fpgasid6581 / pdsid / kungfusid-new / kungfusid-old /
+#     backsid / skpico-8580 / skpico-6581 / sidfx / usid64 / none.
+#     Each responds to the chip's detection magic-cookie protocol but does
+#     not alter audio — ResID still synthesises the voice output.
+#   * Gtk3 window title now shows "[SidVariant=<name>]" so the active
+#     personality is visible at a glance.
+#
+# See docs/ARMSID_PROXY_PLAN.md in the siddetector2 repo for the full design
+# rationale and phase breakdown.
+
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/Makefile.am vice-sidvariant/src/sid/Makefile.am
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/Makefile.am	2024-12-24 20:12:44.000000000 +0100
++++ vice-sidvariant/src/sid/Makefile.am	2026-04-21 16:44:35.008027500 +0200
+@@ -38,6 +38,17 @@
+ 	sid-resources.h \
+ 	sid-snapshot.c \
+ 	sid-snapshot.h \
++	sid-variant-armsid.c \
++	sid-variant-backsid.c \
++	sid-variant-fpgasid.c \
++	sid-variant-kungfu.c \
++	sid-variant-pdsid.c \
++	sid-variant-sidfx.c \
++	sid-variant-skpico.c \
++	sid-variant-swinsid.c \
++	sid-variant-usid64.c \
++	sid-variant.c \
++	sid-variant.h \
+ 	sid.c \
+ 	sid.h \
+ 	wave6581.h \
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/Makefile.in vice-sidvariant/src/sid/Makefile.in
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/Makefile.in	2024-12-24 20:14:00.000000000 +0100
++++ vice-sidvariant/src/sid/Makefile.in	2026-04-21 16:44:53.836908200 +0200
+@@ -114,7 +114,12 @@
+ am_libsid_a_OBJECTS = catweaselmkiii.$(OBJEXT) fastsid.$(OBJEXT) \
+ 	hardsid.$(OBJEXT) parsid.$(OBJEXT) \
+ 	sid-cmdline-options.$(OBJEXT) sid-resources.$(OBJEXT) \
+-	sid-snapshot.$(OBJEXT) sid.$(OBJEXT)
++	sid-snapshot.$(OBJEXT) sid-variant-armsid.$(OBJEXT) \
++	sid-variant-backsid.$(OBJEXT) sid-variant-fpgasid.$(OBJEXT) \
++	sid-variant-kungfu.$(OBJEXT) sid-variant-pdsid.$(OBJEXT) \
++	sid-variant-sidfx.$(OBJEXT) sid-variant-skpico.$(OBJEXT) \
++	sid-variant-swinsid.$(OBJEXT) sid-variant-usid64.$(OBJEXT) \
++	sid-variant.$(OBJEXT) sid.$(OBJEXT)
+ libsid_a_OBJECTS = $(am_libsid_a_OBJECTS)
+ libsid_dtv_a_AR = $(AR) $(ARFLAGS)
+ @HAVE_RESID_TRUE@am__DEPENDENCIES_2 = resid-dtv.o
+@@ -122,7 +127,12 @@
+ am__objects_1 = catweaselmkiii.$(OBJEXT) fastsid.$(OBJEXT) \
+ 	hardsid.$(OBJEXT) parsid.$(OBJEXT) \
+ 	sid-cmdline-options.$(OBJEXT) sid-resources.$(OBJEXT) \
+-	sid-snapshot.$(OBJEXT) sid.$(OBJEXT)
++	sid-snapshot.$(OBJEXT) sid-variant-armsid.$(OBJEXT) \
++	sid-variant-backsid.$(OBJEXT) sid-variant-fpgasid.$(OBJEXT) \
++	sid-variant-kungfu.$(OBJEXT) sid-variant-pdsid.$(OBJEXT) \
++	sid-variant-sidfx.$(OBJEXT) sid-variant-skpico.$(OBJEXT) \
++	sid-variant-swinsid.$(OBJEXT) sid-variant-usid64.$(OBJEXT) \
++	sid-variant.$(OBJEXT) sid.$(OBJEXT)
+ am_libsid_dtv_a_OBJECTS = $(am__objects_1)
+ libsid_dtv_a_OBJECTS = $(am_libsid_dtv_a_OBJECTS)
+ AM_V_P = $(am__v_P_@AM_V@)
+@@ -145,6 +155,15 @@
+ 	./$(DEPDIR)/parsid.Po ./$(DEPDIR)/resid-dtv.Po \
+ 	./$(DEPDIR)/resid.Po ./$(DEPDIR)/sid-cmdline-options.Po \
+ 	./$(DEPDIR)/sid-resources.Po ./$(DEPDIR)/sid-snapshot.Po \
++	./$(DEPDIR)/sid-variant-armsid.Po \
++	./$(DEPDIR)/sid-variant-backsid.Po \
++	./$(DEPDIR)/sid-variant-fpgasid.Po \
++	./$(DEPDIR)/sid-variant-kungfu.Po \
++	./$(DEPDIR)/sid-variant-pdsid.Po \
++	./$(DEPDIR)/sid-variant-sidfx.Po \
++	./$(DEPDIR)/sid-variant-skpico.Po \
++	./$(DEPDIR)/sid-variant-swinsid.Po \
++	./$(DEPDIR)/sid-variant-usid64.Po ./$(DEPDIR)/sid-variant.Po \
+ 	./$(DEPDIR)/sid.Po
+ am__mv = mv -f
+ COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
+@@ -467,6 +486,17 @@
+ 	sid-resources.h \
+ 	sid-snapshot.c \
+ 	sid-snapshot.h \
++	sid-variant-armsid.c \
++	sid-variant-backsid.c \
++	sid-variant-fpgasid.c \
++	sid-variant-kungfu.c \
++	sid-variant-pdsid.c \
++	sid-variant-sidfx.c \
++	sid-variant-skpico.c \
++	sid-variant-swinsid.c \
++	sid-variant-usid64.c \
++	sid-variant.c \
++	sid-variant.h \
+ 	sid.c \
+ 	sid.h \
+ 	wave6581.h \
+@@ -547,6 +577,16 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-cmdline-options.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-resources.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-snapshot.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-armsid.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-backsid.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-fpgasid.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-kungfu.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-pdsid.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-sidfx.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-skpico.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-swinsid.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant-usid64.Po@am__quote@ # am--include-marker
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid-variant.Po@am__quote@ # am--include-marker
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sid.Po@am__quote@ # am--include-marker
+ 
+ $(am__depfiles_remade):
+@@ -715,6 +755,16 @@
+ 	-rm -f ./$(DEPDIR)/sid-cmdline-options.Po
+ 	-rm -f ./$(DEPDIR)/sid-resources.Po
+ 	-rm -f ./$(DEPDIR)/sid-snapshot.Po
++	-rm -f ./$(DEPDIR)/sid-variant-armsid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-backsid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-fpgasid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-kungfu.Po
++	-rm -f ./$(DEPDIR)/sid-variant-pdsid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-sidfx.Po
++	-rm -f ./$(DEPDIR)/sid-variant-skpico.Po
++	-rm -f ./$(DEPDIR)/sid-variant-swinsid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-usid64.Po
++	-rm -f ./$(DEPDIR)/sid-variant.Po
+ 	-rm -f ./$(DEPDIR)/sid.Po
+ 	-rm -f Makefile
+ distclean-am: clean-am distclean-compile distclean-generic \
+@@ -770,6 +820,16 @@
+ 	-rm -f ./$(DEPDIR)/sid-cmdline-options.Po
+ 	-rm -f ./$(DEPDIR)/sid-resources.Po
+ 	-rm -f ./$(DEPDIR)/sid-snapshot.Po
++	-rm -f ./$(DEPDIR)/sid-variant-armsid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-backsid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-fpgasid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-kungfu.Po
++	-rm -f ./$(DEPDIR)/sid-variant-pdsid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-sidfx.Po
++	-rm -f ./$(DEPDIR)/sid-variant-skpico.Po
++	-rm -f ./$(DEPDIR)/sid-variant-swinsid.Po
++	-rm -f ./$(DEPDIR)/sid-variant-usid64.Po
++	-rm -f ./$(DEPDIR)/sid-variant.Po
+ 	-rm -f ./$(DEPDIR)/sid.Po
+ 	-rm -f Makefile
+ maintainer-clean-am: distclean-am maintainer-clean-generic
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-cmdline-options.c vice-sidvariant/src/sid/sid-cmdline-options.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-cmdline-options.c	2024-12-24 20:12:44.000000000 +0100
++++ vice-sidvariant/src/sid/sid-cmdline-options.c	2026-04-20 21:37:43.809862400 +0200
+@@ -41,6 +41,7 @@
+ #include "sid.h"
+ #include "sid-cmdline-options.h"
+ #include "sid-resources.h"
++#include "sid-variant.h"
+ #include "util.h"
+ 
+ #ifdef HAVE_CATWEASELMKIII
+@@ -581,7 +582,11 @@
+             return -1;
+         }
+     }
+-    return cmdline_register_options(common_cmdline_options);
++    if (cmdline_register_options(common_cmdline_options) < 0) {
++        return -1;
++    }
++    /* SID-chip personality layer (-sidvariant family). */
++    return sid_variant_cmdline_options_init();
+ }
+ 
+ void sid_cmdline_options_shutdown(void)
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-resources.c vice-sidvariant/src/sid/sid-resources.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-resources.c	2024-12-24 20:12:44.000000000 +0100
++++ vice-sidvariant/src/sid/sid-resources.c	2026-04-20 21:37:23.105609200 +0200
+@@ -40,6 +40,7 @@
+ #endif
+ #include "resources.h"
+ #include "sid-resources.h"
++#include "sid-variant.h"
+ #include "sid.h"
+ #include "sound.h"
+ #include "types.h"
+@@ -482,6 +483,11 @@
+         return -1;
+     }
+ 
++    /* SID-chip personality layer (-sidvariant family). */
++    if (sid_variant_resources_init() < 0) {
++        return -1;
++    }
++
+     return sid_common_resources_init();
+ }
+ 
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-armsid.c vice-sidvariant/src/sid/sid-variant-armsid.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-armsid.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-armsid.c	2026-04-20 22:02:06.651410600 +0200
+@@ -0,0 +1,201 @@
++/** \file   sid-variant-armsid.c
++ *  \brief  ARMSID / ARM2SID magic-cookie responder.
++ *
++ *  Implements just enough of the ARMSID firmware protocol to make
++ *  siddetector.prg's `Checkarmsid` and `armsid_get_version` routines classify
++ *  this chip as ARMSID (firmware major 2) or ARM2SID (firmware major 3).
++ *  No audio is generated by this file — ResID continues to synthesise
++ *  whatever was written to the usual SID registers; we only override reads
++ *  of `$D41B`/`$D41C`/`$D41D` while the firmware is in "config mode".
++ *
++ *  ### Protocol overview
++ *
++ *  1. Host writes the PETSCII sequence `'D'` ($44) → `$D41F`,
++ *     `'I'` ($49) → `$D41E`, `'S'` ($53) → `$D41D`.  This atomically enters
++ *     *config mode*.
++ *  2. While in config mode:
++ *     - `$D41B` returns `'N'` ($4E)   — idle "NO-op" echo
++ *     - `$D41C` returns `'O'` ($4F)
++ *     - sequential `$D41D` reads on ARM2SID return the 8-slot map
++ *       (nibble-packed into 4 bytes, auto-incrementing pointer).
++ *  3. Inside config mode, sub-commands are issued by writing a
++ *     two-byte pair to `$D41F` + `$D41E`.  The pair encodes the query:
++ *
++ *     | D41F | D41E | Meaning                                   |
++ *     |------|------|-------------------------------------------|
++ *     | 'V'  | 'I'  | firmware version → D41B=major, D41C=minor |
++ *     | 'E'  | 'I'  | EI probe         → D41B='S', D41C='W'     |
++ *     | 'I'  | 'I'  | II probe         → D41B=2(ARM2)/other,    |
++ *     |      |      |                    D41C='L'/'R' (ARM2 only)|
++ *     | 'F'  | 'I'  | emulated SID     → D41B='6' or '8'        |
++ *     | 'G'  | 'I'  | auto-detect      → D41B='7'               |
++ *     | 'M'  | 'M'  | mode bits        → D41B low-2 = mode      |
++ *
++ *  4. Any non-cookie write to `$D418` (master-volume register) returns the
++ *     firmware to idle.  Real hardware also times out after ~100 ms; we
++ *     mimic that loosely (see `ARMSID_IDLE_TIMEOUT_CLK`).
++ *
++ *  The protocol bytes are PETSCII values but are numerically identical to
++ *  the ASCII forms for the characters used here (`d`=$44, `i`=$49, etc.),
++ *  so siddetector.asm writes raw hex literals and the values match.
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "maincpu.h"
++#include "sid-variant.h"
++
++/* Approx 100 ms at ~1 MHz PAL clock. */
++#define ARMSID_IDLE_TIMEOUT_CLK   100000UL
++
++/* Per-slot state, overlaid on sid_variant_slot_t::state[] (64 bytes).  */
++typedef struct {
++    uint8_t  in_config;    /* 1 while firmware has the 'D','I','S' cookie  */
++    uint8_t  last_d41f;    /* most recent write to D41F (sub-command high) */
++    uint8_t  last_d41e;    /* most recent write to D41E (sub-command low)  */
++    uint8_t  map_ptr;      /* ARM2SID map auto-incrementing D41D read idx  */
++    uint8_t  minor_bcd;    /* firmware minor version — 0..99, shown as .XX */
++    uint8_t  major;        /* firmware major (2 = ARMSID, 3 = ARM2SID)     */
++    uint8_t  emul_sid;     /* emulated SID type: '6' ($36) or '8' ($38)    */
++    uint8_t  ch_lr;        /* ARM2SID channel: 'L' ($4C) or 'R' ($52)      */
++    uint8_t  mode;         /* ARM2SID mode bits 0..2 (SID/SFX/SID+SFX)     */
++    uint8_t  map[4];       /* nibble-packed 8-slot map (ARM2SID only)      */
++} armsid_state_t;
++
++static armsid_state_t *as(sid_variant_slot_t *slot)
++{
++    return (armsid_state_t *)slot->state;
++}
++
++static void armsid_do_reset(sid_variant_slot_t *slot, uint8_t major)
++{
++    armsid_state_t *s = as(slot);
++    memset(s, 0, sizeof(*s));
++    s->major    = major;
++    s->minor_bcd = 50;           /* "V2.50" / "V3.50" — plausible default */
++    s->emul_sid = '8';           /* 8580 emulation  */
++    s->ch_lr    = 'L';           /* ARM2SID channel L */
++    s->mode     = 0;             /* SID-only mode (ARM2SID) */
++    /* Slot map (ARM2SID only): slot 0 (D400) = 'SIDL' code (1),
++     * slot 1 (D420) = 'SIDR' (2), rest empty.  Nibble-packed,
++     * low nibble first per `arm2sid_map_l` docs in siddetector.asm. */
++    s->map[0] = (uint8_t)((2u << 4) | 1u);   /* D400=SIDL, D420=SIDR */
++    s->map[1] = 0;                           /* D500, D520 = ---- */
++    s->map[2] = 0;                           /* DE00, DE20 = ---- */
++    s->map[3] = 0;                           /* DF00, DF20 = ---- */
++}
++
++void sid_variant_armsid_reset(sid_variant_slot_t *slot)
++{
++    uint8_t major = (slot->kind == SID_VARIANT_ARM2SID) ? 3 : 2;
++    armsid_do_reset(slot, major);
++}
++
++void sid_variant_armsid_observe_write(sid_variant_slot_t *slot,
++                                      uint16_t reg, uint8_t val)
++{
++    armsid_state_t *s = as(slot);
++
++    /* Lazy-init on first traffic — avoids having to hook machine_reset. */
++    if (s->major == 0) {
++        sid_variant_armsid_reset(slot);
++    }
++
++    /* Any write to D418 (master volume) drops us out of config mode, matching
++     * the real firmware's exit behaviour. */
++    if (reg == 0x18 && s->in_config) {
++        s->in_config = 0;
++        s->map_ptr   = 0;
++        return;
++    }
++
++    /* Track sub-command latches. */
++    if (reg == 0x1f) {
++        s->last_d41f = val;
++    } else if (reg == 0x1e) {
++        s->last_d41e = val;
++    } else if (reg == 0x1d) {
++        /* Entry cookie: 'D' in D41F, 'I' in D41E, then 'S' to D41D. */
++        if (!s->in_config
++            && s->last_d41f == 'D'
++            && s->last_d41e == 'I'
++            && val == 'S') {
++            s->in_config = 1;
++            s->map_ptr   = 0;
++        }
++    }
++
++    slot->last_write_clk = (unsigned long)maincpu_clk;
++}
++
++static int armsid_idle_timed_out(sid_variant_slot_t *slot)
++{
++    return ((unsigned long)maincpu_clk - slot->last_write_clk)
++           > ARMSID_IDLE_TIMEOUT_CLK;
++}
++
++int sid_variant_armsid_try_read(sid_variant_slot_t *slot,
++                                uint16_t reg, uint8_t *out)
++{
++    armsid_state_t *s = as(slot);
++
++    if (s->major == 0) {
++        sid_variant_armsid_reset(slot);
++    }
++    if (!s->in_config) {
++        return 0;   /* idle → pass through to ResID */
++    }
++    if (armsid_idle_timed_out(slot)) {
++        s->in_config = 0;
++        s->map_ptr   = 0;
++        return 0;
++    }
++
++    /* Decode active sub-command from the last D41F/D41E pair. */
++    switch (reg) {
++    case 0x1b:                              /* D41B — primary answer byte */
++        if (s->last_d41f == 'V' && s->last_d41e == 'I') {   /* version  */
++            *out = s->major;
++        } else if (s->last_d41f == 'E' && s->last_d41e == 'I') { /* EI  */
++            *out = 'S';
++        } else if (s->last_d41f == 'I' && s->last_d41e == 'I') { /* II  */
++            *out = (s->major == 3) ? 2 : 0;
++        } else if (s->last_d41f == 'F' && s->last_d41e == 'I') { /* SID type */
++            *out = s->emul_sid;
++        } else if (s->last_d41f == 'G' && s->last_d41e == 'I') { /* auto */
++            *out = '7';
++        } else if (s->last_d41f == 'M' && s->last_d41e == 'M') { /* mode */
++            *out = (uint8_t)(s->mode & 0x03);
++        } else {
++            *out = 'N';                                          /* idle */
++        }
++        return 1;
++
++    case 0x1c:                              /* D41C — secondary answer    */
++        if (s->last_d41f == 'V' && s->last_d41e == 'I') {
++            *out = s->minor_bcd;
++        } else if (s->last_d41f == 'E' && s->last_d41e == 'I') {
++            *out = 'W';
++        } else if (s->last_d41f == 'I' && s->last_d41e == 'I') {
++            *out = (s->major == 3) ? s->ch_lr : 0;
++        } else {
++            *out = 'O';                                          /* idle */
++        }
++        return 1;
++
++    case 0x1d:                              /* D41D — ARM2SID slot map    */
++        if (s->major == 3) {
++            uint8_t v = s->map[s->map_ptr & 0x03];
++            s->map_ptr = (uint8_t)((s->map_ptr + 1) & 0x03);
++            *out = v;
++        } else {
++            *out = 'R';      /* plain ARMSID returns 'R' here per spec */
++        }
++        return 1;
++
++    default:
++        return 0;   /* other registers pass through */
++    }
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-backsid.c vice-sidvariant/src/sid/sid-variant-backsid.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-backsid.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-backsid.c	2026-04-21 06:26:11.661062300 +0200
+@@ -0,0 +1,108 @@
++/** \file   sid-variant-backsid.c
++ *  \brief  BackSID magic-cookie responder.
++ *
++ *  Protocol (per siddetector.asm `checkbacksid`):
++ *    Pre-check:
++ *      Cold read $D41F — must NOT return $01 (any other value is fine).
++ *    Unlock sequence:
++ *      Write $02 → $D41B           (voice-3 OSC3 readback register; write as probe)
++ *      Write $01 → $D41C           (echo value — what D41F returns after unlock)
++ *      Write $B5 → $D41D           (unlock key 1)
++ *      Write $1D → $D41E           (unlock key 2)
++ *    Poll loop (15× with ~42 ms between reads):
++ *      Write $02 → $D41B each iteration (keeps the latch armed)
++ *      Read  $D41F  — real BackSID returns $01 once the unlock is complete.
++ *
++ *  Emulation behaviour:
++ *    - Before any writes we return $00 for the pre-check ($00 is not $01 so
++ *      it passes the siddetector pre-check).
++ *    - On seeing B5→D41D and 1D→D41E (after 02→D41B and 01→D41C) we transition
++ *      to "unlocked" and subsequent D41F reads return $01.
++ *    - A fresh machine reset or a non-matching write sequence clears state.
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "sid-variant.h"
++
++typedef struct {
++    uint8_t  step;           /* 0=idle, 1=got 02→D41B, 2=got 01→D41C, 3=got B5→D41D, 4=unlocked */
++    uint8_t  echo;           /* value stored from D41C (normally $01)               */
++    uint8_t  armed;          /* re-armed by write of $02 to D41B during poll        */
++} backsid_state_t;
++
++static backsid_state_t *bs(sid_variant_slot_t *slot)
++{
++    return (backsid_state_t *)slot->state;
++}
++
++void sid_variant_backsid_reset(sid_variant_slot_t *slot)
++{
++    memset(slot->state, 0, sizeof(slot->state));
++}
++
++void sid_variant_backsid_observe_write(sid_variant_slot_t *slot,
++                                       uint16_t reg, uint8_t val)
++{
++    backsid_state_t *s = bs(slot);
++
++    switch (reg) {
++    case 0x1b:                                  /* probe / re-arm */
++        if (val == 0x02) {
++            if (s->step == 0) {
++                s->step = 1;                    /* begin sequence */
++            }
++            s->armed = 1;                       /* also the poll re-arm */
++        }
++        break;
++
++    case 0x1c:                                  /* echo value */
++        if (s->step == 1 && val == 0x01) {
++            s->echo = val;
++            s->step = 2;
++        } else {
++            s->step = 0;
++        }
++        break;
++
++    case 0x1d:                                  /* unlock key 1 */
++        if (s->step == 2 && val == 0xB5) {
++            s->step = 3;
++        } else {
++            s->step = 0;
++        }
++        break;
++
++    case 0x1e:                                  /* unlock key 2 */
++        if (s->step == 3 && val == 0x1D) {
++            s->step = 4;                        /* unlocked */
++        } else {
++            s->step = 0;
++        }
++        break;
++
++    default:
++        /* Other writes (especially D418 volume) leave the state alone — the
++         * real BackSID unlock survives normal SID traffic. */
++        break;
++    }
++}
++
++int sid_variant_backsid_try_read(sid_variant_slot_t *slot,
++                                 uint16_t reg, uint8_t *out)
++{
++    backsid_state_t *s = bs(slot);
++
++    if (reg != 0x1f) {
++        return 0;
++    }
++    if (s->step >= 4 && s->armed) {
++        *out = s->echo;                         /* typically $01 */
++        return 1;
++    }
++    /* Pre-check: must not be $01.  Return $00 which is safely != $01. */
++    *out = 0x00;
++    return 1;
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-fpgasid.c vice-sidvariant/src/sid/sid-variant-fpgasid.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-fpgasid.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-fpgasid.c	2026-04-21 11:22:05.056767900 +0200
+@@ -0,0 +1,97 @@
++/** \file   sid-variant-fpgasid.c
++ *  \brief  FPGASID 6581 / 8580 magic-cookie responder.
++ *
++ *  Protocol (per siddetector.asm `checkfpgasid`):
++ *    1. Host writes magic cookie:
++ *         $81 → $D419,    $65 → $D41A         (enter config mode)
++ *         $80 → $D41E                          (identify mode)
++ *    2. Host reads:
++ *         $D419 → expect $1D      (identify byte lo)
++ *         $D41A → expect $F5      (identify byte hi — together forms $F51D)
++ *         $D41E → discarded
++ *         $D41F → $3F = 8580,  $00 = 6581
++ *    3. Host exits: $00 → $D419, $00 → $D41A
++ *
++ *  Two kind values select the mode: `fpgasid8580` returns $3F, `fpgasid6581`
++ *  returns $00.  State machine is deliberately narrow — only the exact
++ *  cookie sequence flips us into "identify" mode; any other writes drop back
++ *  to idle so unrelated SID traffic doesn't leave us mistakenly armed.
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "sid-variant.h"
++
++typedef struct {
++    uint8_t  cookie_lo;      /* last write to D419 */
++    uint8_t  cookie_hi;      /* last write to D41A */
++    uint8_t  identify;       /* 1 after $80 → D41E while cookie valid */
++} fpga_state_t;
++
++static fpga_state_t *fp(sid_variant_slot_t *slot)
++{
++    return (fpga_state_t *)slot->state;
++}
++
++void sid_variant_fpgasid_reset(sid_variant_slot_t *slot)
++{
++    memset(slot->state, 0, sizeof(slot->state));
++}
++
++void sid_variant_fpgasid_observe_write(sid_variant_slot_t *slot,
++                                       uint16_t reg, uint8_t val)
++{
++    fpga_state_t *s = fp(slot);
++
++    switch (reg) {
++    case 0x19:
++        s->cookie_lo = val;
++        if (val == 0x00) {
++            s->identify = 0;                  /* exit config */
++        }
++        break;
++    case 0x1a:
++        s->cookie_hi = val;
++        if (val == 0x00) {
++            s->identify = 0;
++        }
++        break;
++    case 0x1e:
++        if (val == 0x80
++            && s->cookie_lo == 0x81
++            && s->cookie_hi == 0x65) {
++            s->identify = 1;                  /* $F51D now readable */
++        }
++        break;
++    default:
++        break;
++    }
++}
++
++int sid_variant_fpgasid_try_read(sid_variant_slot_t *slot,
++                                 uint16_t reg, uint8_t *out)
++{
++    fpga_state_t *s = fp(slot);
++
++    if (!s->identify) {
++        return 0;
++    }
++    switch (reg) {
++    case 0x19:
++        *out = 0x1D;                          /* identify byte 0 */
++        return 1;
++    case 0x1a:
++        *out = 0xF5;                          /* identify byte 1 */
++        return 1;
++    case 0x1e:
++        *out = 0x00;                          /* read discarded by detector */
++        return 1;
++    case 0x1f:
++        *out = (slot->kind == SID_VARIANT_FPGASID_8580) ? 0x3F : 0x00;
++        return 1;
++    default:
++        return 0;
++    }
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-kungfu.c vice-sidvariant/src/sid/sid-variant-kungfu.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-kungfu.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-kungfu.c	2026-04-21 06:48:51.157713700 +0200
+@@ -0,0 +1,80 @@
++/** \file   sid-variant-kungfu.c
++ *  \brief  KungFuSID magic-cookie responder (new-firmware variant only).
++ *
++ *  Protocol (per siddetector.asm `checkkungfusid`):
++ *    1. Host writes $A5 to $D41D.
++ *    2. Host waits ~20 ms.
++ *    3. Host reads  $D41D and expects $5A (new-fw ACK) or $A5 (old-fw echo).
++ *
++ *  siddetector 1.4.x **only** accepts the new-firmware $5A ACK; the old
++ *  $A5-echo path was removed because real SIDs sometimes latch $A5 on the
++ *  bus for long enough to cause false positives.  This module mirrors that:
++ *  the `kungfusid-new` variant responds with $5A, while `kungfusid-old`
++ *  responds with $A5 for legacy-protocol testing.
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "sid-variant.h"
++
++typedef struct {
++    uint8_t  armed;          /* 1 if $A5 was just written to D41D */
++    uint8_t  last_v3ctrl;    /* last value written to D412 (voice-3 control) */
++} kfs_state_t;
++
++static kfs_state_t *ks(sid_variant_slot_t *slot)
++{
++    return (kfs_state_t *)slot->state;
++}
++
++void sid_variant_kungfu_reset(sid_variant_slot_t *slot)
++{
++    memset(slot->state, 0, sizeof(slot->state));
++}
++
++void sid_variant_kungfu_observe_write(sid_variant_slot_t *slot,
++                                      uint16_t reg, uint8_t val)
++{
++    kfs_state_t *s = ks(slot);
++    if (reg == 0x1d && val == 0xA5) {
++        s->armed = 1;
++    } else if (reg == 0x1d) {
++        s->armed = 0;                        /* other D41D write disarms */
++    }
++    if (reg == 0x12) {
++        s->last_v3ctrl = val;                /* track voice-3 ctrl for D41B poison */
++    }
++}
++
++int sid_variant_kungfu_try_read(sid_variant_slot_t *slot,
++                                uint16_t reg, uint8_t *out)
++{
++    kfs_state_t *s = ks(slot);
++
++    /* D41B (OSC3) readback — real KungFuSID does NOT emulate the SID voice-3
++     * sawtooth timing that `checkrealsid` expects ($00 / $03 / $05..$06 / $08
++     * at specific read phases), so we return 0 and break the sawtooth test
++     * on its 2nd read (`cmp #$03`).  But the mirror-test in `checksecondsid`
++     * writes $81 (noise) to D412 and also reads D41B — there it needs the
++     * noise output to come through ResID so the primary is correctly flagged
++     * as "a real chip".  We distinguish by the last written voice-3 ctrl
++     * value: only poison when sawtooth/pulse is active. */
++    if (reg == 0x1b && s->last_v3ctrl != 0x81) {
++        *out = 0x00;
++        return 1;
++    }
++
++    if (reg != 0x1d || !s->armed) {
++        return 0;
++    }
++    if (slot->kind == SID_VARIANT_KUNGFUSID_NEW) {
++        *out = 0x5A;         /* FW_UPDATE_START_ACK on new firmware */
++    } else {
++        *out = 0xA5;         /* old firmware simply echoes the written magic */
++    }
++    /* Single-shot: further reads see the chip's normal state again. */
++    s->armed = 0;
++    return 1;
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-pdsid.c vice-sidvariant/src/sid/sid-variant-pdsid.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-pdsid.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-pdsid.c	2026-04-21 06:25:34.837651700 +0200
+@@ -0,0 +1,67 @@
++/** \file   sid-variant-pdsid.c
++ *  \brief  PDsid magic-cookie responder.
++ *
++ *  Protocol (per siddetector.asm `checkpdsid`):
++ *    1. Host writes 'P' ($50) to $D41D.
++ *    2. Host writes 'D' ($44) to $D41E.
++ *    3. Host reads  $D41E and expects to receive 'S' ($53).
++ *
++ *  The responder is stateful: D41E only echoes 'S' if the immediately
++ *  preceding writes were P→$D41D and D→$D41E in that order.  Other traffic
++ *  resets the state machine, matching the real chip's narrow detection
++ *  window.
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "sid-variant.h"
++
++typedef struct {
++    uint8_t  got_p;          /* 1 once 'P' ($50) has been written to D41D */
++    uint8_t  got_pd;         /* 1 once 'D' ($44) has then been written to D41E */
++} pdsid_state_t;
++
++static pdsid_state_t *ps(sid_variant_slot_t *slot)
++{
++    return (pdsid_state_t *)slot->state;
++}
++
++void sid_variant_pdsid_reset(sid_variant_slot_t *slot)
++{
++    memset(slot->state, 0, sizeof(slot->state));
++}
++
++void sid_variant_pdsid_observe_write(sid_variant_slot_t *slot,
++                                     uint16_t reg, uint8_t val)
++{
++    pdsid_state_t *s = ps(slot);
++
++    if (reg == 0x1d) {
++        s->got_p  = (val == 'P') ? 1 : 0;
++        s->got_pd = 0;
++    } else if (reg == 0x1e) {
++        if (s->got_p && val == 'D') {
++            s->got_pd = 1;
++        } else {
++            s->got_p  = 0;
++            s->got_pd = 0;
++        }
++    }
++    /* Any other register write quietly resets the armed state so a lone
++     * P/D later in the program doesn't leave us stuck in "echo mode". */
++}
++
++int sid_variant_pdsid_try_read(sid_variant_slot_t *slot,
++                               uint16_t reg, uint8_t *out)
++{
++    pdsid_state_t *s = ps(slot);
++    if (reg == 0x1e && s->got_p && s->got_pd) {
++        *out = 'S';              /* magic echo */
++        s->got_p  = 0;           /* single-shot — second read sees open bus */
++        s->got_pd = 0;
++        return 1;
++    }
++    return 0;
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-sidfx.c vice-sidvariant/src/sid/sid-variant-sidfx.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-sidfx.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-sidfx.c	2026-04-21 16:43:49.906594800 +0200
+@@ -0,0 +1,232 @@
++/** \file   sid-variant-sidfx.c
++ *  \brief  SIDFX magic-cookie responder (SCI protocol + PNP handshake).
++ *
++ *  This is the most elaborate variant module — SIDFX uses a bit-serial
++ *  Serial Control Interface at $D41E (sync) + $D41F (data) instead of a
++ *  simple magic-cookie write pattern.
++ *
++ *  ### Wire protocol (`SCIPUT` / `SCIGET` in siddetector.asm, line ~4858)
++ *
++ *  ```
++ *    ldx #$07      ; 8 bits, MSB first
++ *    stx $D41E     ; sync low (marks start of byte)
++ *  loop:
++ *    pha
++ *    sta $D41F     ; TX bit 7 of tx_byte → chip
++ *    lda $D41F     ; RX bit 0 = received data bit
++ *    ror           ; carry = received bit
++ *    pla
++ *    rol           ; shift tx_byte left, insert received bit
++ *    dex
++ *    bpl loop      ; 8 bit pairs
++ *    stx $D41E     ; sync high (end of byte, x = -1 = $FF)
++ *  ```
++ *
++ *  So each SCI byte is: `$07 → $D41E`, 8× (write TX bit to $D41F, read bit
++ *  from $D41F), `$FF → $D41E`.  Bits are MSB-first in both directions.
++ *
++ *  ### Command sequence (`DETECTSIDFX`, line ~4594)
++ *
++ *  1. 16× `$00` (SCISYN) — bring chip to idle.
++ *  2. `$80`, `$50`, `$4E`, `$50` ("PNP" login).
++ *  3. `$00`, `$00`, `$00`, `$00` (four SCIGET reads).
++ *     Chip responds with vendor/product ID:  `$45`, `$4C`, `$12`, `$58`.
++ *  4. Optional REGUNHIDE (`$C0`, `$45`, `$00`) — control regs D41D/D41E
++ *     become readable and return SW1/SW2/SCAP/PLY and SID1/SID2 model bits.
++ *  5. Optional REGHIDE (`$C1`, `$44`, `$00`) — hide control regs again.
++ *
++ *  ### Default SIDFX configuration exposed to the host
++ *    - `SW1 = 0` (CTR), `SCAP = 1`, `PLY = 0`  →  `D41D = $08`.
++ *    - `SID1 = 6581`, `SID2 = NONE`             →  `D41E = $01`.
++ *  This gives siddetector a clean "SIDFX with one 6581 at D400, no secondary"
++ *  view.  Richer configs (LFT→D420, RGT→DE00, 8580 etc.) can be layered on
++ *  later via a dedicated resource (`SidVariantSidfxSw1="LFT"|"CTR"|"RGT"`).
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "sid-variant.h"
++
++typedef struct {
++    uint8_t  in_xact;            /* 1 while $07-$FF transaction is active  */
++    uint8_t  bit_idx;            /* 0..7 bits exchanged in current byte    */
++    uint8_t  tx_byte;            /* byte currently arriving from host      */
++    uint8_t  rx_byte;            /* byte currently being shifted out       */
++    uint8_t  cmd_phase;          /* 0=idle, 1..=progress through commands  */
++    uint8_t  unhidden;           /* 1 after REGUNHIDE, 0 after REGHIDE     */
++    uint8_t  d41d_val;           /* SW2/SW1/SCAP/PLY — returned when unhidden */
++    uint8_t  d41e_val;           /* SID2/SID1 — returned when unhidden      */
++    uint8_t  pending_rx[8];      /* queued response bytes after PNP etc.    */
++    uint8_t  rx_head;            /* next byte index to consume from pending_rx */
++    uint8_t  rx_tail;            /* one past last valid byte in pending_rx  */
++} sidfx_state_t;
++
++/* Command-phase constants — position in `cmd_phase` maps 1:1 to the byte
++ * index we *expect* to receive next. */
++#define SFX_PHASE_IDLE          0     /* waiting for $80 PNP prefix       */
++#define SFX_PHASE_GOT_80        1
++#define SFX_PHASE_GOT_80_50     2
++#define SFX_PHASE_GOT_80_50_4E  3
++#define SFX_PHASE_PNP_DONE      4     /* vendor bytes loaded into rx queue */
++#define SFX_PHASE_GOT_C0        10    /* REGUNHIDE first byte             */
++#define SFX_PHASE_GOT_C1        11    /* REGHIDE first byte               */
++
++static sidfx_state_t *fx(sid_variant_slot_t *slot)
++{
++    return (sidfx_state_t *)slot->state;
++}
++
++static void queue_rx(sidfx_state_t *s, const uint8_t *bytes, int n)
++{
++    int i;
++    s->rx_head = 0;
++    s->rx_tail = (uint8_t)n;
++    for (i = 0; i < n && i < (int)sizeof(s->pending_rx); i++) {
++        s->pending_rx[i] = bytes[i];
++    }
++}
++
++static uint8_t pop_rx(sidfx_state_t *s)
++{
++    if (s->rx_head < s->rx_tail) {
++        return s->pending_rx[s->rx_head++];
++    }
++    return 0x00;                 /* idle → $00 */
++}
++
++void sid_variant_sidfx_reset(sid_variant_slot_t *slot)
++{
++    sidfx_state_t *s = fx(slot);
++    memset(s, 0, sizeof(*s));
++    s->d41d_val = 0x08;          /* SW1=0 (CTR), SCAP=1, PLY=0             */
++    s->d41e_val = 0x01;          /* SID1=6581, SID2=NONE                   */
++}
++
++/* Called once per complete SCI byte exchange (when bit_idx reaches 8). */
++static void process_tx_byte(sidfx_state_t *s)
++{
++    uint8_t v = s->tx_byte;
++    static const uint8_t pnp_resp[4] = { 0x45, 0x4C, 0x12, 0x58 };
++
++    switch (s->cmd_phase) {
++    case SFX_PHASE_IDLE:
++        if (v == 0x80) {
++            s->cmd_phase = SFX_PHASE_GOT_80;
++        } else if (v == 0xC0) {
++            s->cmd_phase = SFX_PHASE_GOT_C0;
++        } else if (v == 0xC1) {
++            s->cmd_phase = SFX_PHASE_GOT_C1;
++        }
++        /* other values (incl. $00 SYN) leave us idle */
++        break;
++    case SFX_PHASE_GOT_80:
++        s->cmd_phase = (v == 0x50) ? SFX_PHASE_GOT_80_50 : SFX_PHASE_IDLE;
++        break;
++    case SFX_PHASE_GOT_80_50:
++        s->cmd_phase = (v == 0x4E) ? SFX_PHASE_GOT_80_50_4E : SFX_PHASE_IDLE;
++        break;
++    case SFX_PHASE_GOT_80_50_4E:
++        if (v == 0x50) {
++            s->cmd_phase = SFX_PHASE_PNP_DONE;
++            queue_rx(s, pnp_resp, 4);
++        } else {
++            s->cmd_phase = SFX_PHASE_IDLE;
++        }
++        break;
++    case SFX_PHASE_PNP_DONE:
++        /* 4 SCIGET calls follow — host transmits $00.  After the queue is
++         * drained, drop back to idle so further commands are recognised. */
++        if (s->rx_head >= s->rx_tail) {
++            s->cmd_phase = SFX_PHASE_IDLE;
++        }
++        break;
++    case SFX_PHASE_GOT_C0:
++        if (v == 0x45) {
++            s->unhidden = 1;
++        }
++        s->cmd_phase = SFX_PHASE_IDLE;
++        break;
++    case SFX_PHASE_GOT_C1:
++        if (v == 0x44) {
++            s->unhidden = 0;
++        }
++        s->cmd_phase = SFX_PHASE_IDLE;
++        break;
++    default:
++        s->cmd_phase = SFX_PHASE_IDLE;
++        break;
++    }
++}
++
++static void start_byte(sidfx_state_t *s)
++{
++    s->in_xact = 1;
++    s->bit_idx = 0;
++    s->tx_byte = 0;
++    s->rx_byte = pop_rx(s);
++}
++
++void sid_variant_sidfx_observe_write(sid_variant_slot_t *slot,
++                                     uint16_t reg, uint8_t val)
++{
++    sidfx_state_t *s = fx(slot);
++
++    if (reg == 0x1e) {
++        /* SCI sync signal. */
++        if (val == 0x07) {
++            start_byte(s);
++        } else if (val == 0xFF) {
++            s->in_xact = 0;
++        }
++        /* Other values (e.g. $00 write during detection-unrelated code) —
++         * ignore; we only care about the explicit $07/$FF framing. */
++        return;
++    }
++
++    if (reg == 0x1f && s->in_xact) {
++        /* Host TX bit = bit 7 of the write value.  Accumulate MSB-first. */
++        s->tx_byte = (uint8_t)((s->tx_byte << 1) | (val >> 7));
++        s->bit_idx++;
++        if (s->bit_idx >= 8) {
++            process_tx_byte(s);
++            s->bit_idx = 0;
++            /* Prepare the next rx_byte — the protocol exchanges 8 bits per
++             * SCI call, then SCIPUT continues with the next write+read pair
++             * (bit_idx re-set).  But siddetector's SCIPUT transfers exactly
++             * 8 bits then writes $FF to D41E — we get the next `start_byte`
++             * via $07→D41E.  No work needed here. */
++        }
++        return;
++    }
++}
++
++int sid_variant_sidfx_try_read(sid_variant_slot_t *slot,
++                               uint16_t reg, uint8_t *out)
++{
++    sidfx_state_t *s = fx(slot);
++
++    if (reg == 0x1f && s->in_xact) {
++        /* Emit MSB of current rx_byte as bit 0 of the read value — the only
++         * bit siddetector cares about (ror/rol chain on bit 0). */
++        uint8_t bit = (uint8_t)((s->rx_byte >> 7) & 1);
++        s->rx_byte = (uint8_t)(s->rx_byte << 1);
++        *out = bit;
++        return 1;
++    }
++
++    /* When unhidden, D41D and D41E expose SIDFX config registers. */
++    if (s->unhidden) {
++        if (reg == 0x1d) {
++            *out = s->d41d_val;
++            return 1;
++        }
++        if (reg == 0x1e) {
++            *out = s->d41e_val;
++            return 1;
++        }
++    }
++
++    return 0;
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-skpico.c vice-sidvariant/src/sid/sid-variant-skpico.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-skpico.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-skpico.c	2026-04-21 11:22:36.270271600 +0200
+@@ -0,0 +1,147 @@
++/** \file   sid-variant-skpico.c
++ *  \brief  SIDKick-pico magic-cookie responder.
++ *
++ *  Three-phase protocol (per siddetector.asm `checkskpico`):
++ *
++ *  Phase 1 — identity
++ *      $FF → $D41F               (enter config mode)
++ *      $E0 → $D41E               (set byte pointer to 0)
++ *      read $D41D → 'S' ($53)
++ *      $E1 → $D41E               (advance pointer)
++ *      read $D41D → 'K' ($4B)
++ *
++ *  Phase 2 — model detection  (exits config mode first)
++ *      $00 → $D418               (non-config-reg write → leave config mode)
++ *      $FF → $D40E, $D40F, $D412 (preconditions)
++ *      $20 → $D412               (REG_AUTO_DETECT_STEP = 1 trigger)
++ *      read $D41B → 2 (8580) / 3 (6581)
++ *      $00 → $D412               (stop waveform)
++ *
++ *  Phase 3 — FM / CFG_SID2_TYPE readback (only if 8580 was detected)
++ *      $FF → $D41F               (re-enter config mode)
++ *      $00 → $D41E               (page 0, starting at config[0])
++ *      read $D41D  × 9           (first 8 discarded, 9th = CFG_SID2_TYPE)
++ *
++ *  State tracking:
++ *    - `cfg_mode` flips on $FF→D41F and clears on any non-config-reg write
++ *      (siddetector uses $00→D418 for that).
++ *    - `ptr` holds the current config-page byte pointer ($00..$FF).  Reads
++ *      of $D41D in config mode return the byte at `ptr` then advance it.
++ *    - Auto-detect sequence: track the last three D412 writes.  When the
++ *      pattern ( $FF , $FF , $20 ) is seen in rapid succession with
++ *      D40E=$FF and D40F=$FF, the next D41B read returns the model byte.
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "sid-variant.h"
++
++typedef struct {
++    uint8_t  cfg_mode;         /* 1 while in config mode */
++    uint8_t  ptr;              /* current config byte pointer */
++    uint8_t  d40e;             /* last D40E write (precondition track) */
++    uint8_t  d40f;             /* last D40F write */
++    uint8_t  d412_prev;        /* D412 write trace for auto-detect trigger */
++    uint8_t  d412;             /* most recent D412 write */
++    uint8_t  autodetect_armed; /* 1 when the FF,FF,FF,20 pattern has been seen */
++} skpico_state_t;
++
++static skpico_state_t *sk(sid_variant_slot_t *slot)
++{
++    return (skpico_state_t *)slot->state;
++}
++
++void sid_variant_skpico_reset(sid_variant_slot_t *slot)
++{
++    memset(slot->state, 0, sizeof(slot->state));
++}
++
++void sid_variant_skpico_observe_write(sid_variant_slot_t *slot,
++                                      uint16_t reg, uint8_t val)
++{
++    skpico_state_t *s = sk(slot);
++
++    switch (reg) {
++    case 0x0e:
++        s->d40e = val;
++        break;
++    case 0x0f:
++        s->d40f = val;
++        break;
++    case 0x12:
++        /* Auto-detect trigger:  previous writes were D40E=$FF, D40F=$FF, then
++         * D412 goes $FF → $FF → $20.  Arm when that happens. */
++        s->d412_prev = s->d412;
++        s->d412      = val;
++        if (val == 0x20
++            && s->d412_prev == 0xFF
++            && s->d40e == 0xFF
++            && s->d40f == 0xFF) {
++            s->autodetect_armed = 1;
++        } else if (val == 0x00) {
++            s->autodetect_armed = 0;        /* D412=$00 stops waveform */
++        }
++        break;
++    case 0x18:
++        /* Writing anything to D418 leaves config mode (detector uses $00). */
++        s->cfg_mode = 0;
++        break;
++    case 0x1e:
++        /* Config-mode pointer set / advance. */
++        if (s->cfg_mode) {
++            s->ptr = val;
++        }
++        break;
++    case 0x1f:
++        if (val == 0xFF) {
++            s->cfg_mode = 1;
++            /* leave ptr alone — detector will set it next via D41E */
++        }
++        break;
++    default:
++        break;
++    }
++}
++
++int sid_variant_skpico_try_read(sid_variant_slot_t *slot,
++                                uint16_t reg, uint8_t *out)
++{
++    skpico_state_t *s = sk(slot);
++
++    if (reg == 0x1b && s->autodetect_armed) {
++        /* model detect:  2 = 8580, 3 = 6581 */
++        *out = (slot->kind == SID_VARIANT_SKPICO_8580) ? 0x02 : 0x03;
++        /* Single-shot — consumed by the detector; siddetector writes $00 to
++         * D412 immediately after, which our observer already clears. */
++        s->autodetect_armed = 0;
++        return 1;
++    }
++
++    if (reg == 0x1d && s->cfg_mode) {
++        uint8_t v = 0x00;
++        switch (s->ptr) {
++        case 0xE0:  v = 'S';  break;    /* VERSION_STR[0] = 'S' */
++        case 0xE1:  v = 'K';  break;    /* VERSION_STR[1] = 'K' */
++        case 0xE2:  v = 'I';  break;    /* plausible defaults for Phase-3 ignored bytes */
++        case 0xE3:  v = 'D';  break;
++        case 0xE4:  v = 'P';  break;
++        case 0xE5:  v = 'I';  break;
++        case 0xE6:  v = 'C';  break;
++        case 0xE7:  v = 'O';  break;
++        /* Page-0 config reads (Phase 3) — detector reads 9 bytes.  We just
++         * return 0 for config[0..7]; config[8] = CFG_SID2_TYPE = 0 means
++         * "no secondary / no FM", which is the safe default. */
++        default:
++            v = 0x00;
++            break;
++        }
++        *out = v;
++        /* Auto-increment the pointer on each read, matching the real chip. */
++        s->ptr = (uint8_t)(s->ptr + 1);
++        return 1;
++    }
++
++    return 0;
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-swinsid.c vice-sidvariant/src/sid/sid-variant-swinsid.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-swinsid.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-swinsid.c	2026-04-21 08:26:35.658922300 +0200
+@@ -0,0 +1,160 @@
++/** \file   sid-variant-swinsid.c
++ *  \brief  SwinSID Ultimate + SwinSID Nano magic-cookie responders.
++ *
++ *  Two distinct chips from the same family, both handled here because their
++ *  state machines are small and share no user-visible code paths with other
++ *  variants.
++ *
++ *  ### SwinSID Ultimate (`swinu`)
++ *
++ *  Uses the same DIS-cookie protocol as ARMSID (`'D'→$D41F`, `'I'→$D41E`,
++ *  `'S'→$D41D`).  Differences from ARMSID:
++ *    - `$D41B` returns `'S'` ($53) instead of `'N'` ($4E).
++ *    - `$D41C` returns `'W'` ($57) instead of `'O'` ($4F).
++ *    - No config-mode state machine — a single read of D41B/D41C is the
++ *      entire probe (siddetector's `Checkarmsid` dispatches on $53 → type $04).
++ *
++ *  ### SwinSID Nano (`swinnano`)
++ *
++ *  Detected via a *noise LFSR update-rate* test (siddetector's
++ *  `checkswinsidnano`, line ~4186).  The procedure:
++ *    1. Write $00 to all D400-D41F registers (reset).
++ *    2. Write $FFFF → D40E/D40F (voice-3 freq = max).
++ *    3. Write $81 → D412 (voice-3 ctrl = noise + gate).
++ *    4. Wait ~12 ms for the oscillator to start.
++ *    5. Stage 1 — read $D41B 8×; count how many adjacent pairs differ.
++ *         Real 6581/8580: LFSR updates every clock → cnt == 7 always.
++ *         SwinSID Nano:   AVR updates at ~44 kHz → cnt is 3…7.
++ *         Accept any attempt (of 3) where `cnt < 7`.
++ *    6. Wait 50 ms more.
++ *    7. Stage 2 — 8 more reads; require `cnt >= 3`.
++ *
++ *  Emulation: when voice-3 ctrl is set to noise AND voice-3 freq is "high
++ *  enough to be testing the LFSR", we return a sequence that changes every
++ *  other read — yielding `cnt ≈ 4` in 7 pairs.  That lands well inside the
++ *  "not real SID" band for Stage 1 and satisfies the `>= 3` gate for Stage 2.
++ *  Reads in any other context (voice-3 idle, or non-noise waveform) fall
++ *  through to ResID so unrelated siddetector probes still work.
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "sid-variant.h"
++
++/* --------------------------------------------------------------------- */
++/* SwinSID Ultimate                                                      */
++/* --------------------------------------------------------------------- */
++
++typedef struct {
++    uint8_t  in_config;      /* 1 after 'D'/'I'/'S' cookie received      */
++    uint8_t  last_d41f;
++    uint8_t  last_d41e;
++} swinu_state_t;
++
++static swinu_state_t *su(sid_variant_slot_t *slot)
++{
++    return (swinu_state_t *)slot->state;
++}
++
++void sid_variant_swinu_reset(sid_variant_slot_t *slot)
++{
++    memset(slot->state, 0, sizeof(slot->state));
++}
++
++void sid_variant_swinu_observe_write(sid_variant_slot_t *slot,
++                                     uint16_t reg, uint8_t val)
++{
++    swinu_state_t *s = su(slot);
++    if (reg == 0x1f) {
++        s->last_d41f = val;
++    } else if (reg == 0x1e) {
++        s->last_d41e = val;
++    } else if (reg == 0x1d) {
++        if (s->last_d41f == 'D' && s->last_d41e == 'I' && val == 'S') {
++            s->in_config = 1;
++        }
++    } else if (reg == 0x18) {
++        /* Volume write clears config state, matching the real firmware's
++         * "exit on unrelated traffic" behaviour. */
++        s->in_config = 0;
++    }
++}
++
++int sid_variant_swinu_try_read(sid_variant_slot_t *slot,
++                               uint16_t reg, uint8_t *out)
++{
++    swinu_state_t *s = su(slot);
++    if (!s->in_config) {
++        return 0;
++    }
++    if (reg == 0x1b) {
++        *out = 'S';                /* $53 — SwinSID Ultimate discriminator */
++        return 1;
++    }
++    if (reg == 0x1c) {
++        *out = 'W';                /* $57 */
++        return 1;
++    }
++    return 0;
++}
++
++/* --------------------------------------------------------------------- */
++/* SwinSID Nano                                                          */
++/* --------------------------------------------------------------------- */
++
++typedef struct {
++    uint8_t  v3ctrl;         /* last write to D412                        */
++    uint8_t  freq_lo;        /* last write to D40E                        */
++    uint8_t  freq_hi;        /* last write to D40F                        */
++    uint8_t  read_counter;   /* ticks on every intercepted D41B read      */
++} swinnano_state_t;
++
++static swinnano_state_t *sn(sid_variant_slot_t *slot)
++{
++    return (swinnano_state_t *)slot->state;
++}
++
++void sid_variant_swinnano_reset(sid_variant_slot_t *slot)
++{
++    memset(slot->state, 0, sizeof(slot->state));
++}
++
++void sid_variant_swinnano_observe_write(sid_variant_slot_t *slot,
++                                        uint16_t reg, uint8_t val)
++{
++    swinnano_state_t *s = sn(slot);
++    switch (reg) {
++    case 0x0e: s->freq_lo = val; break;
++    case 0x0f: s->freq_hi = val; break;
++    case 0x12: s->v3ctrl  = val; break;
++    default:   break;
++    }
++}
++
++int sid_variant_swinnano_try_read(sid_variant_slot_t *slot,
++                                  uint16_t reg, uint8_t *out)
++{
++    swinnano_state_t *s = sn(slot);
++
++    if (reg != 0x1b) {
++        return 0;
++    }
++
++    /* Real SwinSID Nano does NOT match siddetector's `checkrealsid` sawtooth
++     * fingerprint ($00/$03/$05-6/$08 at specific read phases), so its D41B
++     * always looks "wrong" to that probe.  We intercept every D41B read and
++     * return a slow-changing pseudo-random sequence.
++     *
++     * Pattern: `counter >> 1` yields pairs like 0,0,1,1,2,2,3,3 — seven
++     * comparisons see 3-4 changes.  That simultaneously:
++     *   - fails `checkrealsid` (second expected byte $03 rarely matches)
++     *   - passes `checkswinsidnano` Stage 1  (cnt < 7)
++     *   - passes `checkswinsidnano` Stage 2  (cnt >= 3)
++     *   - looks "non-zero" to mirror tests, matching real chip behaviour. */
++    s->read_counter++;
++    *out = (uint8_t)(s->read_counter >> 1);
++    (void)s->v3ctrl;  (void)s->freq_lo;  (void)s->freq_hi;  /* tracked but unused for now */
++    return 1;
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-usid64.c vice-sidvariant/src/sid/sid-variant-usid64.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant-usid64.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant-usid64.c	2026-04-21 06:26:28.608568300 +0200
+@@ -0,0 +1,80 @@
++/** \file   sid-variant-usid64.c
++ *  \brief  uSID64 magic-cookie responder.
++ *
++ *  Protocol (per siddetector.asm `checkusid64`):
++ *    Host writes the unlock sequence to $D41F, one byte at a time:
++ *        $F0 → $D41F
++ *        $10 → $D41F
++ *        $63 → $D41F
++ *        $00 → $D41F   (mode = auto)
++ *        $FF → $D41F
++ *    Host reads $D41F and expects:
++ *        - A value >= $E0 AND != $FF.  uSID64 firmware returns $FE; the
++ *          detector accepts anything in [$E0..$FE] as "uSID64 present".
++ *        - $FF = open bus  → not present.
++ *        - < $E0 = NOSID bus decay → not present.
++ *
++ *  Emulation: track the 5-byte unlock sequence; once complete, next D41F
++ *  read returns $FE and then the state resets back to idle (pre-unlock
++ *  reads return $FF open-bus so a probe before the unlock doesn't
++ *  falsely succeed).
++ */
++
++#include "vice.h"
++
++#include <string.h>
++
++#include "sid-variant.h"
++
++typedef struct {
++    uint8_t  step;           /* 0..5 — counts matched bytes of the unlock  */
++} usid64_state_t;
++
++static const uint8_t unlock_seq[5] = { 0xF0, 0x10, 0x63, 0x00, 0xFF };
++
++static usid64_state_t *us(sid_variant_slot_t *slot)
++{
++    return (usid64_state_t *)slot->state;
++}
++
++void sid_variant_usid64_reset(sid_variant_slot_t *slot)
++{
++    memset(slot->state, 0, sizeof(slot->state));
++}
++
++void sid_variant_usid64_observe_write(sid_variant_slot_t *slot,
++                                      uint16_t reg, uint8_t val)
++{
++    usid64_state_t *s = us(slot);
++
++    if (reg != 0x1f) {
++        /* Traffic to other registers doesn't affect the cookie — real chip
++         * has a dedicated state machine gated on $D41F writes. */
++        return;
++    }
++    if (s->step < 5 && val == unlock_seq[s->step]) {
++        s->step++;
++    } else if (val == unlock_seq[0]) {
++        s->step = 1;         /* re-start sequence on fresh $F0 */
++    } else {
++        s->step = 0;         /* mismatch → reset */
++    }
++}
++
++int sid_variant_usid64_try_read(sid_variant_slot_t *slot,
++                                uint16_t reg, uint8_t *out)
++{
++    usid64_state_t *s = us(slot);
++    if (reg != 0x1f) {
++        return 0;
++    }
++    if (s->step >= 5) {
++        *out = 0xFE;           /* uSID64 config-byte answer */
++        s->step = 0;           /* single-shot */
++        return 1;
++    }
++    /* Pre-unlock reads look like open bus so the NOSID-artifact filter
++     * ($FF in siddetector) trips and uSID64 is NOT falsely detected. */
++    *out = 0xFF;
++    return 1;
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant.c vice-sidvariant/src/sid/sid-variant.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant.c	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant.c	2026-04-21 16:50:41.976017800 +0200
+@@ -0,0 +1,390 @@
++/** \file   sid-variant.c
++ *  \brief  Phase 1 skeleton — resource/CLI wiring + no-op dispatcher.
++ *
++ *  This file adds the `SidVariant` string resource family and the
++ *  `-sidvariant` CLI flag family but intentionally ships **no chip
++ *  personality logic yet**.  All variant names are accepted ("none",
++ *  "armsid", "arm2sid", "swinu", "swinnano", "fpgasid6581", "fpgasid8580",
++ *  "pdsid", "kungfusid-old", "kungfusid-new", "backsid", "skpico-8580",
++ *  "skpico-6581", "sidfx", "usid64") but every chip still behaves like plain
++ *  ResID.  Later phases (see docs/ARMSID_PROXY_PLAN.md in the siddetector
++ *  repo) flesh out the per-chip state machines behind `ops->try_read` /
++ *  `ops->observe_write`.
++ */
++
++#include "vice.h"
++
++#include <stdio.h>
++#include <string.h>
++
++#include "cmdline.h"
++#include "lib.h"
++#include "log.h"
++#include "resources.h"
++#include "sid-variant.h"
++#include "types.h"
++#include "util.h"
++
++/* Variant kind enum is declared in sid-variant.h so per-variant modules
++ * can switch on it.  The `known_names[]` table below mirrors the enum. */
++
++static const char * const known_names[SID_VARIANT_COUNT] = {
++    [SID_VARIANT_NONE]           = "none",
++    [SID_VARIANT_ARMSID]         = "armsid",
++    [SID_VARIANT_ARM2SID]        = "arm2sid",
++    [SID_VARIANT_SWINU]          = "swinu",
++    [SID_VARIANT_SWINNANO]       = "swinnano",
++    [SID_VARIANT_FPGASID_6581]   = "fpgasid6581",
++    [SID_VARIANT_FPGASID_8580]   = "fpgasid8580",
++    [SID_VARIANT_PDSID]          = "pdsid",
++    [SID_VARIANT_KUNGFUSID_OLD]  = "kungfusid-old",
++    [SID_VARIANT_KUNGFUSID_NEW]  = "kungfusid-new",
++    [SID_VARIANT_BACKSID]        = "backsid",
++    [SID_VARIANT_SKPICO_8580]    = "skpico-8580",
++    [SID_VARIANT_SKPICO_6581]    = "skpico-6581",
++    [SID_VARIANT_SIDFX]          = "sidfx",
++    [SID_VARIANT_USID64]         = "usid64",
++};
++
++/* sid_variant_slot_t struct is declared in sid-variant.h so per-variant
++ * modules can access `state[]` through `sid_variant_slot(chipno)`. */
++
++static sid_variant_slot_t slots[SID_VARIANT_NUM_CHIPS];
++
++sid_variant_slot_t *sid_variant_slot(int chipno)
++{
++    if (chipno < 0 || chipno >= SID_VARIANT_NUM_CHIPS) {
++        return NULL;
++    }
++    return &slots[chipno];
++}
++
++/* Forward declarations for per-variant handlers. */
++#define VARIANT_DECL(suffix) \
++    extern void sid_variant_##suffix##_observe_write(sid_variant_slot_t *, uint16_t, uint8_t); \
++    extern int  sid_variant_##suffix##_try_read(sid_variant_slot_t *, uint16_t, uint8_t *); \
++    extern void sid_variant_##suffix##_reset(sid_variant_slot_t *)
++VARIANT_DECL(armsid);
++VARIANT_DECL(pdsid);
++VARIANT_DECL(kungfu);
++VARIANT_DECL(backsid);
++VARIANT_DECL(usid64);
++VARIANT_DECL(swinu);
++VARIANT_DECL(swinnano);
++VARIANT_DECL(fpgasid);
++VARIANT_DECL(skpico);
++VARIANT_DECL(sidfx);
++#undef VARIANT_DECL
++
++/* log target set up lazily on first resource set so CLI errors appear cleanly. */
++static log_t variant_log = LOG_DEFAULT;
++
++static sid_variant_kind_t name_to_kind(const char *name)
++{
++    int i;
++    if (name == NULL || *name == '\0') {
++        return SID_VARIANT_NONE;
++    }
++    for (i = 0; i < SID_VARIANT_COUNT; i++) {
++        if (known_names[i] != NULL && strcmp(known_names[i], name) == 0) {
++            return (sid_variant_kind_t)i;
++        }
++    }
++    return SID_VARIANT_COUNT;   /* sentinel = unknown */
++}
++
++/* ------------------------------------------------------------------------- */
++/* Resource setter — one instance, driven per-chip via the void* param which
++ * carries the chip index (0..7).                                            */
++/* ------------------------------------------------------------------------- */
++
++static int set_sid_variant(const char *val, void *param)
++{
++    int chipno = vice_ptr_to_int(param);
++    sid_variant_kind_t k;
++
++    if (chipno < 0 || chipno >= SID_VARIANT_NUM_CHIPS) {
++        return -1;
++    }
++
++    k = name_to_kind(val);
++    if (k == SID_VARIANT_COUNT) {
++        log_error(variant_log,
++                  "Unknown SidVariant%s name '%s'. Known names: "
++                  "none, armsid, arm2sid, swinu, swinnano, fpgasid6581, "
++                  "fpgasid8580, pdsid, kungfusid-old, kungfusid-new, backsid, "
++                  "skpico-8580, skpico-6581, sidfx, usid64.",
++                  (chipno == 0) ? "" : (const char[]){(char)('0' + chipno + 1), 0},
++                  (val != NULL) ? val : "(null)");
++        return -1;
++    }
++
++    if (util_string_set(&slots[chipno].name, (val != NULL) ? val : "none")) {
++        return 0;
++    }
++    slots[chipno].kind = k;
++    memset(slots[chipno].state, 0, sizeof(slots[chipno].state));
++    slots[chipno].last_write_clk = 0;
++    /* Give each variant a chance to initialise defaults in state[] (e.g.
++     * SIDFX's default D41D/D41E values, ARMSID's firmware-major/minor).   */
++    switch (k) {
++    case SID_VARIANT_ARMSID:
++    case SID_VARIANT_ARM2SID:
++        sid_variant_armsid_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_PDSID:
++        sid_variant_pdsid_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_KUNGFUSID_OLD:
++    case SID_VARIANT_KUNGFUSID_NEW:
++        sid_variant_kungfu_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_BACKSID:
++        sid_variant_backsid_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_USID64:
++        sid_variant_usid64_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_SWINU:
++        sid_variant_swinu_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_SWINNANO:
++        sid_variant_swinnano_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_FPGASID_6581:
++    case SID_VARIANT_FPGASID_8580:
++        sid_variant_fpgasid_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_SKPICO_6581:
++    case SID_VARIANT_SKPICO_8580:
++        sid_variant_skpico_reset(&slots[chipno]);
++        break;
++    case SID_VARIANT_SIDFX:
++        sid_variant_sidfx_reset(&slots[chipno]);
++        break;
++    default:
++        break;
++    }
++    return 0;
++}
++
++/* ------------------------------------------------------------------------- */
++/* Resource table.  Static because resources_register_string() takes a table
++ * and each entry's `param` field carries the chip index back into the
++ * setter.                                                                   */
++/* ------------------------------------------------------------------------- */
++
++static resource_string_t variant_resources_string[] = {
++    { "SidVariant",  "none", RES_EVENT_NO, NULL,
++      &slots[0].name, set_sid_variant, (void *)0 },
++    { "SidVariant2", "none", RES_EVENT_NO, NULL,
++      &slots[1].name, set_sid_variant, (void *)1 },
++    { "SidVariant3", "none", RES_EVENT_NO, NULL,
++      &slots[2].name, set_sid_variant, (void *)2 },
++    { "SidVariant4", "none", RES_EVENT_NO, NULL,
++      &slots[3].name, set_sid_variant, (void *)3 },
++    { "SidVariant5", "none", RES_EVENT_NO, NULL,
++      &slots[4].name, set_sid_variant, (void *)4 },
++    { "SidVariant6", "none", RES_EVENT_NO, NULL,
++      &slots[5].name, set_sid_variant, (void *)5 },
++    { "SidVariant7", "none", RES_EVENT_NO, NULL,
++      &slots[6].name, set_sid_variant, (void *)6 },
++    { "SidVariant8", "none", RES_EVENT_NO, NULL,
++      &slots[7].name, set_sid_variant, (void *)7 },
++    RESOURCE_STRING_LIST_END
++};
++
++int sid_variant_resources_init(void)
++{
++    variant_log = log_open("SidVariant");
++    return resources_register_string(variant_resources_string);
++}
++
++void sid_variant_resources_shutdown(void)
++{
++    int i;
++    for (i = 0; i < SID_VARIANT_NUM_CHIPS; i++) {
++        if (slots[i].name != NULL) {
++            lib_free(slots[i].name);
++            slots[i].name = NULL;
++        }
++    }
++}
++
++/* ------------------------------------------------------------------------- */
++/* Command-line options.                                                     */
++/* ------------------------------------------------------------------------- */
++
++static const cmdline_option_t variant_cmdline_options[] =
++{
++    { "-sidvariant", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
++      NULL, NULL, "SidVariant", NULL,
++      "<Name>", "Specify SID-chip personality on SID #1 (D400). "
++                "Names: none, armsid, arm2sid, swinu, swinnano, fpgasid6581, "
++                "fpgasid8580, pdsid, kungfusid-old, kungfusid-new, backsid, "
++                "skpico-8580, skpico-6581, sidfx, usid64." },
++    { "-sidvariant2", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
++      NULL, NULL, "SidVariant2", NULL,
++      "<Name>", "SID-chip personality on SID #2." },
++    { "-sidvariant3", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
++      NULL, NULL, "SidVariant3", NULL,
++      "<Name>", "SID-chip personality on SID #3." },
++    { "-sidvariant4", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
++      NULL, NULL, "SidVariant4", NULL,
++      "<Name>", "SID-chip personality on SID #4." },
++    { "-sidvariant5", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
++      NULL, NULL, "SidVariant5", NULL,
++      "<Name>", "SID-chip personality on SID #5." },
++    { "-sidvariant6", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
++      NULL, NULL, "SidVariant6", NULL,
++      "<Name>", "SID-chip personality on SID #6." },
++    { "-sidvariant7", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
++      NULL, NULL, "SidVariant7", NULL,
++      "<Name>", "SID-chip personality on SID #7." },
++    { "-sidvariant8", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
++      NULL, NULL, "SidVariant8", NULL,
++      "<Name>", "SID-chip personality on SID #8." },
++    CMDLINE_LIST_END
++};
++
++int sid_variant_cmdline_options_init(void)
++{
++    return cmdline_register_options(variant_cmdline_options);
++}
++
++/* ------------------------------------------------------------------------- */
++/* Dispatch stubs.  Phase 1: always decline reads, ignore writes.  Future
++ * phases switch on slots[chipno].kind and call into per-chip modules.       */
++/* ------------------------------------------------------------------------- */
++
++int sid_variant_try_read(int chipno, uint16_t reg, uint8_t *out)
++{
++    sid_variant_slot_t *slot;
++    if (chipno < 0 || chipno >= SID_VARIANT_NUM_CHIPS) {
++        return 0;
++    }
++    slot = &slots[chipno];
++    switch (slot->kind) {
++    case SID_VARIANT_ARMSID:
++    case SID_VARIANT_ARM2SID:
++        return sid_variant_armsid_try_read(slot, reg, out);
++    case SID_VARIANT_PDSID:
++        return sid_variant_pdsid_try_read(slot, reg, out);
++    case SID_VARIANT_KUNGFUSID_OLD:
++    case SID_VARIANT_KUNGFUSID_NEW:
++        return sid_variant_kungfu_try_read(slot, reg, out);
++    case SID_VARIANT_BACKSID:
++        return sid_variant_backsid_try_read(slot, reg, out);
++    case SID_VARIANT_USID64:
++        return sid_variant_usid64_try_read(slot, reg, out);
++    case SID_VARIANT_SWINU:
++        return sid_variant_swinu_try_read(slot, reg, out);
++    case SID_VARIANT_SWINNANO:
++        return sid_variant_swinnano_try_read(slot, reg, out);
++    case SID_VARIANT_FPGASID_6581:
++    case SID_VARIANT_FPGASID_8580:
++        return sid_variant_fpgasid_try_read(slot, reg, out);
++    case SID_VARIANT_SKPICO_6581:
++    case SID_VARIANT_SKPICO_8580:
++        return sid_variant_skpico_try_read(slot, reg, out);
++    case SID_VARIANT_SIDFX:
++        return sid_variant_sidfx_try_read(slot, reg, out);
++    /* Other variants join here as their personality modules land. */
++    default:
++        return 0;
++    }
++}
++
++void sid_variant_observe_write(int chipno, uint16_t reg, uint8_t val)
++{
++    sid_variant_slot_t *slot;
++    if (chipno < 0 || chipno >= SID_VARIANT_NUM_CHIPS) {
++        return;
++    }
++    slot = &slots[chipno];
++    switch (slot->kind) {
++    case SID_VARIANT_ARMSID:
++    case SID_VARIANT_ARM2SID:
++        sid_variant_armsid_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_PDSID:
++        sid_variant_pdsid_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_KUNGFUSID_OLD:
++    case SID_VARIANT_KUNGFUSID_NEW:
++        sid_variant_kungfu_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_BACKSID:
++        sid_variant_backsid_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_USID64:
++        sid_variant_usid64_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_SWINU:
++        sid_variant_swinu_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_SWINNANO:
++        sid_variant_swinnano_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_FPGASID_6581:
++    case SID_VARIANT_FPGASID_8580:
++        sid_variant_fpgasid_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_SKPICO_6581:
++    case SID_VARIANT_SKPICO_8580:
++        sid_variant_skpico_observe_write(slot, reg, val);
++        return;
++    case SID_VARIANT_SIDFX:
++        sid_variant_sidfx_observe_write(slot, reg, val);
++        return;
++    default:
++        return;
++    }
++}
++
++void sid_variant_reset_all(void)
++{
++    int i;
++    for (i = 0; i < SID_VARIANT_NUM_CHIPS; i++) {
++        memset(slots[i].state, 0, sizeof(slots[i].state));
++        slots[i].last_write_clk = 0;
++        switch (slots[i].kind) {
++        case SID_VARIANT_ARMSID:
++        case SID_VARIANT_ARM2SID:
++            sid_variant_armsid_reset(&slots[i]);
++            break;
++        case SID_VARIANT_PDSID:
++            sid_variant_pdsid_reset(&slots[i]);
++            break;
++        case SID_VARIANT_KUNGFUSID_OLD:
++        case SID_VARIANT_KUNGFUSID_NEW:
++            sid_variant_kungfu_reset(&slots[i]);
++            break;
++        case SID_VARIANT_BACKSID:
++            sid_variant_backsid_reset(&slots[i]);
++            break;
++        case SID_VARIANT_USID64:
++            sid_variant_usid64_reset(&slots[i]);
++            break;
++        case SID_VARIANT_SWINU:
++            sid_variant_swinu_reset(&slots[i]);
++            break;
++        case SID_VARIANT_SWINNANO:
++            sid_variant_swinnano_reset(&slots[i]);
++            break;
++        case SID_VARIANT_FPGASID_6581:
++        case SID_VARIANT_FPGASID_8580:
++            sid_variant_fpgasid_reset(&slots[i]);
++            break;
++        case SID_VARIANT_SKPICO_6581:
++        case SID_VARIANT_SKPICO_8580:
++            sid_variant_skpico_reset(&slots[i]);
++            break;
++        case SID_VARIANT_SIDFX:
++            sid_variant_sidfx_reset(&slots[i]);
++            break;
++        default:
++            break;
++        }
++    }
++}
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant.h vice-sidvariant/src/sid/sid-variant.h
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid-variant.h	1970-01-01 01:00:00.000000000 +0100
++++ vice-sidvariant/src/sid/sid-variant.h	2026-04-20 21:57:50.435656400 +0200
+@@ -0,0 +1,94 @@
++/** \file   sid-variant.h
++ *  \brief  Pluggable SID-chip "personality" layer.
++ *
++ *  This is a thin hook on top of the normal ResID/FastSID emulation that lets
++ *  each emulated SID slot pretend to be a specific third-party chip — ARMSID,
++ *  ARM2SID, SwinSID Ultimate / Nano, FPGASID, PDsid, KungFuSID, BackSID,
++ *  SIDKick-pico, SIDFX, uSID64 — for the purpose of automated *detection*
++ *  testing (siddetector.prg and friends).  Audio is unaffected; only the
++ *  write-only `$D41D/$D41E/$D41F` magic-cookie protocol and adjacent
++ *  `$D41B`/`$D41C` echo reads are intercepted.
++ *
++ *  Runtime selection is per SID chip (0..7) via the `SidVariant`…
++ *  `SidVariant8` resources and the `-sidvariant{,2,3,4,5,6,7,8}` CLI flags.
++ *  Name `"none"` disables the layer entirely for that chip — identical to
++ *  mainline VICE 3.9 behaviour.
++ *
++ *  This header is internal to `src/sid/`.  Only `sid.c` calls the two dispatch
++ *  functions; `sid-resources.c` and `sid-cmdline-options.c` call the
++ *  *_init functions once at startup.
++ */
++
++#ifndef VICE_SID_VARIANT_H
++#define VICE_SID_VARIANT_H
++
++#include "types.h"
++
++/* Matches SOUND_SIDS_MAX in sound.h — 8 concurrent SID chips supported. */
++#define SID_VARIANT_NUM_CHIPS 8
++
++/* Canonical variant kinds.  Strings live in sid-variant.c's name table. */
++typedef enum {
++    SID_VARIANT_NONE = 0,
++    SID_VARIANT_ARMSID,
++    SID_VARIANT_ARM2SID,
++    SID_VARIANT_SWINU,
++    SID_VARIANT_SWINNANO,
++    SID_VARIANT_FPGASID_6581,
++    SID_VARIANT_FPGASID_8580,
++    SID_VARIANT_PDSID,
++    SID_VARIANT_KUNGFUSID_OLD,
++    SID_VARIANT_KUNGFUSID_NEW,
++    SID_VARIANT_BACKSID,
++    SID_VARIANT_SKPICO_8580,
++    SID_VARIANT_SKPICO_6581,
++    SID_VARIANT_SIDFX,
++    SID_VARIANT_USID64,
++    SID_VARIANT_COUNT               /* sentinel */
++} sid_variant_kind_t;
++
++/* Per-chip slot state shared between the dispatcher and each variant module.
++ * `state[]` is a raw byte scratch area; each variant casts it to its own
++ * struct (typedef'd inside that variant's .c file). */
++typedef struct {
++    char               *name;            /* canonical resource string */
++    sid_variant_kind_t  kind;
++    uint8_t             state[64];
++    unsigned long       last_write_clk;
++} sid_variant_slot_t;
++
++/* Shared accessor so per-variant modules can reach the slot state without
++ * each opening the static array in sid-variant.c. */
++sid_variant_slot_t *sid_variant_slot(int chipno);
++
++/** Called from `sid_read_chip()` before the ResID read.
++ *  \return 1 if the variant handled the read (value stored in *out);
++ *          0 if the variant declined and the caller should use the ResID value.
++ */
++int  sid_variant_try_read(int chipno, uint16_t reg, uint8_t *out);
++
++/** Called from `sid_store_chip()` *after* VICE's own register bookkeeping.
++ *  Variants observe every write so they can advance their state machine.
++ */
++void sid_variant_observe_write(int chipno, uint16_t reg, uint8_t val);
++
++/** Called on machine reset — clears all variant state to the chip's idle
++ *  (post-power-on) configuration.
++ */
++void sid_variant_reset_all(void);
++
++/** Register `SidVariant` / `SidVariant2`..`SidVariant8` resources.
++ *  Call from `sid_resources_init()` alongside the stereo resources.
++ */
++int  sid_variant_resources_init(void);
++
++/** Free any runtime memory allocated by the resource setters.
++ *  Call from `sid_resources_shutdown()` (or machine shutdown). */
++void sid_variant_resources_shutdown(void);
++
++/** Register `-sidvariant` / `-sidvariant2`..`-sidvariant8` CLI options.
++ *  Call from `sid_cmdline_options_init()`.
++ */
++int  sid_variant_cmdline_options_init(void);
++
++#endif /* VICE_SID_VARIANT_H */
+diff -urN '--exclude=*.o' '--exclude=*.a' '--exclude=.deps' '--exclude=config.log' '--exclude=config.status' '--exclude=Makefile' '--exclude=GTK3VICE-*' '--exclude=autom4te.cache' '--exclude=*.lo' '--exclude=*.la' '--exclude=*.exe' '--exclude=*.Po' '--exclude=.libs' /c/Users/mit/Downloads/vice-3.9/src/sid/sid.c vice-sidvariant/src/sid/sid.c
+--- /c/Users/mit/Downloads/vice-3.9/src/sid/sid.c	2024-12-24 20:12:44.000000000 +0100
++++ vice-sidvariant/src/sid/sid.c	2026-04-20 21:37:10.822293600 +0200
+@@ -46,6 +46,7 @@
+ #include "resources.h"
+ #include "sid-resources.h"
+ #include "sid-snapshot.h"
++#include "sid-variant.h"
+ #include "sid.h"
+ #include "sound.h"
+ #include "types.h"
+@@ -227,6 +228,16 @@
+         }
+     }
+ 
++    /* --- SID-chip personality layer (see src/sid/sid-variant.c) ---
++     * Phase 1 dispatcher always returns 0 so this is behaviourally a no-op;
++     * later phases intercept D41B/D41C/D41D-F reads for specific chips.     */
++    {
++        uint8_t vval;
++        if (sid_variant_try_read(chipno, (uint16_t)addr, &vval)) {
++            val = vval;
++        }
++    }
++
+     lastsidread = val;
+     return val;
+ }
+@@ -255,6 +266,11 @@
+         maincpu_clk++;
+     }
+ 
++    /* --- SID-chip personality layer (see src/sid/sid-variant.c) ---
++     * Variants observe every write so their state machine can track DIS
++     * cookies, config-mode entry, etc.  Phase 1 dispatcher is a no-op.     */
++    sid_variant_observe_write(chipno, (uint16_t)addr, byte);
++
+     sid_store_func(addr, byte, chipno);
+ }
+ 
+--- /c/Users/mit/Downloads/vice-3.9/src/arch/gtk3/ui.c	2024-12-24 20:12:44.000000000 +0100
++++ vice-sidvariant/src/arch/gtk3/ui.c	2026-04-20 21:53:30.212935700 +0200
+@@ -1805,15 +1805,25 @@
+     }
+ #endif
+ 
+-    /* set title */
+-    if (!mouse_grab) {
+-        g_snprintf(title, sizeof(title), "VICE (%s)", machine_get_name());
+-    } else {
+-        gchar *name = vhk_gtk_get_accel_label_by_action(ACTION_MOUSE_GRAB_TOGGLE);
+-        g_snprintf(title, sizeof(title),
+-                   "VICE (%s) (Use %s to disable mouse grab)",
+-                   machine_get_name(), name);
+-        g_free(name);
++    /* set title — always include SidVariant so the current personality is
++     * visible at a glance; defaults to "none" when the resource is unset. */
++    {
++        const char *sv = NULL;
++        char        svbuf[64];
++        if (resources_get_string("SidVariant", &sv) != 0 || sv == NULL || *sv == '\0') {
++            sv = "none";
++        }
++        g_snprintf(svbuf, sizeof(svbuf), "  [SidVariant=%s]", sv);
++        if (!mouse_grab) {
++            g_snprintf(title, sizeof(title), "VICE (%s)%s",
++                       machine_get_name(), svbuf);
++        } else {
++            gchar *name = vhk_gtk_get_accel_label_by_action(ACTION_MOUSE_GRAB_TOGGLE);
++            g_snprintf(title, sizeof(title),
++                       "VICE (%s)%s (Use %s to disable mouse grab)",
++                       machine_get_name(), svbuf, name);
++            g_free(name);
++        }
+     }
+ 
+     gtk_window_set_title(GTK_WINDOW(new_window), title);
+--- /c/Users/mit/Downloads/vice-3.9/src/arch/gtk3/actions-joystick.c	2024-12-24 20:12:44.000000000 +0100
++++ vice-sidvariant/src/arch/gtk3/actions-joystick.c	2026-04-20 21:53:39.020859400 +0200
+@@ -39,6 +39,7 @@
+ #include <gtk/gtk.h>
+ #include <stddef.h>
+ #include <stdbool.h>
++#include <string.h>
+ 
+ #include "hotkeys.h"
+ #include "resources.h"
+@@ -133,14 +134,23 @@
+     mouse = !mouse;
+     resources_set_int("Mouse", mouse);
+ 
+-    if (mouse) {
+-        gchar *name = vhk_gtk_get_accel_label_by_action(self->action);
+-        g_snprintf(title, sizeof(title),
+-                   "VICE (%s) (Use %s to disable mouse grab)",
+-                   machine_get_name(), name);
+-        g_free(name);
+-    } else {
+-       g_snprintf(title, sizeof(title), "VICE (%s)", machine_get_name());
++    {
++        const char *sv = NULL;
++        char        svbuf[64];
++        if (resources_get_string("SidVariant", &sv) != 0 || sv == NULL || *sv == '\0') {
++            sv = "none";
++        }
++        g_snprintf(svbuf, sizeof(svbuf), "  [SidVariant=%s]", sv);
++        if (mouse) {
++            gchar *name = vhk_gtk_get_accel_label_by_action(self->action);
++            g_snprintf(title, sizeof(title),
++                       "VICE (%s)%s (Use %s to disable mouse grab)",
++                       machine_get_name(), svbuf, name);
++            g_free(name);
++        } else {
++            g_snprintf(title, sizeof(title), "VICE (%s)%s",
++                       machine_get_name(), svbuf);
++        }
+     }
+ 
+     window = ui_get_main_window_by_index(PRIMARY_WINDOW);

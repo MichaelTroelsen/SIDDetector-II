@@ -9,12 +9,18 @@ SID Detector is a Commodore 64 diagnostic utility written in 6502 assembly that 
 ## Build
 
 ```bash
-make          # assemble siddetector.asm → siddetector.prg using KickAssembler
-make run      # build and launch in WinVICE (x64sc)
-make clean    # remove siddetector.prg
+make             # assemble siddetector.asm → siddetector.prg using KickAssembler
+make run         # launch detector in the patched WinVICE 3.9
+make run-armsid  # launch with ARMSID personality at D400  (see Makefile for full list)
+make ci          # unit tests (32 cases)
+make ci-full     # unit tests + golden-diff sweep across all 14 variants
+make clean       # remove siddetector.prg
 ```
 
-**Tools:** KickAssembler (`C:/debugger/kickasm/KickAss.jar`, requires Java) and WinVICE (`C:/winvice/bin/x64sc.exe`). Paths are set at the top of the `Makefile`.
+**Tools:**
+- **KickAssembler** (`C:/debugger/kickasm/KickAss.jar`, requires Java).
+- **Patched WinVICE 3.9** with the `-sidvariant` personality layer at `C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe`. Source, build recipe and usage: `docs/VICE_PROXY_BUILD.md`, `docs/VICE_PROXY_USAGE.md`, `docs/ARMSID_PROXY_PLAN.md`. **All VICE-based tests must use this binary** — the stock VICE doesn't know `-sidvariant`.
+- Paths are set at the top of the `Makefile`.
 
 **Source syntax:** The `.asm` file uses KickAssembler syntax (converted from the original ACME source in `siddetector.asm.acme.bak`). Key differences from ACME: `.byte`/`.word`/`.text` directives, `//` comments, `.const` for symbol equates, lowercase mnemonics only, labels require `:`, and `#'x'` for char literals.
 
@@ -55,3 +61,23 @@ Zero-page `$A2–$AF` and `$F6–$FF` hold working variables and detection state
 ### Detected SID Types
 
 Real chips (6581 R2/R3/R4/R4AR, 8580), FPGASID, ARMSID, Swinsid Nano, Swinsid Ultimate, uSID64, ULTISID (U64), SIDFX, and emulators: VICE ResID, VICE FastSID, HOXS64, Frodo, YACE64, EMU64, plus UNKNOWNSID and No Sound fallbacks.
+
+## SidVariant proxy (headless testing in WinVICE)
+
+The repo ships a fork of VICE 3.9 (at `../vice-sidvariant/`) with a
+`-sidvariant <name>` flag that makes any emulated SID slot wear a
+chip-family personality — ARMSID, ARM2SID, SwinSID U/Nano, FPGASID,
+PDsid, KungFuSID, BackSID, SIDKick-pico, SIDFX, uSID64. The personality
+only intercepts the chip's detection magic-cookie protocol; ResID still
+synthesises audio.
+
+This lets CI exercise every chip family without hardware:
+- `make run-<variant>` / `make stereo-<variant>` — one-shot interactive launch.
+- `make test-variants` — 14-case headless sweep, pass/fail per variant.
+- `make ci-full` — unit tests + variant golden diff; pre-PR gate.
+- `tests/variant_goldens/*.txt` — reference screen dumps per variant.
+- `patches/vice-sidvariant-v1.patch` — the source diff against pristine VICE 3.9.
+
+Full plan in `docs/ARMSID_PROXY_PLAN.md`; build recipe in
+`docs/VICE_PROXY_BUILD.md`; catalogue of variants + make targets in
+`docs/VICE_PROXY_USAGE.md`.
