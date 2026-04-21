@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.28  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.29  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -810,7 +810,9 @@ check_swin_nano:
                 lda #<swinsidnanof
                 ldy #>swinsidnanof
                 jsr $AB1E
-                jmp end
+                lda #$08               // stamp data1=$08 so end: saves data4=$08
+                sta data1              // → end_pre_d400 pre-populates "D400 SWINSID NANO"
+                jmp end                //   on the stereo list (was UNKNOWN before)
 nosound:                               // no SID chip detected
                 txs
                 ldx #11                // row 11 = "nosid......:" line
@@ -869,6 +871,8 @@ end_sfx_not_sidfx:
                 cmp #$0C               // KungFuSID: always single at D400
                 beq end_pre_d400
                 cmp #$0D               // uSID64: always single at D400
+                beq end_pre_d400
+                cmp #$09               // PDsid: single at D400, no stereo
                 beq end_pre_d400
                 jmp end_pre_d400_skip  // unknown type → no pre-populate
 end_pre_d400:
@@ -8087,7 +8091,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.28 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.29 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8425,7 +8429,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.28 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.29 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9231,7 +9235,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.28 README"
+    .text "SIDDETECTOR V1.4.29 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9394,6 +9398,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.29 FIX DISPLAY GAPS"
+    .byte 13
+    .byte $9E
     .text "  V1.4.28 SIDVARIANT PROXY IN VICE 3.9"
     .byte 13
     .byte $9E
@@ -9404,9 +9411,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.25 FIX INFO PAGE HDR/FTR SCROLL"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.24 INFO PAGE SCROLL BOUND"
     .byte 13
     .byte 13
     .byte 0                         // null terminator

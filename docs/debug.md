@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.4.29  | FIX DISPLAY GAPS |
 | V1.4.28  | SIDVARIANT PROXY IN VICE 3.9 |
 | V1.4.27  | release: docs reorg into docs/ + hardware-only probe verification matrix (P01–P05) + stale version-string fix |
 | V1.4.26  | feat: ip_fmyam info page + fix SIDFX wording + unreachable pages |

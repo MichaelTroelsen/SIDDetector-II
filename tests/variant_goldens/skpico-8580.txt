@@ -13,7 +13,7 @@ r12: SIDFX......:
 r13: PAL/NTSC...: PAL-MACHINE FOUND C64
 r14: USID64.....:
 r16: STEREO SID.: D400 SIDKICK-PICO 8580
-r17:              D420 8580 FOUND
+r17:              D460 8580 FOUND
 r18: 
 r19: 
 r20: 

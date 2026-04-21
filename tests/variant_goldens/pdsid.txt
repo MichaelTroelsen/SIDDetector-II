@@ -13,7 +13,7 @@ r12: SIDFX......:
 r13: PAL/NTSC...: PAL-MACHINE FOUND C64
 r14: USID64.....:
 r16: STEREO SID.:
-r17:              2000 8580 INT
+r17:              2020 8580 INT
 r18:              4040
 r19:              6060
 r20:              8080
