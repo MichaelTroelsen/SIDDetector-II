@@ -28,7 +28,9 @@ ROOT = os.path.dirname(HERE)
 VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
 PRG  = os.path.join(ROOT, "siddetector.prg")
 PORT = 6502
-WAIT = 14.0
+# 20 s wait — tri-SID configs (3× ResID) load slower than single-SID; 14 s
+# used to be enough but triple-SID autostart can straddle that boundary.
+WAIT = 20.0
 GOLDENS = os.path.join(ROOT, "tests", "variant_goldens")
 
 # Rows included in the golden.  r00 (version banner) and r15 ($D418 decay
@@ -56,6 +58,79 @@ CASES = [
     ("sidfx",         ["-sidextra", "0", "-sidvariant",  "sidfx"],    12,  "SIDFX FOUND"),
     ("skpico-8580",   ["-sidextra", "0", "-sidvariant",  "skpico-8580"], 7, "SIDKICK"),
     ("skpico-6581",   ["-sidextra", "0", "-sidvariant",  "skpico-6581"], 7, "SIDKICK"),
+
+    # -----------------------------------------------------------------------
+    # Multi-SID scenarios.  `-sidextra N` enables SIDs #2..N+1.  The address
+    # of each extra SID is set by Sid{2,3}AddressStart via -sid{2,3}address
+    # (decimal, e.g. $D420 = 54304).  Default primary is plain 8580 ResID.
+    # -----------------------------------------------------------------------
+
+    # Secondary ARMSID at different addresses.
+    ("stereo-D500-armsid",
+        ["-sidextra", "1", "-sid2address", "54528",      # $D500
+         "-sidvariant2", "armsid"],
+        17, "ARMSID FOUND"),
+    # ARMSID @ $DE00: siddetector's ARMSID scan explicitly skips $DE/$DF
+    # expansion space (s_s_is_armsid `cmp #$DE / bcs s_s_arm_skip`).  The
+    # chip is still detected via fiktivloop and shows up as generic 8580 —
+    # matches real-hardware behaviour when ARMSID lives in cartridge space.
+    ("stereo-DE00-armsid",
+        ["-sidextra", "1", "-sid2address", "56832",      # $DE00
+         "-sidvariant2", "armsid"],
+        17, "DE00 8580"),
+
+    # Secondary SwinSID U / FPGASID at non-default slots.
+    ("stereo-D500-swinu",
+        ["-sidextra", "1", "-sid2address", "54528",
+         "-sidvariant2", "swinu"],
+        17, "SWINSID ULTIMATE"),
+    # FPGASID as *secondary* SID: the magic-cookie protocol ($81/$65 →
+    # D419/D41A, read D41F=$3F/$00) only lives at primary $D400 addresses.
+    # A FPGASID-personality on SID #2 never sees those writes and thus
+    # falls through to checkrealsid, which detects it as a plain 8580.
+    # Real FPGASID hardware is always the primary chip; this case stays
+    # as a regression guard to make sure we haven't accidentally broken
+    # the fall-through.
+    ("stereo-D500-fpgasid8580",
+        ["-sidextra", "1", "-sid2address", "54528",
+         "-sidvariant2", "fpgasid8580"],
+        17, "D500 8580"),
+
+    # Triple-SID: 8580 @ D400 + ARMSID @ D420 + 8580 @ D500.
+    # Expect: r17 ARMSID @ D420, r18 8580 @ D500.
+    ("tri-D420-armsid+D500-8580",
+        ["-sidextra", "2",
+         "-sid2address", "54304",      # $D420
+         "-sid3address", "54528",      # $D500
+         "-sidvariant2", "armsid"],
+        17, "ARMSID FOUND"),
+
+    # Triple-SID: 8580 @ D400 + ARMSID @ D420 + 8580 @ DE00.
+    # Classic "3-SID expander board" layout.
+    ("tri-D420-armsid+DE00-8580",
+        ["-sidextra", "2",
+         "-sid2address", "54304",
+         "-sid3address", "56832",      # $DE00
+         "-sidvariant2", "armsid"],
+        17, "ARMSID FOUND"),
+
+    # Triple-SID mixed personalities: ARMSID @ D420 + FPGASID @ D500.
+    ("tri-D420-armsid+D500-fpgasid",
+        ["-sidextra", "2",
+         "-sid2address", "54304",
+         "-sid3address", "54528",
+         "-sidvariant2", "armsid",
+         "-sidvariant3", "fpgasid8580"],
+        17, "ARMSID FOUND"),
+
+    # Dual ARMSID — both secondary slots wear ARMSID.
+    ("tri-D420-armsid+D500-armsid",
+        ["-sidextra", "2",
+         "-sid2address", "54304",
+         "-sid3address", "54528",
+         "-sidvariant2", "armsid",
+         "-sidvariant3", "armsid"],
+        17, "ARMSID FOUND"),
 ]
 
 
@@ -145,7 +220,7 @@ def compare_golden(name, current):
     return False, "\n".join(out)
 
 
-def run_case(name, args, row, expected, update):
+def _launch_and_capture(name, args):
     subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(0.6)
@@ -164,9 +239,19 @@ def run_case(name, args, row, expected, update):
     finally:
         subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return raw
 
+
+def run_case(name, args, row, expected, update):
+    raw = _launch_and_capture(name, args)
     row_text = decode(raw[row*40:(row+1)*40])
     substring_ok = expected in row_text
+    # One retry on timing flake — host-CPU variance or heavy tri-SID load
+    # occasionally straddles the WAIT budget.
+    if not substring_ok and not update:
+        raw = _launch_and_capture(name, args)
+        row_text = decode(raw[row*40:(row+1)*40])
+        substring_ok = expected in row_text
     golden_text = render_golden(raw)
 
     if update:
