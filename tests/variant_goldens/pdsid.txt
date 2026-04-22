@@ -12,11 +12,11 @@ r11: NOSID......:
 r12: SIDFX......:
 r13: PAL/NTSC...: PAL-MACHINE FOUND C64
 r14: USID64.....:
-r16: STEREO SID.:
-r17:              2020 8580 INT
-r18:              4040
-r19:              6060
-r20:              8080
-r21:              A0A0
-r22:              C0C0
-r23:              E0E0
+r16: STEREO SID.: D400 PD SID FOUND
+r17:              D420 8580 FOUND
+r18:              D440 PD SID FOUND
+r19:              D460 PD SID FOUND
+r20:              D480 PD SID FOUND
+r21:              D4A0 PD SID FOUND
+r22:              D4C0 PD SID FOUND
+r23: 

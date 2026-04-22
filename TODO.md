@@ -2,6 +2,14 @@
 
 ## New chips to detect
 
+- [ ] **8-SID "Sinful Eight" (U64)** — Ultimate 64 supports up to 8 concurrent
+      UltiSID slots across `$D400–$DFxx`. Current `fiktivloop` + UCI
+      `GET_HWINFO` handles 2 EMUSIDs; extend to enumerate all 8, verify
+      the stereo list renders ≤ 7 non-primary entries (slot 0 reserved),
+      and regenerate goldens for a new VICE tri- / octa-SID test case.
+- [ ] **EMUSID (new)** — Planned chip family (TBD vendor / protocol).
+      Add detection stub + TODO.md placeholder once the magic-cookie
+      spec is published; wire it through `sidstereo_print` + info page.
 - [x] **CBM SFX Sound Expander + FM-YAM (shared chip)** — V1.4.06+: detected at standard `$DF40/$DF50/$DF60` (XeNTaX reference) via `checkfmyam`. Both products use Yamaha OPL family (YM3526 / YM3812) with identical port decoding; one detection path covers both. V1.4.09: T1 started with IRQ masked (`$04=$41`) + RST on exit to avoid OPL-/IRQ CPU storm that was hanging real hardware. V1.4.19: detection uses `(status & $E0) == 0` on two reads — real OPL drives status into `$00-$1F` range; open bus has high bits set (`$FF, $D1, $C5`). V1.4.20: screen label neutralized to `DF40 SFX/FM FOUND`. V1.4.22: legacy `checksfxexpander` at `$DE00` removed entirely (had been disabled in V1.4.18 due to bus-noise false positives); `opl_write_reg` simplified to a single jmp to `cfm_write_reg`; dead vars `sfxexp_detected`/`sfx_port_mode`/`opl_tmp_reg/val`/`dse_s2b/6b/2b_b` removed. Verified on U64 with FM-YAM installed/removed and CBM SFX Sound Expander — see teststatus rows 41-44.
 - [x] **OPL sound test** — V1.4.13+: Sound test (T) plays the same 7-note C-major arpeggio (`C E G C G E C`) across 3 octaves per instrument, matching SID's 3-voice pattern. Three FM instruments: Flute (pure sine, no FM), Organ (FM sustained w/ feedback), Bell (FM percussive). Global OPL init sequence (`$01=$20`, `$08=$00`, `$BD=$C0`) per XeNTaX edlib player. V1.4.14: SID pulse width table reorder fix — pulse was silent after waveform reorder. V1.4.15: three FM instruments added.
 - [x] **KungFuSID** — Detected via D41D echo: write $A5, read back. Old firmware returns $A5 (register echo); new firmware returns $5A (FW_UPDATE_START_ACK). Both accepted. Detection placed after all other hardware checks (position 5b). `data1=$0C`.

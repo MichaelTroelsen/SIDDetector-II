@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.4.31  | FIX SID_LIST OVERFLOW |
 | V1.4.30  | TEST MATRIX HTML DIAGRAM |
 | V1.4.29  | FIX DISPLAY GAPS |
 | V1.4.28  | SIDVARIANT PROXY IN VICE 3.9 |

@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.30  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.31  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -5248,6 +5248,14 @@ s_s_cs2_dup_nx:
 s_s_cs2_mir:
        jmp s_s_next           // D4xx CS2 ARMSID already in list → mirror → skip
 s_s_add:
+       // Bounds guard: sid_list has 8 slots (0..7); slot 0 unused so usable
+       // slots are 1..7. Past-end writes corrupt sid_list_h / sid_list_t /
+       // uci_resp (contiguous at $6010/$6018/$6020). Observed on VICE
+       // PDsid proxy: the PDsid mirror responds at $D4xx..$DFxx, yielding
+       // 31 would-be adds that rewrote the whole array with lo-byte values.
+       lda sidnum_zp
+       cmp #$07
+       bcs s_s_next           // sidnum >= 7 → list full; skip add
        ldx sidnum_zp //
        inx
        stx sidnum_zp
@@ -5857,10 +5865,14 @@ ccas_fpgasid2:
                 bne ccasstopsrealsid
 //-----                
 ccas_writesidl:
+                // Bounds guard (same layout issue as s_s_add): sidnum must stay ≤ 7
+                lda sidnum_zp
+                cmp #$07
+                bcs ccasstopsrealsid
                 ldx sidnum_zp //
                 inx
                 stx sidnum_zp
-                lda data1 
+                lda data1
                 sta sid_list_t,x
                 lda sptr_zp
                 sta sid_list_l,x
@@ -5926,8 +5938,8 @@ csfp_l_l_found:
        //hvis fundet
        // sanity check
        lda sidnum_zp
-       cmp #$08
-       bcs csfp_l_next// hvis x >=09 then slut     
+       cmp #$07               // fixed off-by-one: bound is sidnum <= 6 (post-inc ≤ 7)
+       bcs csfp_l_next        // skip if sidnum >= 7 (would overflow slot 7)
        // sanity check
        ////// found sid //////
        ldx sidnum_zp // 
@@ -8091,7 +8103,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.30 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.31 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8429,7 +8441,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.30 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.31 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9235,7 +9247,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.30 README"
+    .text "SIDDETECTOR V1.4.31 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9398,6 +9410,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.31 FIX SID_LIST OVERFLOW"
+    .byte 13
+    .byte $9E
     .text "  V1.4.30 TEST MATRIX HTML DIAGRAM"
     .byte 13
     .byte $9E
@@ -9408,9 +9423,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.27 DOCS REORG; HW PROBE MATRIX"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.26 ADD FM INFO PAGE; SIDFX DESC FIX"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
