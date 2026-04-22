@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SID Detector &mdash; Combined Test Matrix (V1.4.29)</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#141b30; --panel2:#182040; --ink:#e7eaf6; --mute:#8a93b3;
+    --ok:#5fd38a; --ok-dim:#2b6a44; --fail:#ff6b6b; --fail-dim:#5a2530;
+    --warn:#f2c661; --warn-dim:#4a3a20; --wont:#b0a8c8; --wont-dim:#2e2a45;
+    --blank:#394166; --blank-dim:#1e2442;
+    --armsid:#ffa166; --arm2sid:#ff8866; --swinu:#c77dff; --swinnano:#b48cff;
+    --fpga8580:#6fb8ff; --fpga6581:#4a9cff; --pdsid:#ffc857; --skpico:#7bd389;
+    --backsid:#e5989b; --kungfu:#ffb4a2; --usid64:#a0c4ff; --sidfx:#ff6f91;
+    --ulti:#86efac; --plain8580:#98a7c9; --plain6581:#6e7aa8;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink);
+              font:14px/1.45 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif; }
+  header { padding:28px 32px 14px; border-bottom:1px solid #222a44;
+           background:linear-gradient(180deg,#111935 0%,#0b1020 100%); }
+  h1 { margin:0 0 4px; font-size:24px; }
+  h2 { margin:30px 0 8px; font-size:17px; color:var(--ink);
+       border-left:3px solid #3a4478; padding-left:10px; }
+  h3 { margin:18px 0 6px; font-size:14px; color:var(--mute);
+       font-weight:600; letter-spacing:.3px; text-transform:uppercase; }
+  .sub { color:var(--mute); font-size:13px; max-width:900px; }
+  main { padding:18px 32px 60px; max-width:1340px; }
+
+  .stats { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; }
+  .stat { background:var(--panel); border:1px solid #222a48; border-radius:10px;
+          padding:10px 14px; min-width:140px; }
+  .stat .n { font-size:22px; font-weight:700; }
+  .stat .l { font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.5px; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 4px; font-size:12px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px;
+          background:#1b2342; color:var(--ink); border:1px solid #2a335a; font-size:12px; white-space:nowrap; }
+  .chip .dot { width:8px; height:8px; border-radius:50%; background:var(--ink); }
+
+  /* matrix row layout: label | addr-strip | hw | vice | notes */
+  .addr-header, .row {
+    display:grid;
+    grid-template-columns:220px 1fr 58px 58px 1.1fr;
+    gap:10px; align-items:center;
+  }
+  .addr-header { padding:8px 10px 4px; color:var(--mute); font-size:11px;
+                 letter-spacing:.4px; text-transform:uppercase; }
+  .addr-header .cols { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; text-align:center; }
+  .row { padding:7px 10px; border-radius:9px; margin-bottom:5px;
+         background:var(--panel); border:1px solid #1f2744; }
+  .row:hover { background:var(--panel2); }
+  .row .label { font-weight:600; font-size:13px; }
+  .row .label .sub { font-size:10.5px; color:var(--mute); font-weight:400; display:block; }
+  .row .addr-strip { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .slot { padding:6px 3px; border-radius:5px; text-align:center; font-size:11px;
+          border:1px solid #232c50; background:#0f1530; color:var(--mute); }
+  .slot.filled { color:#0b1020; font-weight:700; border-color:transparent; }
+  .slot .a { display:block; font-size:9.5px; opacity:.85; font-weight:600; }
+  .slot .v { display:block; margin-top:1px; font-size:10.5px; line-height:1.1; }
+
+  .pill { display:inline-block; font-size:10.5px; padding:3px 7px; border-radius:999px;
+          font-weight:700; letter-spacing:.3px; text-align:center; width:100%; }
+  .p-ok    { background:var(--ok-dim); color:var(--ok); }
+  .p-fail  { background:var(--fail-dim); color:var(--fail); }
+  .p-warn  { background:var(--warn-dim); color:var(--warn); }
+  .p-wont  { background:var(--wont-dim); color:var(--wont); }
+  .p-none  { background:var(--blank-dim); color:var(--mute); }
+
+  .notes { font-size:11.5px; color:var(--mute); line-height:1.35; }
+  .notes b { color:#cdd3ec; font-weight:600; }
+
+  /* SID color classes */
+  .t-armsid   { background:var(--armsid); }
+  .t-arm2sid  { background:var(--arm2sid); }
+  .t-swinu    { background:var(--swinu); }
+  .t-swinnano { background:var(--swinnano); }
+  .t-fpga8580 { background:var(--fpga8580); }
+  .t-fpga6581 { background:var(--fpga6581); }
+  .t-pdsid    { background:var(--pdsid); }
+  .t-skpico   { background:var(--skpico); }
+  .t-backsid  { background:var(--backsid); }
+  .t-kungfu   { background:var(--kungfu); }
+  .t-usid64   { background:var(--usid64); }
+  .t-sidfx    { background:var(--sidfx); }
+  .t-ulti     { background:var(--ulti); }
+  .t-8580     { background:var(--plain8580); }
+  .t-6581     { background:var(--plain6581); color:#e7eaf6 !important; }
+  .t-ghost    { background:#30385c; color:#c7cbe0 !important; font-style:italic; }
+
+  footer { color:var(--mute); font-size:12px; margin-top:26px; padding-top:14px;
+           border-top:1px solid #1f2744; }
+  code { background:#1b2342; padding:1px 5px; border-radius:4px; font-size:12px; }
+  a { color:#9ecbff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SID Detector &mdash; Combined Test Matrix</h1>
+  <div class="sub">Real-hardware bench verification (teststatus.md) combined with the headless
+    WinVICE 3.9 SidVariant-proxy smoke suite. Build V1.4.29 &middot;
+    <code>make ci</code> / <code>make ci-full</code> / bench probe P01&ndash;P05.</div>
+
+  <div class="stats">
+    <div class="stat"><div class="n">44</div><div class="l">Master chip / config tests</div></div>
+    <div class="stat"><div class="n">52</div><div class="l">Stereo / triple configs</div></div>
+    <div class="stat"><div class="n">25</div><div class="l">VICE SidVariant cases</div></div>
+    <div class="stat"><div class="n">29 / 29</div><div class="l">Unit tests (make&nbsp;ci)</div></div>
+    <div class="stat"><div class="n">12 / 12</div><div class="l">hw_test smoke</div></div>
+    <div class="stat"><div class="n">11</div><div class="l">HW-only probes (P01&ndash;P05)</div></div>
+  </div>
+
+  <div class="legend" style="margin-top:14px;">
+    <span class="chip"><span class="dot t-armsid"></span>ARMSID</span>
+    <span class="chip"><span class="dot t-arm2sid"></span>ARM2SID</span>
+    <span class="chip"><span class="dot t-swinu"></span>SwinSID Ultimate</span>
+    <span class="chip"><span class="dot t-swinnano"></span>SwinSID Nano</span>
+    <span class="chip"><span class="dot t-fpga8580"></span>FPGASID 8580</span>
+    <span class="chip"><span class="dot t-fpga6581"></span>FPGASID 6581</span>
+    <span class="chip"><span class="dot t-pdsid"></span>PDsid</span>
+    <span class="chip"><span class="dot t-skpico"></span>SIDKick-pico</span>
+    <span class="chip"><span class="dot t-backsid"></span>BackSID</span>
+    <span class="chip"><span class="dot t-kungfu"></span>KungFuSID</span>
+    <span class="chip"><span class="dot t-usid64"></span>uSID64</span>
+    <span class="chip"><span class="dot t-sidfx"></span>SIDFX</span>
+    <span class="chip"><span class="dot t-ulti"></span>UltiSID (U64)</span>
+    <span class="chip"><span class="dot t-8580"></span>real 8580</span>
+    <span class="chip"><span class="dot t-6581"></span>real 6581</span>
+    <span class="chip"><span class="dot t-ghost"></span>reported as 8580 (fall-through)</span>
+  </div>
+  <div class="legend">
+    <span class="chip"><span class="pill p-ok" style="width:auto;padding:2px 8px;">PASS</span></span>
+    <span class="chip"><span class="pill p-warn" style="width:auto;padding:2px 8px;">FLAKY / WARN</span></span>
+    <span class="chip"><span class="pill p-wont" style="width:auto;padding:2px 8px;">WONTFIX</span></span>
+    <span class="chip"><span class="pill p-fail" style="width:auto;padding:2px 8px;">FAIL</span></span>
+    <span class="chip"><span class="pill p-none" style="width:auto;padding:2px 8px;">not tested / n/a</span></span>
+  </div>
+</header>
+
+<main>
+
+<!-- ========================================================================
+     SECTION 1 — Single-chip variants: everything each chip, HW + VICE
+     ======================================================================== -->
+<h2>1 &middot; Single SID at $D400 &mdash; identity per chip family</h2>
+
+<div class="addr-header">
+  <div>Config</div>
+  <div class="cols">
+    <div>$D400</div><div>$D420</div><div>$D500</div><div>$D600</div><div>$D700</div><div>$DE00</div><div>$DF00</div>
+  </div>
+  <div style="text-align:center;">HW</div>
+  <div style="text-align:center;">VICE</div>
+  <div>Notes</div>
+</div>
+
+<!-- 6581 sub-revs -->
+<div class="row">
+  <div class="label">6581 R2<span class="sub">Real silicon, MOS revision R2</span></div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581 R2</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Bench P03a — OSC3 sawtooth-decay fingerprint. VICE ReSID can&rsquo;t model sub-revs.</div>
+</div>
+<div class="row">
+  <div class="label">6581 R3 <span class="sub">R3 2084</span></div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581 R3</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Bench P03b.</div>
+</div>
+<div class="row">
+  <div class="label">6581 R4</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581 R4</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Bench P03c.</div>
+</div>
+<div class="row">
+  <div class="label">6581 R4AR <span class="sub">R4AR 5286</span></div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581 R4AR</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Bench P03d.</div>
+</div>
+<div class="row">
+  <div class="label">8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Bench P03e. VICE case <code>none</code>.</div>
+</div>
+
+<!-- Replacement chips -->
+<div class="row">
+  <div class="label">ARMSID <span class="sub">nobomi.cz V2.xx</span></div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Bench P01a. VICE covered via <code>armsid-d420</code> (secondary slot path).</div>
+</div>
+<div class="row">
+  <div class="label">ARM2SID <span class="sub">nobomi.cz V3.xx (single chan)</span></div>
+  <div class="addr-strip">
+    <div class="slot filled t-arm2sid"><span class="a">D400</span><span class="v">ARM2SID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Bench P01b (left &amp; right). VICE case <code>arm2sid-d420</code>.</div>
+</div>
+<div class="row">
+  <div class="label">SwinSID Ultimate</div>
+  <div class="addr-strip">
+    <div class="slot filled t-swinu"><span class="a">D400</span><span class="v">SwinU</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">VICE case <code>swinu</code>.</div>
+</div>
+<div class="row">
+  <div class="label">SwinSID Nano</div>
+  <div class="addr-strip">
+    <div class="slot filled t-swinnano"><span class="a">D400</span><span class="v">SwinNano</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">3-retry D41B cnt test + step-0.25 real-SID pre-check. V1.4.29: stereo row now populates.</div>
+</div>
+<div class="row">
+  <div class="label">FPGASID 8580 mode</div>
+  <div class="addr-strip">
+    <div class="slot filled t-fpga8580"><span class="a">D400</span><span class="v">FPGA 8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Bench P02b. VICE case <code>fpgasid8580</code>.</div>
+</div>
+<div class="row">
+  <div class="label">FPGASID 6581 mode</div>
+  <div class="addr-strip">
+    <div class="slot filled t-fpga6581"><span class="a">D400</span><span class="v">FPGA 6581</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Bench P02a. VICE case <code>fpgasid6581</code>.</div>
+</div>
+<div class="row">
+  <div class="label">PD SID</div>
+  <div class="addr-strip">
+    <div class="slot filled t-pdsid"><span class="a">D400</span><span class="v">PDsid</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">VICE case <code>pdsid</code>. Stereo row has a known cosmetic ghost (sid_list overflow); not on real HW.</div>
+</div>
+<div class="row">
+  <div class="label">BackSID</div>
+  <div class="addr-strip">
+    <div class="slot filled t-backsid"><span class="a">D400</span><span class="v">BackSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Cold-boot only (one-shot unlock protocol).</div>
+</div>
+<div class="row">
+  <div class="label">KungFuSID new FW</div>
+  <div class="addr-strip">
+    <div class="slot filled t-kungfu"><span class="a">D400</span><span class="v">KungFu</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">$A5&rarr;$5A ACK. Old FW ($A5&rarr;$A5 echo) also detected.</div>
+</div>
+<div class="row">
+  <div class="label">uSID64 (U64 socket)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-usid64"><span class="a">D400</span><span class="v">uSID64</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">D41F two-read stability test. 5/5 on bench.</div>
+</div>
+<div class="row">
+  <div class="label">SIDFX cartridge</div>
+  <div class="addr-strip">
+    <div class="slot filled t-sidfx"><span class="a">D400</span><span class="v">SIDFX</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">SCI bit-serial protocol at D41E/D41F.</div>
+</div>
+<div class="row">
+  <div class="label">SIDKick-pico 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-skpico"><span class="a">D400</span><span class="v">SKpico 8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Firmware 0.22 DAC64. Auto-detect trigger via D412=$20.</div>
+</div>
+<div class="row">
+  <div class="label">SIDKick-pico 6581</div>
+  <div class="addr-strip">
+    <div class="slot filled t-skpico"><span class="a">D400</span><span class="v">SKpico 6581</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Same detect path; data1=$0E.</div>
+</div>
+<div class="row">
+  <div class="label">UltiSID 8580 (U64)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-ulti"><span class="a">D400</span><span class="v">8580 INT</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">U64 UCI GET_HWINFO. VICE doesn&rsquo;t model U64.</div>
+</div>
+<div class="row">
+  <div class="label">UltiSID 6581 (U64)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-ulti"><span class="a">D400</span><span class="v">6581 INT</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Code in place (ssp_skp16 $22/$23). No 6581 UltiSID in test rig.</div>
+</div>
+
+<!-- ========================================================================
+     SECTION 2 — MixSID combinations (D400 + D420)
+     ======================================================================== -->
+<h2>2 &middot; MixSID in SID socket adapter &mdash; $D400 + $D420</h2>
+<h3>C01&ndash;C20 &middot; real chip pairings (HW only; VICE equivalent only for ARMSID @ D420)</h3>
+
+<div class="row">
+  <div class="label">C01: 6581 + 6581</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot filled t-6581"><span class="a">D420</span><span class="v">6581</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Confirmed 2026-04-19. Same path as C03.</div>
+</div>
+<div class="row">
+  <div class="label">C02: 6581 + 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot filled t-8580"><span class="a">D420</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Confirmed 2026-04-19.</div>
+</div>
+<div class="row">
+  <div class="label">C03: 8580 + 6581</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot filled t-6581"><span class="a">D420</span><span class="v">6581</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.76 hw_test 10/10. TEST-bit reset of CS2 voice3 fixes D4A0/D4E0 drift.</div>
+</div>
+<div class="row">
+  <div class="label">C04: 8580 + 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot filled t-8580"><span class="a">D420</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Confirmed 2026-04-19.</div>
+</div>
+<div class="row">
+  <div class="label">C05: ARMSID + ARMSID</div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot filled t-armsid"><span class="a">D420</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">User rig confirmed V1.3.45.</div>
+</div>
+<div class="row">
+  <div class="label">C06: ARMSID + 6581</div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot filled t-6581"><span class="a">D420</span><span class="v">6581</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.74 hw_test 10/10. Fallback Checkarmsid at D400 for ARMSID@CS1.</div>
+</div>
+<div class="row">
+  <div class="label">C07: ARMSID + 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot filled t-8580"><span class="a">D420</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.71 hw_test 10/10. D41B-ACK fix for ARMSID bus contention.</div>
+</div>
+<div class="row">
+  <div class="label">C08: 6581 + ARMSID</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot filled t-armsid"><span class="a">D420</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.74 hw_test 10/10.</div>
+</div>
+<div class="row">
+  <div class="label">C09: 8580 + ARMSID &nbsp;<span class="sub">== VICE armsid-d420</span></div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot filled t-armsid"><span class="a">D420</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">V1.3.73 hw_test 10/10. Matches VICE <code>armsid-d420</code> / <code>arm2sid-d420</code>.</div>
+</div>
+<div class="row">
+  <div class="label">C10&ndash;C20: FPGASID / SwinSID-Nano / SKpico / KungFu pairings at D420</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">various</span></div>
+    <div class="slot filled t-ghost"><span class="a">D420</span><span class="v">various</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">11 pair combos (C10&ndash;C20) awaiting bench pass. Tracked in <code>teststatus.md</code>.</div>
+</div>
+
+<!-- ========================================================================
+     SECTION 3 — MixSID / Stereo D400 + D500
+     ======================================================================== -->
+<h2>3 &middot; StereoSID &mdash; $D400 + $D500</h2>
+
+<div class="row">
+  <div class="label">C21&ndash;C24: real 6581/8580 pairings at D500</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">6581/8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">6581/8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Pending bench pass.</div>
+</div>
+<div class="row">
+  <div class="label">C25: ARMSID + 6581 @ D500</div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-6581"><span class="a">D500</span><span class="v">6581</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-fail">FAIL</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Mirror issue: ARMSID primary skips D5xx stereo scan.</div>
+</div>
+<div class="row">
+  <div class="label">C26: ARMSID + 8580 @ D500</div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-fail">FAIL</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Same root cause as C25.</div>
+</div>
+<div class="row">
+  <div class="label">C27&ndash;C30: 6581/8580 + ARMSID/SwinU/SwinNano pairings at D500</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">6581/8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-ghost"><span class="a">D500</span><span class="v">various</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Bench pending. SwinU echo at D500 flagged as risk.</div>
+</div>
+
+<h3>VICE equivalents &mdash; 8580 primary + replacement-chip secondary @ D500</h3>
+<div class="row">
+  <div class="label">VICE: stereo-D500-armsid</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-armsid"><span class="a">D500</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/a</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Real-hw equivalent would be &ldquo;socket 8580 + ARMSID cart @ D500&rdquo;.</div>
+</div>
+<div class="row">
+  <div class="label">VICE: stereo-D500-swinu</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-swinu"><span class="a">D500</span><span class="v">SwinU</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/a</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">DIS-echo protocol at secondary slot verified.</div>
+</div>
+<div class="row">
+  <div class="label">VICE: stereo-D500-fpgasid8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-ghost" title="FPGASID magic only lives at primary $D400"><span class="a">D500</span><span class="v">8580*</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/a</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Regression guard &mdash; FPGASID magic at D400 only, falls through to 8580 elsewhere.</div>
+</div>
+
+<!-- ========================================================================
+     SECTION 4 — SIDFX configs (cartridge adds second SID)
+     ======================================================================== -->
+<h2>4 &middot; SIDFX cartridge &mdash; secondary slot at $D500 / $D420 / $DE00</h2>
+
+<div class="row">
+  <div class="label">C31: 6581 + SKpico (CTR D500)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-skpico"><span class="a">D500</span><span class="v">SKpico 8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.58 hw_test 9/9. <code>sfx_probe_skpico</code> &lsquo;S&rsquo;+&lsquo;K&rsquo; echo.</div>
+</div>
+<div class="row">
+  <div class="label">C32: 6581 + PDsid</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-pdsid"><span class="a">D500</span><span class="v">PDsid</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.59 hw_test 9/9.</div>
+</div>
+<div class="row">
+  <div class="label">C33: 6581 + SwinU</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-swinu"><span class="a">D500</span><span class="v">SwinU</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.61 hw_test 9/9. DIS &lsquo;S&rsquo; echo.</div>
+</div>
+<div class="row">
+  <div class="label">C34: 6581 + ARMSID</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-armsid"><span class="a">D500</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.61 hw_test 9/9. DIS &lsquo;N&rsquo; echo.</div>
+</div>
+<div class="row">
+  <div class="label">C34a: 6581 + SwinU (LFT D420)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot filled t-ghost"><span class="a">D420</span><span class="v">SwinU*</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-wont">WONTFIX</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">6581 primary drives D43B, contaminates DIS echo. Shows SIDFX-reported 8580.</div>
+</div>
+<div class="row">
+  <div class="label">C34b: 6581 + BackSID (cold boot)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-backsid"><span class="a">D500</span><span class="v">BackSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.63. BackSID unlock is one-shot-per-power-cycle; restart shows 8580.</div>
+</div>
+<div class="row">
+  <div class="label">C34c: 6581 + KungFuSID new FW</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-kungfu"><span class="a">D500</span><span class="v">KungFu</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.64/65 hw_test 9/9.</div>
+</div>
+<div class="row">
+  <div class="label">C34d: 6581 + KungFuSID old FW</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-ghost"><span class="a">D500</span><span class="v">KungFu*</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-wont">WONTFIX</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Old FW $A5-echo indistinguishable from SIDFX write-buffer latch. Shows 8580.</div>
+</div>
+<div class="row">
+  <div class="label">C34e: 6581 + FPGASID 6581</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-fpga6581"><span class="a">D500</span><span class="v">FPGA 6581</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.66 hw_test 9/9. FPGASID magic works at secondary too.</div>
+</div>
+<div class="row">
+  <div class="label">C34f: ARMSID + 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.67. SID1=UNKN probe resolves SIDFX-reported ARMSID.</div>
+</div>
+<div class="row">
+  <div class="label">C34g: SKpico + 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-skpico"><span class="a">D400</span><span class="v">SKpico 8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.68. SID1=UNKN &rarr; SKpico identified.</div>
+</div>
+<div class="row">
+  <div class="label">C34h: PDsid + 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-pdsid"><span class="a">D400</span><span class="v">PDsid</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.69. SID1=UNKN &rarr; PDsid identified.</div>
+</div>
+<div class="row">
+  <div class="label">C34i: SwinU + 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-swinu"><span class="a">D400</span><span class="v">SwinU</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.68.</div>
+</div>
+<div class="row">
+  <div class="label">C34j: SwinU + SKpico</div>
+  <div class="addr-strip">
+    <div class="slot filled t-swinu"><span class="a">D400</span><span class="v">SwinU</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-skpico"><span class="a">D500</span><span class="v">SKpico 8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.69 dual-replacement combo.</div>
+</div>
+<div class="row">
+  <div class="label">C35b: 6581 + real 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.65. No false KungFuSID positive.</div>
+</div>
+<div class="row">
+  <div class="label">C38: 6581 + SKpico (LFT D420)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot filled t-ghost"><span class="a">D420</span><span class="v">SKpico*</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-warn">WARN</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">D4xx bus conflict; shows 8580. hw_test 9/9.</div>
+</div>
+<div class="row">
+  <div class="label">C40: 6581 + SKpico (RGT DE00)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-ghost"><span class="a">DE00</span><span class="v">SKpico*</span></div>
+    <div class="slot"></div>
+  </div>
+  <span class="pill p-warn">WARN</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">DE00 is SIDFX cartridge I/O; probe skipped. Shows 8580. hw_test 9/9.</div>
+</div>
+<div class="row">
+  <div class="label">C43a: FPGASID 8580 + SKpico</div>
+  <div class="addr-strip">
+    <div class="slot filled t-fpga8580"><span class="a">D400</span><span class="v">FPGA 8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-skpico"><span class="a">D500</span><span class="v">SKpico</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-wont">WONTFIX</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">V1.3.70. SIDFX drives D419/D41A (POT), overriding FPGASID identify-mode readback. Hardware limit.</div>
+</div>
+<div class="row">
+  <div class="label">C44: 6581 + ARMSID (LFT D420)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot filled t-ghost"><span class="a">D420</span><span class="v">ARMSID*</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-wont">WONTFIX</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">ARMSID FW responds to DIS on CS1 only; CS2 (D420) gives no echo. Falls back to 8580.</div>
+</div>
+<div class="row">
+  <div class="label">C45: 6581 + SKpico (LFT D420)</div>
+  <div class="addr-strip">
+    <div class="slot filled t-6581"><span class="a">D400</span><span class="v">6581</span></div>
+    <div class="slot filled t-ghost"><span class="a">D420</span><span class="v">SKpico*</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-wont">WONTFIX</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">SKpico needs CS1 for config mode. SIDFX +$1D write-buffer artifact. Falls back to 8580.</div>
+</div>
+
+<!-- ========================================================================
+     SECTION 5 — U64 UltiSID
+     ======================================================================== -->
+<h2>5 &middot; Ultimate64 &mdash; UltiSID in secondary slots</h2>
+<div class="row">
+  <div class="label">U64-1: ARMSID + ULTISID @ D500 + D600</div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-ulti"><span class="a">D500</span><span class="v">8580 INT</span></div>
+    <div class="slot filled t-ulti"><span class="a">D600</span><span class="v">8580 INT</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">User U64 rig confirmed V1.3.45 baseline.</div>
+</div>
+<div class="row">
+  <div class="label">U64-2: ARMSID + ULTISID @ DE00</div>
+  <div class="addr-strip">
+    <div class="slot filled t-armsid"><span class="a">D400</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-ulti"><span class="a">DE00</span><span class="v">8580 INT</span></div>
+    <div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">User U64 rig confirmed.</div>
+</div>
+
+<!-- ========================================================================
+     SECTION 6 — Triple SID configs
+     ======================================================================== -->
+<h2>6 &middot; Triple SID &mdash; three independent chips</h2>
+
+<div class="row">
+  <div class="label">VICE: tri D420 ARMSID + D500 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot filled t-armsid"><span class="a">D420</span><span class="v">ARMSID</span></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Classic expander-board layout.</div>
+</div>
+<div class="row">
+  <div class="label">VICE: tri D420 ARMSID + DE00 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot filled t-armsid"><span class="a">D420</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">DE00</span><span class="v">8580</span></div>
+    <div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-warn">FLAKY</span>
+  <div class="notes">~50% pass rate within 2-retry budget; tri-SID autostart straddles 20s wait.</div>
+</div>
+<div class="row">
+  <div class="label">VICE: tri D420 ARMSID + D500 FPGASID</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot filled t-armsid"><span class="a">D420</span><span class="v">ARMSID</span></div>
+    <div class="slot filled t-ghost"><span class="a">D500</span><span class="v">8580*</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">FPGASID magic at D400 only; secondary falls through to 8580.</div>
+</div>
+<div class="row">
+  <div class="label">VICE: tri D420 ARMSID + D500 ARMSID</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot filled t-armsid"><span class="a">D420</span><span class="v">ARMSID</span></div>
+    <div class="slot filled t-armsid"><span class="a">D500</span><span class="v">ARMSID</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Dual ARMSID secondary slots.</div>
+</div>
+<div class="row">
+  <div class="label">VICE: tri D500 + DE00 plain 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">D500</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-8580"><span class="a">DE00</span><span class="v">8580</span></div>
+    <div class="slot"></div>
+  </div>
+  <span class="pill p-none">n/t</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">&ldquo;Rad-expander&rdquo; layout via fiktivloop.</div>
+</div>
+
+<!-- ========================================================================
+     SECTION 7 — Stereo slot presence tests (either HW or VICE)
+     ======================================================================== -->
+<h2>7 &middot; Stereo slot presence &mdash; second SID address scan</h2>
+<div class="row">
+  <div class="label">Second SID @ D500</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div>
+    <div class="slot filled t-ulti"><span class="a">D500</span><span class="v">2nd</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">HW: U64 ULTISID $20 at D500. VICE: <code>stereo-D500-armsid/swinu/fpgasid8580</code>.</div>
+</div>
+<div class="row">
+  <div class="label">Second SID @ D600</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-ulti"><span class="a">D600</span><span class="v">2nd</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">HW: U64 ULTISID $20 at D600 baseline.</div>
+</div>
+<div class="row">
+  <div class="label">Second SID @ D700</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-ulti"><span class="a">D700</span><span class="v">2nd</span></div>
+    <div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">User-confirmed 2026-04-19 / V1.4.27.</div>
+</div>
+<div class="row">
+  <div class="label">Second SID @ DE00</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-armsid"><span class="a">DE00</span><span class="v">2nd</span></div>
+    <div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">HW: ARMSID $05 at DE00 (U64 rig). VICE: <code>stereo-DE00-armsid/8580/swinu</code>.</div>
+</div>
+<div class="row">
+  <div class="label">Second SID @ DF00</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-ulti"><span class="a">DF00</span><span class="v">2nd</span></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">User-confirmed 2026-04-19 / V1.4.27. DF00 overlaps UCI; skipped in VICE.</div>
+</div>
+
+<!-- ========================================================================
+     SECTION 8 — Emulators / platform / FM
+     ======================================================================== -->
+<h2>8 &middot; Emulators &middot; platform &middot; FM expansion</h2>
+<div class="row">
+  <div class="label">VICE ReSID 6581 / 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">VICE C64</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">calcandloop decay fingerprint; emulators fall through to nosound classifier.</div>
+</div>
+<div class="row">
+  <div class="label">VICE FastSID 6581 / 8580</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">VICE C64</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Same classifier path.</div>
+</div>
+<div class="row">
+  <div class="label">HOXS64 / Frodo / YACE64 / EMU64</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">EMU</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">Each emulator has a unique decay signature; verified on real emulators.</div>
+</div>
+<div class="row">
+  <div class="label">No SID detected</div>
+  <div class="addr-strip">
+    <div class="slot"><span class="a">D400</span><span class="v">&mdash;</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-none">n/a</span>
+  <div class="notes">&ldquo;NO SID DETECTED&rdquo; fallback.</div>
+</div>
+<div class="row">
+  <div class="label">C64 PAL / C64 NTSC / C128 PAL / C128 NTSC / TC64</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">Platform dispatch + PAL/NTSC detection (<code>checkpalntsc</code>).</div>
+</div>
+<div class="row">
+  <div class="label">FM expansion @ DF40 &mdash; CBM SFX / FM-YAM / none</div>
+  <div class="addr-strip">
+    <div class="slot filled t-8580"><span class="a">D400</span><span class="v">8580</span></div>
+    <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    <div class="slot filled t-sidfx"><span class="a">DF40</span><span class="v">SFX/FM</span></div>
+  </div>
+  <span class="pill p-ok">OK</span>
+  <span class="pill p-ok">OK</span>
+  <div class="notes">V1.4.22 HW: 5/5 detect + 5/5 no-false-positive. VICE: <code>-sfxse -sfxsetype 3812</code> matches.</div>
+</div>
+
+<footer>
+  <strong>How to re-run</strong> &middot;
+  HW matrix: bench rig &mdash; insert chip, power-cycle, load <code>siddetector.prg</code>, compare against
+  <code>docs/teststatus.md</code>. &nbsp;
+  VICE matrix: <code>make test-variants</code> (or <code>python scripts/variant_smoke.py [name]</code>). &nbsp;
+  Full pre-PR gate: <code>make ci-full</code>. &nbsp;
+  Bench probes P01&ndash;P05: <code>docs/teststatus.md</code> &sect; &ldquo;Hardware-only probe verification&rdquo;.
+  <br>
+  <strong>Sources</strong> &middot;
+  <code>docs/teststatus.md</code> (HW) &middot;
+  <code>scripts/variant_smoke.py</code> (VICE cases) &middot;
+  <code>tests/variant_goldens/*.txt</code> (VICE reference dumps) &middot;
+  <code>scripts/hw_test.py</code> (remote-monitor smoke).
+</footer>
+
+</main>
+</body>
+</html>

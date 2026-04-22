@@ -1,4 +1,4 @@
-# SID Detector v1.4.29
+# SID Detector v1.4.30
 
 A Commodore 64 diagnostic utility that identifies 24+ variants of the SID (Sound Interface Device) chip — including real hardware, FPGA clones, microcontroller emulators, and PC emulators.
 
@@ -12,7 +12,7 @@ Syntax: KickAssembler (converted from ACME original)
 
 ## Screenshot
 
-![SID Detector v1.4.29 running in VICE](screenshot.png)
+![SID Detector v1.4.30 running in VICE](screenshot.png)
 
 ---
 
@@ -322,6 +322,7 @@ Full design rationale and per-chip protocol tables:
 - `docs/ARMSID_PROXY_PLAN.md` — ultraplan with the 9-phase build-out.
 - `docs/VICE_PROXY_BUILD.md` — reproducible build from MSYS2.
 - `docs/VICE_PROXY_USAGE.md` — flag catalogue + make targets.
+- `docs/test_matrix.html` — combined HW + VICE test dashboard (open in browser).
 - `patches/vice-sidvariant-v1.patch` — ~2 kLOC source diff against pristine
   VICE 3.9 (upstream-ready, GPLv2+ inherited).
 
