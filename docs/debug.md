@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.4.32  | SKIP PDSID D4XX MIRRORS |
 | V1.4.31  | FIX SID_LIST OVERFLOW |
 | V1.4.30  | TEST MATRIX HTML DIAGRAM |
 | V1.4.29  | FIX DISPLAY GAPS |

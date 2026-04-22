@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.31  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.32  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -5139,8 +5139,12 @@ s_s_pdsid:
        lda sidtype
        cmp #$09 // PDsid
        bne s_s_backid
-       jsr checkpdsid
-       jmp s_s_ff
+       jmp s_s_next   // PDsid is single-slot (same as BackSID / SKpico / KungFuSID):
+                      // D400 pre-populated; rest of $D4xx-$DFxx are HW mirrors of
+                      // the same chip on real HW, and VICE routes unmapped SID-area
+                      // writes back to SID0 in single-SID configs — either way the
+                      // scan would add ghost copies of the primary.  A PDsid used
+                      // as SIDFX secondary is populated by sidfx_populate_sid_list.
 s_s_backid:
        lda sidtype
        cmp #$0A // BackSID
@@ -8103,7 +8107,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.31 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.32 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8441,7 +8445,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.31 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.32 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9247,7 +9251,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.31 README"
+    .text "SIDDETECTOR V1.4.32 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9410,6 +9414,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.32 SKIP PDSID D4XX MIRRORS"
+    .byte 13
+    .byte $9E
     .text "  V1.4.31 FIX SID_LIST OVERFLOW"
     .byte 13
     .byte $9E
@@ -9420,9 +9427,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.28 SIDVARIANT PROXY IN VICE 3.9"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.27 DOCS REORG; HW PROBE MATRIX"
     .byte 13
     .byte 13
     .byte 0                         // null terminator

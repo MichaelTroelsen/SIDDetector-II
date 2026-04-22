@@ -14,9 +14,9 @@ r13: PAL/NTSC...: PAL-MACHINE FOUND C64
 r14: USID64.....:
 r16: STEREO SID.: D400 PD SID FOUND
 r17:              D420 8580 FOUND
-r18:              D440 PD SID FOUND
-r19:              D460 PD SID FOUND
-r20:              D480 PD SID FOUND
-r21:              D4A0 PD SID FOUND
-r22:              D4C0 PD SID FOUND
+r18: 
+r19: 
+r20: 
+r21: 
+r22: 
 r23: 
