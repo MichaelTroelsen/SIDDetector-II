@@ -24,6 +24,23 @@
 - [x] Use a simple triangle-wave note (voice 1, fixed frequency) per SID address
 - [x] Optionally allow pressing a key to cycle through all detected SIDs
 
+### SID music playback (P key) — visual animation
+- [x] **VU meters / waveform display while SID music plays.** Implemented as
+      a dedicated "SID TRACKER VIEW" screen (P enters, SPACE / P / Q exits via
+      `jmp start`). Design:
+      - Player's `STA $D4xx` writes are redirected via binary patch to
+        shadow RAM at `$C000-$C01F`; raster IRQ copies shadow -> real SID
+        each frame after `jsr $1806`. Lets the render path read voice
+        FREQ / PW / CTRL / ADSR (regs otherwise write-only).
+      - Per-voice columns show NOTE name (96-entry PAL note table lookup),
+        waveform letters (TRI/SAW/PUL/NOI/---), gate +/-, ADSR and FREQ hex.
+      - VU bar per voice: voice 3 uses real `$D41C` ENV3; voices 1-2 use a
+        software envelope follower that tracks gate edges and ramps per
+        AD/SR nybbles.
+      - 40-column live OSC3 scope plotted across 8 rows at bottom.
+      - Tracker code lives at `$9200` (below BASIC ROM) so it stays CPU-
+        visible without bank switching. Footprint ~3.5 KB code+data.
+
 ### Per-chip information pages
 - [x] After detection, add an info screen for each detected chip (press a key to step through)
 - [x] Show chip name, variant, known quirks, audio quality rating, and firmware/upgrade info

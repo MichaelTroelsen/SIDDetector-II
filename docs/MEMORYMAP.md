@@ -28,7 +28,21 @@
 | $00AF | `buf_zp` | Temporary buffer byte |
 | $00B0 | `sid_music_flag` | 0=SID module silent, 1=play $1806 from IRQ |
 | $00B1 | `colwash_flag` | 1=run COLWASH in IRQ, 0=suppress (sub-screens) |
-| $00B2–$00F5 | — | Unused by program |
+| $00B2 | `retry_zp` | checkrealsid retry count (0–2) |
+| $00B3 | `trk_v1env` | Tracker: voice-1 software envelope follower |
+| $00B4 | `trk_v2env` | Tracker: voice-2 software envelope follower |
+| $00B5 | `trk_v1prev` | Tracker: voice-1 previous gate bit (edge detect) |
+| $00B6 | `trk_v2prev` | Tracker: voice-2 previous gate bit |
+| $00B7 | `trk_patched` | 1 = player binary's $D4xx writes redirected to shadow |
+| $00B8 | `trk_parity` | Frame parity (every-other-frame render gate) |
+| $00B9 | `trk_scratch` | Tracker scratch (undo count / scan tmp) |
+| $00BA | `trk_scratch2` | Tracker scratch (shadow pointer low) |
+| $00BB | `trk_scratch3` | Tracker scratch (shadow pointer high) |
+| $00BC | `trk_ptr_lo` | Tracker ZP pointer low (for `sta (ptr),y`) |
+| $00BD | `trk_ptr_hi` | Tracker ZP pointer high |
+| $00BE | `trk_tmp_nidx` | Tracker scratch (nibble / wave index) |
+| $00BF | `tr_ctrl_tmp` | Tracker cached CTRL byte for current voice |
+| $00C0–$00F5 | — | Unused by program |
 | $00F6 | `cnt2_zp` | Inner mirror-scan step counter (fiktivloop / checkanothersid) |
 | $00F7 | `sidnum_zp` | Number of SID chips found so far (0–8) |
 | $00F8 | `cnt1_zp` | tab1/tab2 index during multi-SID scan |
@@ -301,6 +315,42 @@ Null-terminated ASCII labels used by the debug screen printer. Starting at `$55A
 | $7D9B | `dbg_print_frame` | Print "Fn:$xxyy T=xx INT/EXT [curve]\n" for debug page 2 |
 | $7E43 | `dbg_uci_query` | Issue UCI GET_HWINFO, fill `uci_resp[0..22]`, drain FIFO |
 | ~$7EA7 | *(end)* | Last byte of assembled binary |
+
+---
+
+## Tracker-View Shadow SID ($C000–$C01F)
+
+| Address | Size | Description |
+|---------|------|-------------|
+| $C000–$C01F | 32 B | Shadow SID register mirror for Tracker view |
+
+When the user enters the Tracker screen (P key), `tracker_patch_once` scans
+the player binary at `$1806–$1FFF` and rewrites every `STA $D4xx` where
+`xx < $20` so the player writes land in `$C0xx` instead of `$D4xx`. The
+raster IRQ then copies `$C000–$C01F` → `$D400–$D41F` each frame *after*
+calling the play routine. Result: audio path is unchanged, but the tracker
+render code can read the write-only voice registers by inspecting the
+shadow.
+
+The undo table ensures a clean exit: on SPACE / P / Q, `tracker_unpatch`
+restores every patched `$C0` back to `$D4`, so second-entry works fine.
+
+---
+
+## Tracker-View Code + Data ($9200–$9FFD)
+
+| Address | Label | Description |
+|---------|-------|-------------|
+| $9200 | `tracker_patch_once` | Scan + patch player's SID writes to shadow |
+| ~$9263 | `tracker_unpatch` | Restore original `$D4` high bytes |
+| ~$928A | `tracker_entry` | Clear screen, draw chrome, run render loop |
+| ~$932F | `tracker_exit` | Silence SID, unpatch, `jmp start` |
+| ~$9413 | `scope_sample` | Read `$D41B` (OSC3) 40× at ~48c spacing |
+| ~$9429 | `scope_plot` | Plot scope_buf as 8-row waveform |
+| Tables | `note_freq_tbl` (192B), `note_name_tbl` (288B), `vu_colour_tbl` (20B), `scope_buf` (40B) |
+
+Placed at `$9200` (above the $6000 data segment, below BASIC ROM at
+`$A000`) so the CPU sees all of it as RAM without bank switching.
 
 ---
 

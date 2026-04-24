@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.32  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.33  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -37,6 +37,11 @@
 .var sidFile = LoadBinary("bin/Triangle_Intro.sid")
 * = $1800
     .fill sidFile.getSize() - $7E, sidFile.get(i + $7E)  // skip 126-byte header+load-addr
+
+// Tracker view shadow SID: player's STA $D4xx writes are rewritten to STA $C0xx
+// at P-key start; IRQ copies $C000-$C01F to $D400-$D41F each frame so the
+// tracker render path can read voice state (regs otherwise write-only).
+.const shadowBase = $C000
 
 // TLR's original second SID detector (sid-detect2 by TLR)
 // Embedded at $0A00 (free gap). Copied to $0801 and executed when L is pressed.
@@ -117,6 +122,21 @@ tlr_data:
 .const colwash_flag   = $B1 // 1=run COLWASH in IRQ, 0=suppress (sub-screens)
 .const retry_zp       = $B2 // checkrealsid retry count (0=1st try, 1=2nd, 2=3rd)
 
+// Tracker-view working state (only used while P-key music is active).
+.const trk_v1env      = $B3 // voice-1 software envelope follower (0-255)
+.const trk_v2env      = $B4 // voice-2 software envelope follower (0-255)
+.const trk_v1prev     = $B5 // voice-1 previous CTRL (for gate-edge detect)
+.const trk_v2prev     = $B6 // voice-2 previous CTRL
+.const trk_patched    = $B7 // 1 = player binary has had $D4xx writes redirected
+.const trk_parity     = $B8 // frame counter (low bit gates 25 Hz render)
+.const trk_scratch    = $B9 // tracker scratch byte (undo count / scan tmp)
+.const trk_scratch2   = $BA // tracker scratch (ptr low / tmp)
+.const trk_scratch3   = $BB // tracker scratch (ptr high / tmp)
+.const trk_ptr_lo     = $BC // tracker ZP pointer low  (for sta (ptr),y)
+.const trk_ptr_hi     = $BD // tracker ZP pointer high
+.const trk_tmp_nidx   = $BE // tracker scratch for nibble/wave index
+.const tr_ctrl_tmp    = $BF // tracker cached CTRL byte for current voice
+
 // Detection state ($F6-$FF)
 .const cnt2_zp  = $F6   // inner mirror-scan step counter (fiktivloop / checkanothersid)
 .const sidnum_zp= $F7   // number of SID chips found so far (0-8)
@@ -157,6 +177,8 @@ start:
                 sta $D40F               // voice 3 freq hi (clear $FF left by checksecondsid)
                 sta $D41E               // clear FPGASID D41E (write-only in normal mode; harmless)
                 sta colwash_flag        // suppress COLWASH until readkey2 enables it
+                sta trk_patched         // tracker: player binary not yet redirected
+                sta trk_undo_count      // tracker: no undo entries
                 lda #$15                // $D018: charset ROM at $D000, uppercase/graphics set
                 sta $D018               // switch to uppercase character set
                 ldx #$00
@@ -1131,16 +1153,17 @@ kbd_not_q:
            jmp kbdloop
 do_sid_music:
            lda sid_music_flag
-           bne sid_music_stop      // already playing → stop
+           bne sid_music_stop      // already playing → stop (safety; normally 0)
+           jsr tracker_patch_once  // redirect player's $D4xx writes to $C0xx
            sei                     // guard init against mid-frame IRQ call to $1806
            ldx #$00
            ldy #$00
            lda #$00                // subtune 0 = song 1
-           jsr $1800               // SID init: Triangle Intro
+           jsr $1800               // SID init: Triangle Intro (writes go to shadow)
            lda #$01
            sta sid_music_flag      // arm IRQ play
            cli
-           jmp sid_key_wait
+           jmp tracker_entry
 sid_music_stop:
            sei
            lda #$00
@@ -3763,6 +3786,16 @@ IRQ:
            lda sid_music_flag      // if SID module active, call play routine each frame
            beq irq_no_music
            jsr $1806               // SID play (Triangle Intro, 50 Hz)
+           // If player writes were redirected to shadow ($C000-$C01F) for the
+           // tracker view, copy shadow -> real SID each frame (~450 cycles).
+           lda trk_patched
+           beq irq_no_music
+           ldx #$1F
+irq_shadow_cp:
+           lda shadowBase,x
+           sta $D400,x
+           dex
+           bpl irq_shadow_cp
 irq_no_music:
            lda colwash_flag        // skip COLWASH in sub-screens (info/readme)
            beq irq_done
@@ -8102,12 +8135,848 @@ MODEUNKN:     .byte $f0,$f0,$f0,$f0,$f0,$f0,$f0,$f2,$f0,$f0,$f0,$f2,$f0,$f1,$f1,
     //
     //Example tables, default mode (0) is selected when requested SID type is not available (recommended)
 
+// -----------------------------------------------------------------------------
+// Relocate to $9200 (above the $6000 data segment, below BASIC ROM at $A000).
+// This keeps the tracker view + screen + check_uci_ultisid code inside normal
+// RAM that the CPU sees directly — no BASIC ROM shadowing to deal with.
+// Segment here fits ~3.5 KB which comfortably ends before $A000.
+// -----------------------------------------------------------------------------
+* = $9200
+
+// =============================================================================
+// TRACKER VIEW (P key) — per-voice visual display during SID music playback.
+//
+// Dedicated screen. Enters when P is first pressed; SPACE / P / Q exits via
+// jmp start (same pattern as info/readme/soundtest).
+//
+// How voices 1-2 are visualised despite write-only SID regs:
+//   tracker_patch_once scans $1806-$1FFF for STA $D4xx opcodes and rewrites
+//   the $D4 high byte to $C0. The player's writes now land in shadow RAM at
+//   $C000-$C01F. The raster IRQ copies shadow -> real SID each frame after
+//   calling $1806, so audio is unaffected. The render path reads the shadow
+//   to learn voice FREQ/PW/CTRL/ADSR state.
+// Voice 3 additionally uses real OSC3 ($D41B) / ENV3 ($D41C) for VU + scope.
+// =============================================================================
+
+.const TRK_UNDO_MAX = 40          // max patch sites recorded for unpatch
+
+// ---------- tracker_patch_once ----------
+tracker_patch_once:
+           lda trk_patched
+           beq tpo_start
+           rts
+tpo_start:
+           lda #$00
+           sta trk_scratch             // patch count accumulator
+           lda #$06
+           sta trk_scratch2            // scan ptr lo = $1806
+           lda #$18
+           sta trk_scratch3
+tpo_loop:
+           ldy #$00
+           lda (trk_scratch2),y        // opcode byte
+           cmp #$8D                    // STA abs
+           beq tpo_check_lo
+           cmp #$9D                    // STA abs,X
+           beq tpo_check_lo
+           cmp #$99                    // STA abs,Y
+           bne tpo_advance
+tpo_check_lo:
+           iny
+           lda (trk_scratch2),y
+           cmp #$20                    // low byte must be < $20 (voice/global regs)
+           bcs tpo_advance
+           iny
+           lda (trk_scratch2),y
+           cmp #$D4                    // high byte must be $D4
+           bne tpo_advance
+           ldx trk_scratch
+           cpx #TRK_UNDO_MAX
+           bcs tpo_advance             // undo table full; don't patch further
+           // Record the address of the high-byte (scan_ptr + 2) for unpatch.
+           lda trk_scratch2
+           clc
+           adc #$02
+           sta trk_undo_lo,x
+           lda trk_scratch3
+           adc #$00
+           sta trk_undo_hi,x
+           // Patch $D4 -> $C0.
+           lda #$C0
+           ldy #$02
+           sta (trk_scratch2),y
+           inx
+           stx trk_scratch
+tpo_advance:
+           inc trk_scratch2
+           bne tpo_nc
+           inc trk_scratch3
+tpo_nc:
+           lda trk_scratch3
+           cmp #$20                    // past $1FFF?
+           bcc tpo_loop
+           ldx trk_scratch
+           stx trk_undo_count
+           lda #$01
+           sta trk_patched
+           rts
+
+// ---------- tracker_unpatch ----------
+tracker_unpatch:
+           lda trk_patched
+           bne tu_start
+           rts
+tu_start:
+           ldx trk_undo_count
+           beq tu_done
+tu_loop:
+           dex
+           lda trk_undo_lo,x
+           sta trk_scratch2
+           lda trk_undo_hi,x
+           sta trk_scratch3
+           ldy #$00
+           lda #$D4
+           sta (trk_scratch2),y
+           cpx #$00
+           bne tu_loop
+tu_done:
+           lda #$00
+           sta trk_patched
+           sta trk_undo_count
+           rts
+
+// ---------- tracker_entry ----------
+tracker_entry:
+           sei
+           lda #$00
+           sta colwash_flag            // suppress COLWASH during tracker screen
+           sta $D020                   // black border
+           sta $D021                   // black background
+           cli
+           // Wait for P / SPACE / Q to release so tracker_poll_keys doesn't
+           // immediately exit when the user's initial P is still held.
+te_waitrel:
+           lda #$7F
+           sta $DC00
+           lda $DC01
+           and #$50                    // SPACE + Q
+           cmp #$50
+           bne te_waitrel
+           lda #$DF
+           sta $DC00
+           lda $DC01
+           and #$02                    // P
+           beq te_waitrel
+           // Clear screen to space ($20) and paint default colour light-green.
+           lda #$20
+           ldx #$00
+te_clr:
+           sta $0400,x
+           sta $0500,x
+           sta $0600,x
+           sta $0700,x
+           inx
+           bne te_clr
+           lda #$0D                    // light green
+           ldx #$00
+te_col:
+           sta $D800,x
+           sta $D900,x
+           sta $DA00,x
+           sta $DB00,x
+           inx
+           bne te_col
+           // Reset tracker runtime state.
+           lda #$00
+           sta trk_v1env
+           sta trk_v2env
+           sta trk_v1prev
+           sta trk_v2prev
+           sta trk_parity
+           // Draw static chrome.
+           jsr tracker_draw_chrome
+tracker_loop:
+           // Frame pacing — spin until raster hits line $F8 (bottom border).
+tl_sync:
+           lda $D012
+           cmp #$F8
+           bne tl_sync
+           // Advance envelope followers for voices 1 + 2 every frame.
+           jsr envfollow_v12
+           // Sample scope every frame.
+           jsr scope_sample
+           // Update display every other frame (~25 Hz).
+           inc trk_parity
+           lda trk_parity
+           and #$01
+           bne tl_no_render
+           jsr tracker_render
+           jsr scope_plot
+tl_no_render:
+           // Poll keys.
+           jsr tracker_poll_keys
+           bcc tracker_loop
+           jmp tracker_exit
+
+// ---------- tracker_poll_keys ----------
+// Returns C=1 if SPACE, P, or Q pressed; else C=0.
+tracker_poll_keys:
+           lda #$7F
+           sta $DC00
+           lda $DC01
+           tax
+           and #$10                    // SPACE
+           beq tpk_hit
+           txa
+           and #$40                    // Q
+           beq tpk_hit
+           lda #$DF
+           sta $DC00
+           lda $DC01
+           and #$02                    // P
+           beq tpk_hit
+           clc
+           rts
+tpk_hit:
+           sec
+           rts
+
+// ---------- tracker_exit ----------
+tracker_exit:
+           sei
+           lda #$00
+           sta sid_music_flag          // stop IRQ play
+           ldx #$1F
+te_zshad:
+           sta shadowBase,x            // zero shadow so next session starts clean
+           dex
+           bpl te_zshad
+           ldx #$18
+te_zreal:
+           sta $D400,x                 // silence real SID (volume + all regs)
+           dex
+           bpl te_zreal
+           cli
+           jsr tracker_unpatch         // restore player binary
+           // Wait for all exit keys released so start:'s kbdwait doesn't bounce.
+te_relw:
+           lda #$7F
+           sta $DC00
+           lda $DC01
+           and #$50                    // SPACE + Q
+           cmp #$50
+           bne te_relw
+           lda #$DF
+           sta $DC00
+           lda $DC01
+           and #$02                    // P
+           beq te_relw
+           jmp start
+
+// ---------- tracker_draw_chrome ----------
+tracker_draw_chrome:
+           // Row 0: title
+           ldx #$00
+tdc_title:
+           lda trk_title,x
+           sta $0400,x
+           inx
+           cpx #40
+           bne tdc_title
+           // Row 2: voice column headers
+           ldx #$00
+tdc_hdr:
+           lda trk_hdr,x
+           sta $0400+2*40,x
+           inx
+           cpx #40
+           bne tdc_hdr
+           // Rows 3-7: row labels (NOTE/WAVE/GATE/ADSR/FREQ) in first 6 cols
+           ldx #$00
+tdc_lbl:
+           lda trk_rowlabels,x
+           sta $0400+3*40,x
+           inx
+           cpx #5*40
+           bne tdc_lbl
+           // Row 9: VU header
+           ldx #$00
+tdc_vuhdr:
+           lda trk_vuhdr,x
+           sta $0400+9*40,x
+           inx
+           cpx #40
+           bne tdc_vuhdr
+           // Row 10/11/12: VU row labels "V1  [" / "V2  [" / "V3  [" at col 0,
+           //               and "]" at col 25.
+           ldx #$00
+tdc_vurow:
+           lda trk_vu_pre,x            // "V1  ["
+           sta $0400+10*40,x
+           lda trk_vu_pre+5,x          // "V2  [" (each entry is 5 chars)
+           sta $0400+11*40,x
+           lda trk_vu_pre+10,x         // "V3  ["
+           sta $0400+12*40,x
+           inx
+           cpx #5
+           bne tdc_vurow
+           lda #$1D                    // ']' screencode
+           sta $0400+10*40+25
+           sta $0400+11*40+25
+           sta $0400+12*40+25
+           // Row 14: scope header
+           ldx #$00
+tdc_shdr:
+           lda trk_scopehdr,x
+           sta $0400+14*40,x
+           inx
+           cpx #40
+           bne tdc_shdr
+           // Row 24: footer
+           ldx #$00
+tdc_foot:
+           lda trk_footer,x
+           sta $0400+24*40,x
+           inx
+           cpx #40
+           bne tdc_foot
+           // Colour pass: header/footer yellow, row labels white, VU grey.
+           ldx #$00
+tdc_colp:
+           lda #$07                    // yellow
+           sta $D800+0*40,x
+           sta $D800+2*40,x
+           sta $D800+14*40,x
+           sta $D800+24*40,x
+           lda #$0F                    // light grey
+           sta $D800+3*40,x
+           sta $D800+4*40,x
+           sta $D800+5*40,x
+           sta $D800+6*40,x
+           sta $D800+7*40,x
+           sta $D800+9*40,x
+           inx
+           cpx #40
+           bne tdc_colp
+           rts
+
+// ---------- tracker_render ----------
+// Render all three voices (note, waveform name, gate, ADSR, FREQ, VU bar).
+tracker_render:
+           ldx #$00
+tr_vloop:
+           stx trk_scratch              // save voice index
+           // Set shadow pointer = $C000 + voice*7
+           lda voice_base_lo,x
+           sta trk_scratch2
+           lda #>shadowBase
+           sta trk_scratch3
+           jsr tr_render_voice
+           ldx trk_scratch
+           inx
+           cpx #$03
+           bne tr_vloop
+           rts
+
+// tr_render_voice: renders one voice's block. trk_scratch holds voice index
+// (0..2); trk_scratch2/3 points at shadow voice base. Non-destructive to
+// trk_scratch/2/3; clobbers A, X, Y.
+tr_render_voice:
+           // -------- NOTE (row 3) --------
+           ldy #$00
+           lda (trk_scratch2),y
+           sta tr_freq_lo_tmp
+           ldy #$01
+           lda (trk_scratch2),y
+           sta tr_freq_hi_tmp
+           // Linear search note_freq_tbl for smallest entry >= input freq.
+           ldx #$00                     // note index
+tr_nl:
+           lda tr_freq_hi_tmp
+           cmp note_freq_hi,x           // table_hi < input_hi? then keep looking
+           bcc tr_nl_found              // input < table_entry → this is the note
+           bne tr_nl_next
+           lda tr_freq_lo_tmp
+           cmp note_freq_lo,x
+           bcc tr_nl_found
+           beq tr_nl_found
+tr_nl_next:
+           inx
+           cpx #96
+           bne tr_nl
+           ldx #95
+tr_nl_found:
+           // X = note index 0..95. Build 16-bit pointer note_name_tbl + X*3
+           // (X*3 can exceed 255, so 8-bit tbl,x indexing is not enough).
+           stx trk_tmp_nidx             // stash note index for the multiply
+           lda #<note_name_tbl
+           sta trk_ptr_lo
+           lda #>note_name_tbl
+           sta trk_ptr_hi
+           ldx #$03
+tr_nn_mul:
+           lda trk_ptr_lo
+           clc
+           adc trk_tmp_nidx
+           sta trk_ptr_lo
+           bcc tr_nn_ncc
+           inc trk_ptr_hi
+tr_nn_ncc:
+           dex
+           bne tr_nn_mul
+           // Copy 3 bytes from (trk_ptr_lo) -> screen row 3 cols col..col+2.
+           ldx trk_scratch
+           lda voice_col_tbl,x
+           sta trk_tmp_nidx             // screen column for this voice
+           ldy #$00
+tr_nn_cpy:
+           lda (trk_ptr_lo),y           // source byte
+           pha
+           tya
+           clc
+           adc trk_tmp_nidx             // dest col = base_col + y
+           tax
+           pla
+           sta $0400+3*40,x
+           iny
+           cpy #$03
+           bne tr_nn_cpy
+
+           // -------- WAVE (row 4) --------
+           ldy #$04
+           lda (trk_scratch2),y         // CTRL byte
+           sta tr_ctrl_tmp
+           // Pick highest-priority waveform bit (noise > pulse > saw > tri).
+           ldx #$04                     // index into wave_names: 4 = "---"
+           lda tr_ctrl_tmp
+           and #$10
+           beq tw_not_tri
+           ldx #$00                     // "TRI"
+tw_not_tri:
+           lda tr_ctrl_tmp
+           and #$20
+           beq tw_not_saw
+           ldx #$01                     // "SAW"
+tw_not_saw:
+           lda tr_ctrl_tmp
+           and #$40
+           beq tw_not_pul
+           ldx #$02                     // "PUL"
+tw_not_pul:
+           lda tr_ctrl_tmp
+           and #$80
+           beq tw_not_noi
+           ldx #$03                     // "NOI"
+tw_not_noi:
+           // X = wave-name index (0..4). Source offset = X*3.
+           txa
+           sta trk_tmp_nidx
+           asl
+           clc
+           adc trk_tmp_nidx
+           tax
+           ldy trk_scratch              // voice index
+           lda voice_col_tbl,y
+           tay
+           lda wave_names,x
+           sta $0400+4*40,y
+           inx
+           lda wave_names,x
+           sta $0400+4*40+1,y
+           inx
+           lda wave_names,x
+           sta $0400+4*40+2,y
+
+           // -------- GATE (row 5) --------
+           lda tr_ctrl_tmp
+           and #$01
+           bne tg_on
+           lda #$2D                     // '-' screencode
+           jmp tg_put
+tg_on:
+           lda #$2B                     // '+' screencode
+tg_put:
+           ldx trk_scratch
+           ldy voice_col_tbl,x
+           sta $0400+5*40,y
+
+           // -------- ADSR (row 6, 4 hex digits) --------
+           ldy #$05
+           lda (trk_scratch2),y         // AD
+           pha
+           ldy #$06
+           lda (trk_scratch2),y         // SR
+           sta trk_tmp_nidx             // keep SR for below
+           pla                          // AD back in A
+           ldx trk_scratch
+           ldy voice_col_tbl,x
+           jsr hex_byte_to_screen_r6    // prints A as 2 hex chars at row 6, col Y
+           lda trk_tmp_nidx             // SR
+           ldx trk_scratch
+           lda voice_col_tbl,x
+           clc
+           adc #$02                     // +2 cols for second byte
+           tay
+           lda trk_tmp_nidx
+           jsr hex_byte_to_screen_r6
+
+           // -------- FREQ (row 7, 4 hex digits: hi-byte then lo-byte) --------
+           lda tr_freq_hi_tmp
+           ldx trk_scratch
+           ldy voice_col_tbl,x
+           jsr hex_byte_to_screen_r7
+           lda tr_freq_lo_tmp
+           ldx trk_scratch
+           lda voice_col_tbl,x
+           clc
+           adc #$02
+           tay
+           lda tr_freq_lo_tmp
+           jsr hex_byte_to_screen_r7
+
+           // -------- VU bar (rows 10/11/12) --------
+           // Voice 3 uses real ENV3 ($D41C); voices 1/2 use software followers.
+           ldx trk_scratch
+           cpx #$02
+           bne tv_sw_env
+           lda $D41C                     // real ENV3 for voice 3
+           jmp tv_env_got
+tv_sw_env:
+           lda trk_v1env,x              // X=0 -> trk_v1env, X=1 -> trk_v2env
+tv_env_got:
+           // A = env level 0..255. Map to 0..20 cells via env>>3 clipped at 20
+           // (so peak envelopes reach the hot red cells of vu_colour_tbl).
+           lsr
+           lsr
+           lsr                          // 0..31
+           cmp #20
+           bcc tv_env_ok
+           lda #20
+tv_env_ok:
+           sta trk_tmp_nidx             // bar count 0..20
+           // Screen pointer: trk_ptr_lo/hi = row[voice] start ($0400+row*40+5).
+           ldx trk_scratch
+           lda vu_row_base_lo,x
+           sta trk_ptr_lo
+           lda vu_row_base_hi,x
+           sta trk_ptr_hi
+           // Colour RAM pointer in trk_scratch2/3 (same offset, base $D800).
+           // $D800 - $0400 = $D400 → add $D400 to screen addr to get colour addr.
+           lda trk_ptr_lo
+           sta trk_scratch2
+           lda trk_ptr_hi
+           clc
+           adc #$D4
+           sta trk_scratch3
+           ldy #$00
+tv_bar:
+           cpy trk_tmp_nidx
+           bcs tv_space
+           lda #$62                     // horizontal middle stripe: thin bar
+           sta (trk_ptr_lo),y           // across full cell width but only the
+           lda vu_colour_tbl,y          // middle pixel rows, so bars look thin
+           sta (trk_scratch2),y         // horizontally with colour per cell
+           jmp tv_next
+tv_space:
+           lda #$20                     // empty cell
+           sta (trk_ptr_lo),y
+tv_next:
+           iny
+           cpy #20
+           bne tv_bar
+           rts
+
+// ---------- hex_byte_to_screen_r6 / r7 ----------
+// A = byte, Y = screen column. Writes 2 hex chars at row 6 (or 7) starting at col Y.
+hex_byte_to_screen_r6:
+           pha
+           lsr
+           lsr
+           lsr
+           lsr
+           jsr nibble_to_screen
+           sta $0400+6*40,y
+           iny
+           pla
+           and #$0F
+           jsr nibble_to_screen
+           sta $0400+6*40,y
+           rts
+
+hex_byte_to_screen_r7:
+           pha
+           lsr
+           lsr
+           lsr
+           lsr
+           jsr nibble_to_screen
+           sta $0400+7*40,y
+           iny
+           pla
+           and #$0F
+           jsr nibble_to_screen
+           sta $0400+7*40,y
+           rts
+
+// nibble_to_screen: A = 0..15 -> A = screencode for '0'-'9'/'A'-'F'
+// Screencode_upper: 'A'=$01 .. 'F'=$06 ; digits '0'=$30 .. '9'=$39.
+nibble_to_screen:
+           cmp #$0A
+           bcc nts_digit
+           sec
+           sbc #$09                     // 10..15 -> $01..$06 ('A'..'F')
+           rts
+nts_digit:
+           clc
+           adc #$30                     // 0..9 -> $30..$39
+           rts
+
+// ---------- envfollow_v12 ----------
+// Software envelope follower for voices 1 and 2 (voice 3 uses real ENV3).
+//
+// Per frame:
+//   - Detect gate rising edge (prev_gate=0 AND current_gate=1): snap env to $FF.
+//     This models the ear's perception of a SID note-on: instant attack, then
+//     audible decay. It also makes every re-triggered note produce a visible
+//     flash on the VU bar, which is what we want for a 25 Hz display.
+//   - Every frame, decay env by (release_nibble + 1) * 4 toward 0.
+//     Faster than SID's real release envelope but keeps the bar lively; a
+//     sustained note still visibly pulses on each retrigger.
+envfollow_v12:
+           // -- voice 1 --
+           lda $C004                    // CTRL
+           and #$01                     // current gate bit
+           sta trk_tmp_nidx             // = current gate (0 or 1)
+           lda trk_v1prev
+           eor trk_tmp_nidx             // XOR: nonzero => gate state changed
+           beq ef1_no_edge
+           lda trk_tmp_nidx
+           beq ef1_no_edge              // falling edge: let decay take over
+           lda #$FF                     // rising edge: peak
+           sta trk_v1env
+ef1_no_edge:
+           lda trk_tmp_nidx
+           sta trk_v1prev
+           // Decay every frame regardless of gate state.
+           lda $C006                    // SR
+           and #$0F                     // release nibble
+           clc
+           adc #$01
+           asl
+           asl                          // (R+1)*4
+           sta trk_ptr_lo
+           lda trk_v1env
+           sec
+           sbc trk_ptr_lo
+           bcs ef1_store
+           lda #$00
+ef1_store:
+           sta trk_v1env
+           // -- voice 2 --
+           lda $C00B                    // CTRL of voice 2
+           and #$01
+           sta trk_tmp_nidx
+           lda trk_v2prev
+           eor trk_tmp_nidx
+           beq ef2_no_edge
+           lda trk_tmp_nidx
+           beq ef2_no_edge
+           lda #$FF
+           sta trk_v2env
+ef2_no_edge:
+           lda trk_tmp_nidx
+           sta trk_v2prev
+           lda $C00D                    // SR
+           and #$0F
+           clc
+           adc #$01
+           asl
+           asl
+           sta trk_ptr_lo
+           lda trk_v2env
+           sec
+           sbc trk_ptr_lo
+           bcs ef2_store
+           lda #$00
+ef2_store:
+           sta trk_v2env
+           rts
+
+// ---------- scope_sample ----------
+// Read $D41B 40 times with ~63-cycle spacing into scope_buf. Protects timing
+// with sei so one IRQ per frame doesn't land inside the burst.
+scope_sample:
+           php
+           sei
+           ldy #$00
+ss_loop:
+           lda $D41B                    // 4 cyc
+           sta scope_buf,y              // 5 cyc
+           iny                          // 2 cyc
+           // Delay ~50 cycles.
+           ldx #$0A                     // 2
+ss_del:
+           dex                          // 2
+           bne ss_del                   // 3 (10 iters × 5 - 1 = 49)
+           cpy #40                      // 2
+           bne ss_loop                  // 3
+           plp
+           rts
+
+// ---------- scope_plot ----------
+// Clear rows 15-22 cols 0-39, then plot one cell per column at row based on
+// scope_buf[col] >> 5 (0 = bottom row 22, 7 = top row 15).
+scope_plot:
+           // Clear scope area.
+           ldx #$00
+sp_clr:
+           lda #$20
+           sta $0400+15*40,x
+           sta $0400+16*40,x
+           sta $0400+17*40,x
+           sta $0400+18*40,x
+           sta $0400+19*40,x
+           sta $0400+20*40,x
+           sta $0400+21*40,x
+           sta $0400+22*40,x
+           inx
+           cpx #40
+           bne sp_clr
+           // Plot points.
+           ldx #$00
+sp_plot:
+           lda scope_buf,x
+           lsr
+           lsr
+           lsr
+           lsr
+           lsr                          // 0..7
+           tay
+           lda scope_row_lo,y
+           sta trk_ptr_lo
+           lda scope_row_hi,y
+           sta trk_ptr_hi
+           txa
+           tay
+           lda #$51                     // round ball screencode (filled circle) — looks like dot
+           sta (trk_ptr_lo),y
+           // Also paint a cyan colour under the dot.
+           lda scope_col_lo,x           // trk's not strictly needed; skip for now.
+           inx
+           cpx #40
+           bne sp_plot
+           rts
+
+// =============================================================================
+// TRACKER DATA TABLES
+// =============================================================================
+
+// Voice shadow offsets (0, 7, 14) and on-screen column positions (7, 16, 25).
+voice_base_lo:   .byte $00, $07, $0E
+voice_col_tbl:   .byte 7, 16, 25
+
+// VU bar row base addresses (start of 20-cell bar on rows 10/11/12 at col 5).
+vu_row_base_lo:  .byte <($0400+10*40+5), <($0400+11*40+5), <($0400+12*40+5)
+vu_row_base_hi:  .byte >($0400+10*40+5), >($0400+11*40+5), >($0400+12*40+5)
+
+// Per-cell VU colour gradient (20 cells, indexed by position 0..19).
+// White -> light grey -> yellow -> orange -> light red -> red. As the bar
+// fills further right, later cells light up in hotter colours.
+//   $01 white, $0F light grey, $07 yellow, $08 orange, $0A light red, $02 red
+vu_colour_tbl:   .byte $01,$01,$01,$01, $0F,$0F,$0F,$0F, $07,$07,$07,$07
+                 .byte $08,$08,$08, $0A,$0A, $02,$02,$02
+
+// Scope row base addresses (row 15 at top, row 22 at bottom).
+scope_row_lo:    .byte <($0400+22*40), <($0400+21*40), <($0400+20*40), <($0400+19*40), <($0400+18*40), <($0400+17*40), <($0400+16*40), <($0400+15*40)
+scope_row_hi:    .byte >($0400+22*40), >($0400+21*40), >($0400+20*40), >($0400+19*40), >($0400+18*40), >($0400+17*40), >($0400+16*40), >($0400+15*40)
+scope_col_lo:    .fill 40, 0           // unused placeholder
+
+// 40-byte scope sample buffer.
+scope_buf:       .fill 40, 0
+
+// Per-voice runtime temps (used only inside tr_render_voice / envfollow).
+// NB: trk_ptr_lo/hi, trk_tmp_nidx, tr_ctrl_tmp now live in zero page (see
+// constants block near top of file) so `sta (ptr),y` works correctly.
+tr_freq_lo_tmp:  .byte 0
+tr_freq_hi_tmp:  .byte 0
+
+// Wave-name table: 4 entries × 3 chars ("TRI"/"SAW"/"PUL"/"NOI"/"---").
+.encoding "screencode_upper"
+wave_names:      .text "TRI"
+                 .text "SAW"
+                 .text "PUL"
+                 .text "NOI"
+                 .text "---"
+
+// Screen chrome strings (40 chars each, screencode_upper).
+trk_title:       .text "   SID TRACKER VIEW - TRIANGLE INTRO    "
+trk_hdr:         .text "       V1       V2       V3             "
+trk_rowlabels:   .text "NOTE:                                   "
+                 .text "WAVE:                                   "
+                 .text "GATE:                                   "
+                 .text "ADSR:                                   "
+                 .text "FREQ:                                   "
+trk_vuhdr:       .text "VU METERS (V3 = REAL ENV3):             "
+trk_vu_pre:      .text "V1  ["
+                 .text "V2  ["
+                 .text "V3  ["
+trk_scopehdr:    .text "SCOPE  -  OSC3 OUTPUT OF VOICE 3:       "
+trk_footer:      .text "  PRESS P OR SPACE TO STOP MUSIC        "
+.encoding "ascii"
+
+// Undo table for tracker_unpatch (max TRK_UNDO_MAX entries).
+trk_undo_count:  .byte 0
+trk_undo_lo:     .fill TRK_UNDO_MAX, 0
+trk_undo_hi:     .fill TRK_UNDO_MAX, 0
+
+// Note-frequency table (PAL SID, 96 notes C-0..B-7). Stored as two parallel
+// byte arrays (lo, hi) so lookup can compare each half without 16-bit fetch.
+.const PAL_CLK = 985248
+.function note_val(i) {
+    .return round(440 * pow(2, (i-57)/12.0) * 16777216 / PAL_CLK)
+}
+note_freq_lo:
+.for (var i = 0; i < 96; i++) {
+    .byte note_val(i) & $FF
+}
+note_freq_hi:
+.for (var i = 0; i < 96; i++) {
+    .byte (note_val(i) >> 8) & $FF
+}
+
+// Note-name table: 96 × 3 chars ("C-0", "C#0", "D-0", ... "B-7").
+.encoding "screencode_upper"
+note_name_tbl:
+.for (var i = 0; i < 96; i++) {
+    .var n = mod(i, 12)
+    .var oct = floor(i / 12)
+    .if (n==0)  { .text "C-" }
+    .if (n==1)  { .text "C#" }
+    .if (n==2)  { .text "D-" }
+    .if (n==3)  { .text "D#" }
+    .if (n==4)  { .text "E-" }
+    .if (n==5)  { .text "F-" }
+    .if (n==6)  { .text "F#" }
+    .if (n==7)  { .text "G-" }
+    .if (n==8)  { .text "G#" }
+    .if (n==9)  { .text "A-" }
+    .if (n==10) { .text "A#" }
+    .if (n==11) { .text "B-" }
+    .byte $30 + oct                      // '0'..'7' screencode digit
+}
+.encoding "ascii"
+
+// =============================================================================
+// END TRACKER VIEW
+// =============================================================================
+
 PNP:    .byte 4,0,0,0,0
 
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.32 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.33 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -8445,7 +9314,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.32 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.33 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -9251,7 +10120,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.32 README"
+    .text "SIDDETECTOR V1.4.33 README"
     .byte 13
     .byte 13
     .byte $05
@@ -9414,6 +10283,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.33 SID TRACKER VIEW (P KEY)"
+    .byte 13
+    .byte $9E
     .text "  V1.4.32 SKIP PDSID D4XX MIRRORS"
     .byte 13
     .byte $9E
@@ -9424,9 +10296,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.29 FIX DISPLAY GAPS"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.28 SIDVARIANT PROXY IN VICE 3.9"
     .byte 13
     .byte 13
     .byte 0                         // null terminator

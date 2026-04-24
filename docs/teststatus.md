@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-19  
 **Build:** `$2400–$5D87` (code) `$6000–$910E` (data)  
-**Version:** V1.4.32  
+**Version:** V1.4.33  
 Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 
 ---

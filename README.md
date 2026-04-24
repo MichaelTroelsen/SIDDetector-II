@@ -1,4 +1,4 @@
-# SID Detector v1.4.32
+# SID Detector v1.4.33
 
 A Commodore 64 diagnostic utility that identifies 24+ variants of the SID (Sound Interface Device) chip — including real hardware, FPGA clones, microcontroller emulators, and PC emulators.
 
@@ -12,7 +12,7 @@ Syntax: KickAssembler (converted from ACME original)
 
 ## Screenshot
 
-![SID Detector v1.4.32 running in VICE](screenshot.png)
+![SID Detector v1.4.33 running in VICE](screenshot.png)
 
 ---
 
@@ -263,7 +263,22 @@ row 16: stereo sid.:  [address + chip name per slot]
 
 Spacebar restarts the full detection sequence (raster-stable restart via `$D012` spin). Pressing SPACE also silences all SID voices immediately.
 
-Press **P** to play/stop the built-in Triangle Intro SID music (50 Hz IRQ-driven, `$1800`). Press **P** again to stop.
+Press **P** to launch the **SID Tracker View** — a dedicated screen that plays the built-in Triangle Intro (Michael Troelsen / Fun Fun 1988) and shows per-voice state live while music plays:
+
+- **NOTE / WAVE / GATE / ADSR / FREQ** columns for voices 1–3
+- **VU bar** per voice with a white → grey → yellow → orange → red gradient
+  (voice 3 reads real `$D41C` ENV3; voices 1/2 use a software envelope follower
+  with gate-edge detection)
+- **Live OSC3 scope** across rows 15–22 (40-sample burst of `$D41B`)
+
+Press **P**, **SPACE**, or **Q** on the tracker screen to stop and return to detection.
+
+Technical note: SID voice registers are write-only, so to display what the
+player is writing to voices 1 and 2 the tracker patches the player binary
+at `$1800–$1FFF`, rewriting every `STA $D4xx` to `STA $C0xx`. The raster
+IRQ then copies `$C000–$C01F → $D400–$D41F` each frame *after* the play
+call, so audio is unaffected. On exit, an undo table restores the
+original bytes for a clean re-entry.
 
 Press **I** to enter the info page for the detected chip. Navigate with CRSR LEFT/RIGHT; SPACE returns to the main screen. 17 pages are available (one per chip type), browsable in any order.
 
@@ -394,6 +409,7 @@ Because the actual detection routines (`Checkarmsid`, `checkfpgasid`, etc.) prob
 
 ## Known issues / TODO
 
+- **Added V1.4.33:** SID Tracker View (P key) — dedicated screen during music playback showing per-voice NOTE/WAVE/GATE/ADSR/FREQ, VU bars with white→red gradient, and live OSC3 scope for voice 3. Player writes are redirected to shadow RAM at `$C000–$C01F` via one-shot binary patch so voice 1/2 registers can be read back (normally write-only). Tracker code lives at `$9200` (below BASIC ROM) to stay CPU-visible without bank switching. See [MEMORYMAP.md](docs/MEMORYMAP.md).
 - **Fixed V1.3.84:** SIDFX secondary D420 probing: (1) removed D41D echo test — SIDFX write-buffers unmapped registers ($1D–$1F), causing any chip at D420 to echo back the written value (not chip-specific). (2) When primary SID is ARMSID, skip DIS probe at D420 entirely — ARMSID snoops CS2 DIS writes and drives $4E aggressively on all D4xx bus reads, contaminating D43B. Falls back to SIDFX-reported type (6581/8580). DIS probe still works for D420 with non-ARMSID primary, and for D5xx+ regardless of primary. Added D41B ACK in `sfx_probe_dis_echo` before secondary reads (harmless for non-ARMSID primaries).
 - **Fixed V1.3.83:** Detection confidence indicator — if `checkrealsid` needed retries due to VIC bad-line DMA steals, a `*` is appended after "6581 FOUND"/"8580 FOUND" on the main screen. `retry_zp` ($B2) tracks how many of the 3 attempts were used.
 - **Fixed V1.3.81:** Multi-SID sound test now plays the full 3-voice melody on every detected SID slot (not just a triangle tone). `snd_patch_page` self-modifies all 31 `sta $D4xx` instructions in `st_soundtest` to the target SID page.
