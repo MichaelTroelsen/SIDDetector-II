@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.38  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.39  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -1225,37 +1225,36 @@ do_tlr:
 do_restart:
            lda #$00
            sta sid_music_flag      // stop SID module before restart
-           // Clear rows 23 (progress bar) + 24 (banner) so the old legend
-           // doesn't sit behind the restart UI; fill with spaces (screen code $20).
+           // Clear row 24 (banner + bar) so the old legend doesn't sit
+           // behind the restart UI; fill with spaces (screen code $20).
            ldx #$00
 dor_clr:   lda #$20
-           sta $0798,x             // row 23 = $0400 + 23*40 = $0798
-           sta $07C0,x             // row 24 = $07C0
+           sta $07C0,x             // row 24 = $0400 + 24*40 = $07C0
            inx
            cpx #$28               // 40 columns
            bne dor_clr
-           // Write "*** RESTARTING ***" at row 23, col 11 (~centered in 40 cols).
+           // Write "*** RESTARTING ***" at row 24, col 11 (~centered in 40 cols).
            ldx #$00
 dor_cpy:   lda dor_msg,x
            beq dor_clr_color      // 0 terminator → done writing text
-           sta $07A3,x             // row 23 * 40 = $0798; +$0B = col 11
+           sta $07CB,x             // row 24 * 40 = $07C0; +$0B = col 11
            inx
            bne dor_cpy             // infinite-guard: message < 256 bytes
 dor_clr_color:
-           // Paint the banner row yellow (colour code 7) so the user sees
-           // it against the usual green text.
+           // Paint row 24 yellow (colour code 7); the bar progressively
+           // overwrites colour with green as it sweeps across.
            ldx #$00
 dor_col:   lda #$07
-           sta $DB98,x             // colour RAM row 23
+           sta $DBC0,x             // colour RAM row 24
            inx
            cpx #$28
            bne dor_col
-           // Progress bar across row 24 (one row below the banner): fill
-           // 40 cells with $A0 (reverse-space = solid block) one cell at a
-           // time. ~16 × loop1sek (~3.4 ms) per cell ≈ 54 ms × 40 cells ≈
-           // 2.16 s — same total dwell as the old dor_dout/dor_din/dor_d3
-           // chain, now with visible feedback. loop1sek preserves X/Y so
-           // the column counter survives.
+           // Progress bar shares row 24 with the banner. Outside the banner
+           // range (cols 11..28) we paint a solid block ($A0); inside the
+           // banner range we leave the banner text in place and only flip
+           // its colour to green, so the bar visually sweeps through the
+           // banner without erasing it. ~16 × loop1sek (~3.4 ms) per cell ≈
+           // 54 ms × 40 cells ≈ 2.16 s — same total dwell as before.
            ldx #$00                // X = column index 0..39
 dor_bar:
            ldy #$10                // 16 inner ticks per column
@@ -1263,8 +1262,16 @@ dor_bar_in:
            jsr loop1sek
            dey
            bne dor_bar_in
+           // Banner range = cols 11..28 inclusive ($0B..$1C).
+           cpx #$0B
+           bcc dor_bar_paint        // col < 11 → outside → paint block
+           cpx #$1D
+           bcs dor_bar_paint        // col >= 29 → outside → paint block
+           jmp dor_bar_color        // inside banner → keep text, recolor only
+dor_bar_paint:
            lda #$A0                // solid block (reverse-space screencode)
            sta $07C0,x             // row 24 character
+dor_bar_color:
            lda #$05                // green colour
            sta $DBC0,x             // colour RAM row 24
            inx
@@ -9069,7 +9076,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.38 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.39 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9413,7 +9420,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.38 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.39 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10219,7 +10226,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.38 README"
+    .text "SIDDETECTOR V1.4.39 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10382,6 +10389,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.39 BAR + BANNER ON ROW 24"
+    .byte 13
+    .byte $9E
     .text "  V1.4.38 RESTART BAR ROW 23->24"
     .byte 13
     .byte $9E
@@ -10392,9 +10402,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.35 2ND TUNE + RESTART BAR"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.33 SID TRACKER VIEW (P KEY)"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
