@@ -1,6 +1,6 @@
 # SID Detector — Memory Map
 
-**Version:** V1.4.35  
+**Version:** V1.4.36  
 **Assembler:** KickAssembler  
 **Build output:** code $2400–$593C, data $6000–$9101, tracker $9200–$9FC9, Delirious 9 tune $A000–$B399, tune-mgmt $C020–$C135
 
@@ -201,12 +201,14 @@ Explicitly placed with `* = $5300` in the assembler source.
 
 | Address | Label | Size | Description |
 |---------|-------|------|-------------|
-| $5300 | `num_sids` | 8 B | Slot 0 = SID count found; slots 1–7 unused here |
-| $5308 | `sid_list_l` | 8 B | SID address low byte per slot ($00 or $20) |
-| $5310 | `sid_list_h` | 8 B | SID address high byte per slot ($D4/$D5/$D6/$D7/$DE/$DF) |
-| $5318 | `sid_list_t` | 8 B | Chip type code per slot (see Type Codes below) |
+| $6000 | `num_sids` | 9 B | Slot 0 reserved; slots 1–8 unused here |
+| $6009 | `sid_list_l` | 9 B | SID address low byte per slot ($00 or $20) |
+| $6012 | `sid_list_h` | 9 B | SID address high byte per slot ($D4/$D5/$D6/$D7/$DE/$DF) |
+| $601B | `sid_list_t` | 9 B | Chip type code per slot (see Type Codes below) |
 
-Slot 0 is unused (reserved). Slots 1–7 hold detected SIDs. `num_sids[0]` = count of active slots.
+Slot 0 is unused (reserved). Slots 1–8 hold detected SIDs. `sidnum_zp` ($F7)
+holds the live count of active slots — extended from a 1..7 range to 1..8
+in V1.4.36 to accommodate the U64 "Tuneful Eight" 8-SID configuration.
 
 ### UCI Response Buffer ($5320–$5336)
 

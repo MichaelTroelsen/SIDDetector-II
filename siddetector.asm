@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.35  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.36  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -200,12 +200,12 @@ start:
                 sta res_zp              // init: no tentative SwinSID Nano result
                 sta retry_zp            // init: no retries yet
                 sta fmyam_detected      // init: FM-YAM / SFX not detected (reset on every restart)
-init_sid_list:                          // zero the 8-slot SID result tables (A=$00)
+init_sid_list:                          // zero the 9-slot SID result tables (A=$00)
                 sta sid_list_h,x        // SID address high byte ($D4/$D5 ...)
                 sta sid_list_l,x        // SID address low byte  ($00/$20 ...)
                 sta sid_list_t,x        // chip type code for this slot
                 inx
-                cpx #$08               // 8 slots; slot 0 unused, slots 1-7 active
+                cpx #$09               // 9 slots; slot 0 unused, slots 1-8 active (U64 8-SID)
                 bne init_sid_list
 
                 lda #$00
@@ -2571,7 +2571,7 @@ dbg_sids_last:
            lda #$0D
            jsr $FFD2
            inx
-           cpx #$08                // max 7 entries
+           cpx #$09                // max 8 entries (slots 1..8)
            bne dbg_sids
 dbg_sids_done:
            jmp dbg_p1_nav          // page 1 → nav (skip SID2 section)
@@ -5316,14 +5316,15 @@ s_s_cs2_dup_nx:
 s_s_cs2_mir:
        jmp s_s_next           // D4xx CS2 ARMSID already in list → mirror → skip
 s_s_add:
-       // Bounds guard: sid_list has 8 slots (0..7); slot 0 unused so usable
-       // slots are 1..7. Past-end writes corrupt sid_list_h / sid_list_t /
-       // uci_resp (contiguous at $6010/$6018/$6020). Observed on VICE
-       // PDsid proxy: the PDsid mirror responds at $D4xx..$DFxx, yielding
-       // 31 would-be adds that rewrote the whole array with lo-byte values.
+       // Bounds guard: sid_list has 9 slots (0..8); slot 0 unused so usable
+       // slots are 1..8 (U64 Tuneful Eight uses all 8). Past-end writes
+       // corrupt sid_list_h / sid_list_t / uci_resp (contiguous at
+       // $6010/$6018/$6020). Observed on VICE PDsid proxy: the PDsid mirror
+       // responds at $D4xx..$DFxx, yielding 31 would-be adds that rewrote
+       // the whole array with lo-byte values.
        lda sidnum_zp
-       cmp #$07
-       bcs s_s_next           // sidnum >= 7 → list full; skip add
+       cmp #$08
+       bcs s_s_next           // sidnum >= 8 → list full; skip add
        ldx sidnum_zp //
        inx
        stx sidnum_zp
@@ -6006,8 +6007,8 @@ csfp_l_l_found:
        //hvis fundet
        // sanity check
        lda sidnum_zp
-       cmp #$07               // fixed off-by-one: bound is sidnum <= 6 (post-inc ≤ 7)
-       bcs csfp_l_next        // skip if sidnum >= 7 (would overflow slot 7)
+       cmp #$08               // bound is sidnum <= 7 (post-inc ≤ 8); 8 SIDs max for U64
+       bcs csfp_l_next        // skip if sidnum >= 8 (would overflow slot 8)
        // sanity check
        ////// found sid //////
        ldx sidnum_zp // 
@@ -6308,8 +6309,8 @@ ssp_skp20:
         lda     #13
         jsr     $ffd2
         ldy tmp2_zp
-        cpy #$08            // cap at 8 entries (rows 16-23; row 24 = shortcut line)
-        beq ssp_ex1
+        cpy #$09            // cap at 8 entries (rows 16-23; row 24 = shortcut line)
+        beq ssp_ex1         // tmp2_zp post-incs to N before cap test, so #$09 → 8 rows
         cpy sidnum_zp
         beq ssp_ex1
         jmp ssp_loop
@@ -9044,7 +9045,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.35 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.36 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9252,14 +9253,17 @@ uca_sil2f: sta $D40F          // self-mod → mptr+$0F (silence freq)
        rts
 
 * = $6000
+// 9 bytes per array: slot 0 reserved (legacy "count" position, never read as a
+// chip slot); slots 1..8 hold up to 8 detected SIDs (U64 Tuneful Eight uses
+// all 8 across $D4xx-$DFxx).
 num_sids:
-        .byte    $0,$9,$9,$9,$9,$9,$9,$9
+        .byte    $0,$9,$9,$9,$9,$9,$9,$9,$9
 sid_list_l:
-        .byte    $0,$0,$0,$0,$0,$0,$0,$0
+        .byte    $0,$0,$0,$0,$0,$0,$0,$0,$0
 sid_list_h:
-        .byte    $0,$0,$0,$0,$0,$0,$0,$0
+        .byte    $0,$0,$0,$0,$0,$0,$0,$0,$0
 sid_list_t:
-        .byte    $0,$0,$0,$0,$0,$0,$0,$0
+        .byte    $0,$0,$0,$0,$0,$0,$0,$0,$0
 
 uci_resp:           // 23-byte buffer (GET_HWINFO $04/$28/$01 response, 5 bytes per frame):
                     // [0]=count  [1..5]=F1(lo,hi,sec_hi,sec_lo,type)  [6..10]=F2  [11..15]=F3  [16..20]=F4
@@ -9382,7 +9386,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.35 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.36 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10188,7 +10192,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.35 README"
+    .text "SIDDETECTOR V1.4.36 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10351,6 +10355,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.36 U64 8-SID TUNEFUL EIGHT"
+    .byte 13
+    .byte $9E
     .text "  V1.4.35 2ND TUNE + RESTART BAR"
     .byte 13
     .byte $9E
@@ -10361,9 +10368,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.31 FIX SID_LIST OVERFLOW"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.30 TEST MATRIX HTML DIAGRAM"
     .byte 13
     .byte 13
     .byte 0                         // null terminator

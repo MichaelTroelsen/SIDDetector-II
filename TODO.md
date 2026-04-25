@@ -2,11 +2,16 @@
 
 ## New chips to detect
 
-- [ ] **8-SID "Sinful Eight" (U64)** — Ultimate 64 supports up to 8 concurrent
-      UltiSID slots across `$D400–$DFxx`. Current `fiktivloop` + UCI
-      `GET_HWINFO` handles 2 EMUSIDs; extend to enumerate all 8, verify
-      the stereo list renders ≤ 7 non-primary entries (slot 0 reserved),
-      and regenerate goldens for a new VICE tri- / octa-SID test case.
+- [x] **8-SID "Tuneful Eight" (U64)** — V1.4.36: extended `num_sids` /
+      `sid_list_l/h/t` from 8 to 9 bytes (slot 0 reserved + slots 1..8);
+      bumped the `s_s_add` cap from `cmp #$07` to `cmp #$08`, the
+      FPGASID-stereo `csfp_l_l_found` cap to `cmp #$08`, the startup
+      zero-init loop to `cpx #$09`, the debug-print loop to `cpx #$09`,
+      and the `sidstereo_print` cap to `cpy #$09`. SID rows now render
+      at rows 16..23 (one extra row over V1.4.35's 16..22); row 24 stays
+      as the action bar. U64 detection itself is unchanged (`is_u64 = 1`
+      via `$DF1F != $FF`). Verified with TLR's sid-detect2 confirming
+      hardware exposes 8 addressable SIDs.
 - [ ] **EMUSID (new)** — Planned chip family (TBD vendor / protocol).
       Add detection stub + TODO.md placeholder once the magic-cookie
       spec is published; wire it through `sidstereo_print` + info page.
