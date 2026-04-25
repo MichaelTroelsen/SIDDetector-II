@@ -38,3 +38,7 @@ __pycache__/
 
 # Build lock
 .version
+
+# Per-run U64 test artifacts (snapshot before-test, JSON of cfg after-convert)
+bin/_u64_pretest_backup.json
+bin/tt8-ultimate.json
