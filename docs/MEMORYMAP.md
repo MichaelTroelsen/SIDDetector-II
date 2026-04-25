@@ -1,6 +1,6 @@
 # SID Detector — Memory Map
 
-**Version:** V1.4.43  
+**Version:** V1.4.44  
 **Assembler:** KickAssembler  
 **Build output:** code $2400–$594F, data $6000–$911E, tracker $9200–$9FC9, Delirious 9 tune $A000–$B399, tune-mgmt $C020–$C21F  
 **Maintained by:** `python scripts/check_memorymap.py [--fix]` — verify symbol addresses match `siddetector.sym`, or auto-rewrite drifted ones.
@@ -315,9 +315,9 @@ Null-terminated ASCII labels used by the debug screen printer. Starting at `$55A
 
 | Address | Label | Description |
 |---------|-------|-------------|
-| $8F3F | `uci_type_for_addr` | Determine UltiSID 6581/8580 via UCI GET_HWINFO + checkrealsid fallback |
-| $9000 | `dbg_print_frame` | Print "Fn:$xxyy T=xx INT/EXT [curve]\n" for debug page 2 |
-| $90A4 | `dbg_uci_query` | Issue UCI GET_HWINFO, fill `uci_resp[0..22]`, drain FIFO |
+| $8F40 | `uci_type_for_addr` | Determine UltiSID 6581/8580 via UCI GET_HWINFO + checkrealsid fallback |
+| $9001 | `dbg_print_frame` | Print "Fn:$xxyy T=xx INT/EXT [curve]\n" for debug page 2 |
+| $90A5 | `dbg_uci_query` | Issue UCI GET_HWINFO, fill `uci_resp[0..22]`, drain FIFO |
 | ~$7EA7 | *(end)* | Last byte of assembled binary |
 
 ---

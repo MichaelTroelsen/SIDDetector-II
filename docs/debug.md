@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.4.44  | TT8 8-SID HARDWARE TEST |
 | V1.4.43  | TYPE FIX + DRAIN CAP + MEMMAP |
 | V1.4.42  | U64 BEHAVIORAL THRESHOLD 4 |
 | V1.4.41  | TUNEFUL 8 BANNER ON NOSID ROW |
