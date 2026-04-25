@@ -43,13 +43,28 @@ def cfg_to_json() -> dict:
     return out
 
 
-def c64u(*args: str, capture: bool = False) -> str:
+def c64u(*args: str, capture: bool = False, retries: int = 3) -> str:
+    """Run c64u once. On HTTP timeout / connect-refused, sleep + retry up to
+    `retries` times — applying the SID config can briefly take the U64's HTTP
+    listener offline as it re-initialises hardware."""
     cmd = [C64U, "--host", HOST, *args]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if capture:
-        return result.stdout
-    if result.returncode != 0:
-        sys.stderr.write(f"FAIL: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}\n")
+    last_err = ""
+    for attempt in range(retries + 1):
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout
+        last_err = (result.stderr or "") + (result.stdout or "")
+        # Retry only on transient connection failures.
+        transient = ("dial tcp" in last_err) or ("EOF" in last_err) or (
+            "connection reset" in last_err
+        )
+        if not transient or attempt == retries:
+            break
+        wait = 2 + attempt * 2
+        sys.stderr.write(f"  (attempt {attempt + 1}/{retries + 1}: connection issue; retrying in {wait}s)\n")
+        time.sleep(wait)
+    if not capture:
+        sys.stderr.write(f"FAIL: {' '.join(cmd)}\n{last_err}\n")
     return result.stdout
 
 
@@ -106,16 +121,33 @@ def main() -> int:
         out = c64u("config", "show", cat, "--json", capture=True)
         try:
             parsed = json.loads(out)
-            snap.update(parsed)
         except json.JSONDecodeError:
             print(f"  WARNING: failed to parse category {cat!r}; skipping")
+            continue
+        if not isinstance(parsed, dict):
+            print(f"  WARNING: category {cat!r} response not a dict; skipping")
+            continue
+        # `config show --json` returns {"<cat>": {...}, "errors": []} on success;
+        # populated `errors` or `success: false` means a connection / API failure.
+        errs = parsed.get("errors")
+        if errs:
+            print(f"  WARNING: category {cat!r} returned errors {errs!r}; skipping")
+            continue
+        if parsed.get("success") is False:
+            print(f"  WARNING: category {cat!r} returned success=false; skipping")
+            continue
+        if cat not in parsed:
+            print(f"  WARNING: category {cat!r} missing from response; skipping")
+            continue
+        snap[cat] = parsed[cat]
+    if not snap:
+        print("  ERROR: snapshot empty — refusing to apply tt8. Check U64 connectivity.")
+        if BACKUP.exists():
+            BACKUP.unlink()
+        return 2
     BACKUP.write_text(json.dumps(snap, indent=2), encoding="utf-8")
-    if BACKUP.stat().st_size < 100:
-        print(f"  WARNING: snapshot looks too small ({BACKUP.stat().st_size} bytes)")
-        print("  Continuing, but restore at the end may be incomplete.")
-    else:
-        cats = ", ".join(snap.keys())
-        print(f"  saved {BACKUP.stat().st_size} bytes ({cats})")
+    cats = ", ".join(snap.keys())
+    print(f"  saved {BACKUP.stat().st_size} bytes ({cats})")
 
     print(f"\n=== Step 2: convert {CFG.name} -> JSON ===")
     settings = cfg_to_json()
@@ -129,7 +161,9 @@ def main() -> int:
     try:
         print(f"\n=== Step 3: apply tt8 config to U64 @ {HOST} ===")
         c64u("config", "set-multiple", str(JSON_OUT))
-        time.sleep(0.5)
+        # Applying SID-addressing changes briefly takes the U64's HTTP
+        # listener offline; pause to let it come back before the run-prg call.
+        time.sleep(3.0)
 
         print(f"\n=== Step 4: boot siddetector.prg + wait for detection ===")
         c64u("runners", "run-prg-upload", PRG)
