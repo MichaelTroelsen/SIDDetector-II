@@ -1,8 +1,8 @@
 # SID Detector — Memory Map
 
-**Version:** V1.3.58  
+**Version:** V1.4.35  
 **Assembler:** KickAssembler  
-**Build output:** code $2400–$555C (164-byte margin to data segment), data $5600–$823E
+**Build output:** code $2400–$593C, data $6000–$9101, tracker $9200–$9FC9, Delirious 9 tune $A000–$B399, tune-mgmt $C020–$C135
 
 ---
 
@@ -42,7 +42,8 @@
 | $00BD | `trk_ptr_hi` | Tracker ZP pointer high |
 | $00BE | `trk_tmp_nidx` | Tracker scratch (nibble / wave index) |
 | $00BF | `tr_ctrl_tmp` | Tracker cached CTRL byte for current voice |
-| $00C0–$00F5 | — | Unused by program |
+| $00C0 | `cur_tune` | Tracker current tune (0 = Triangle Intro, 1 = Delirious 9) |
+| $00C1–$00F5 | — | Unused by program |
 | $00F6 | `cnt2_zp` | Inner mirror-scan step counter (fiktivloop / checkanothersid) |
 | $00F7 | `sidnum_zp` | Number of SID chips found so far (0–8) |
 | $00F8 | `cnt1_zp` | tab1/tab2 index during multi-SID scan |
@@ -334,6 +335,42 @@ shadow.
 
 The undo table ensures a clean exit: on SPACE / P / Q, `tracker_unpatch`
 restores every patched `$C0` back to `$D4`, so second-entry works fine.
+
+---
+
+## Delirious 9 Tune ($A000–$B39B)
+
+| Address | Description |
+|---------|-------------|
+| $A000 | **Delirious 9** by Michael Troelsen / Genesis Project, 1990 |
+| $A000 | Init address (SIDwinder-relocated from native $2BFE) |
+| $A005 | Play address — called from raster IRQ when `cur_tune = 1` |
+| $A006–$B39B | Music data, pattern tables, code |
+
+Lives under BASIC ROM. The C64 LOAD routine writes to RAM beneath ROM, so the
+tune lands correctly. To read or execute it, the IRQ banks `$01 = $36` only
+during the player call (and `tune_player_init` / `tracker_patch_once` do the
+same), then restores `$01 = $37` so `$AB1E` (BASIC STROUT) keeps working in
+the rest of the program.
+
+---
+
+## Tune-Management Segment ($C020–$C135)
+
+| Address | Label | Description |
+|---------|-------|-------------|
+| $C020 | `tune_select` | Apply `cur_tune` to all per-tune patch sites |
+| ~$C04A | `tune_init_lo/hi`, `tune_play_lo/hi` | Per-tune dispatch tables (2 entries each) |
+| ~$C062 | `tune_scan_*_tbl` | tracker_patch_once scan range per tune |
+| ~$C06B | `tune_scan_start_lo/hi`, `tune_scan_end_hi` | Live working values |
+| ~$C06E | `trk_undo_count`, `trk_undo_lo/hi` | tracker_unpatch undo entries (40 max) |
+| ~$C0BF | `trk_title2` | "  SID TRACKER VIEW - DELIRIOUS 9 (1990) " |
+| ~$C0E7 | `tune_player_init` | Bank BASIC out, JSR init (operand patched) |
+| ~$C100 | `tune_switch` | Stop, silence, unpatch, repatch, re-init, redraw |
+
+Placed above the shadow SID (`$C000–$C01F`) and well below KERNAL ROM
+(`$E000`). Pulled out of the `$9200` tracker segment because the additions
+would otherwise overflow `$A000` (start of the embedded Delirious 9 body).
 
 ---
 

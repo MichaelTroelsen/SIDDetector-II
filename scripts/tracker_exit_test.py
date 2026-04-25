@@ -5,8 +5,8 @@ import os, time, socket, subprocess, re
 VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
 PRG  = r"C:/Users/mit/claude/c64server/siddetector2/siddetector.prg"
 PORT = 6502
-DO_SID_MUSIC = 0x2a61
-TRACKER_EXIT = 0x932f
+DO_SID_MUSIC = 0x2a63
+TRACKER_EXIT = 0x9354
 
 def connect():
     for _ in range(60):

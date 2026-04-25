@@ -24,6 +24,23 @@
 - [x] Use a simple triangle-wave note (voice 1, fixed frequency) per SID address
 - [x] Optionally allow pressing a key to cycle through all detected SIDs
 
+### Second tune + tune-select in tracker view
+- [x] **Embed `bin/Delirious_9_tune.sid` (Troelsen / Fun Fun, Genesis Project
+      1990) as a second tune in the tracker view, selected with keys 1 / 2.**
+      Resolved V1.4.34 via option 1 (SIDwinder offline relocation): tune
+      relocated to `$A000-$B39B` and embedded directly in the .prg as a
+      separate segment. New tune-management code lives in a fresh `$C020`
+      segment (above the tracker shadow at `$C000-$C01F`). `tune_select`
+      patches IRQ play / init JSR operands, tracker_patch_once scan range,
+      and the title row pointer. `tracker_poll_keys` now handles `1` / `2`
+      and calls `tune_switch` which stops IRQ play, silences SID, unpatches
+      old player, repatches new range, re-inits, redraws chrome. BASIC ROM
+      is banked out (`$01=$36`) only inside the IRQ play call and around
+      tune_player_init / tracker_patch_once — the rest of the program keeps
+      `$01=$37` so `$AB1E` (BASIC STROUT) still works. PRG grew from
+      ~33 KB to ~46 KB (8 KB zero-pad to $A000 + 5 KB tune + ~256 B in
+      $C020 segment).
+
 ### SID music playback (P key) — visual animation
 - [x] **VU meters / waveform display while SID music plays.** Implemented as
       a dedicated "SID TRACKER VIEW" screen (P enters, SPACE / P / Q exits via

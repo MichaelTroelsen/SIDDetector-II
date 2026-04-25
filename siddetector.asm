@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.33  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.35  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -37,6 +37,14 @@
 .var sidFile = LoadBinary("bin/Triangle_Intro.sid")
 * = $1800
     .fill sidFile.getSize() - $7E, sidFile.get(i + $7E)  // skip 126-byte header+load-addr
+
+// SID music module 2: Delirious 9 by Michael Troelsen (Fun Fun) / Genesis Project, 1990
+// Relocated by SIDwinder to load address $A000, init $A000, play $A005.
+// Lives under BASIC ROM ($A000-$BFFF) — caller must bank BASIC out ($01=$36)
+// before any read/exec from this region, then restore $01=$37.
+.var sidFile2 = LoadBinary("bin/Delirious_9_A000.sid")
+* = $A000
+    .fill sidFile2.getSize() - $7E, sidFile2.get(i + $7E)
 
 // Tracker view shadow SID: player's STA $D4xx writes are rewritten to STA $C0xx
 // at P-key start; IRQ copies $C000-$C01F to $D400-$D41F each frame so the
@@ -137,6 +145,10 @@ tlr_data:
 .const trk_tmp_nidx   = $BE // tracker scratch for nibble/wave index
 .const tr_ctrl_tmp    = $BF // tracker cached CTRL byte for current voice
 
+// Current tune in tracker view: 0 = Triangle Intro ($1800/$1806), 1 = Delirious 9
+// ($A000/$A005, lives under BASIC ROM — IRQ banks $01=$36 around play call).
+.const cur_tune       = $C0
+
 // Detection state ($F6-$FF)
 .const cnt2_zp  = $F6   // inner mirror-scan step counter (fiktivloop / checkanothersid)
 .const sidnum_zp= $F7   // number of SID chips found so far (0-8)
@@ -179,6 +191,7 @@ start:
                 sta colwash_flag        // suppress COLWASH until readkey2 enables it
                 sta trk_patched         // tracker: player binary not yet redirected
                 sta trk_undo_count      // tracker: no undo entries
+                sta cur_tune            // tracker: default to Triangle Intro (tune 0)
                 lda #$15                // $D018: charset ROM at $D000, uppercase/graphics set
                 sta $D018               // switch to uppercase character set
                 ldx #$00
@@ -1154,12 +1167,11 @@ kbd_not_q:
 do_sid_music:
            lda sid_music_flag
            bne sid_music_stop      // already playing → stop (safety; normally 0)
+           jsr tune_select         // apply cur_tune (scan range, IRQ play op,
+                                   // init op, title pointer)
            jsr tracker_patch_once  // redirect player's $D4xx writes to $C0xx
-           sei                     // guard init against mid-frame IRQ call to $1806
-           ldx #$00
-           ldy #$00
-           lda #$00                // subtune 0 = song 1
-           jsr $1800               // SID init: Triangle Intro (writes go to shadow)
+           sei                     // guard init against mid-frame IRQ call
+           jsr tune_player_init    // bank BASIC out, jsr init, restore $01
            lda #$01
            sta sid_music_flag      // arm IRQ play
            cli
@@ -1190,11 +1202,12 @@ do_tlr:
 do_restart:
            lda #$00
            sta sid_music_flag      // stop SID module before restart
-           // Clear row 24 (action bar) so the old legend doesn't sit behind
-           // the restart banner; fill with spaces (screen code $20).
+           // Clear rows 23 (progress bar) + 24 (banner) so the old legend
+           // doesn't sit behind the restart UI; fill with spaces (screen code $20).
            ldx #$00
 dor_clr:   lda #$20
-           sta $07C0,x
+           sta $0798,x             // row 23 = $0400 + 23*40 = $0798
+           sta $07C0,x             // row 24 = $07C0
            inx
            cpx #$28               // 40 columns
            bne dor_clr
@@ -1214,21 +1227,25 @@ dor_col:   lda #$07
            inx
            cpx #$28
            bne dor_col
-           // ~2 s delay: 2 outer passes × 256 × loop1sek (~3.3 ms) ≈ 1.7 s,
-           // plus 128 extra calls to reach ~2 s.  `loop1sek` saves & restores Y
-           // internally so we can use Y as the inner counter safely.
-           ldx #$02
-dor_dout:
-           ldy #$00
-dor_din:   jsr loop1sek
+           // Progress bar across row 23: fill 40 cells with $A0 (reverse-space
+           // = solid block) one cell at a time. ~16 × loop1sek (~3.4 ms) per
+           // cell ≈ 54 ms × 40 cells ≈ 2.16 s — same total dwell as the old
+           // dor_dout/dor_din/dor_d3 chain, now with visible feedback.
+           // loop1sek preserves X/Y so the column counter survives.
+           ldx #$00                // X = column index 0..39
+dor_bar:
+           ldy #$10                // 16 inner ticks per column
+dor_bar_in:
+           jsr loop1sek
            dey
-           bne dor_din
-           dex
-           bne dor_dout
-           ldy #$80                // 128 extra calls → push total to ~2.0 s
-dor_d3:    jsr loop1sek
-           dey
-           bne dor_d3
+           bne dor_bar_in
+           lda #$A0                // solid block (reverse-space screencode)
+           sta $0798,x             // row 23 character
+           lda #$05                // green colour
+           sta $DB98,x             // colour RAM row 23
+           inx
+           cpx #$28               // 40 columns done?
+           bne dor_bar
            jmp start
 // "*** RESTARTING ***" in C64 screen codes (A=$01 … Z=$1A, space=$20, *=$2A).
 dor_msg:   .byte $2A,$2A,$2A,$20,$12,$05,$13,$14,$01,$12,$14,$09,$0E,$07,$20,$2A,$2A,$2A,$00
@@ -3785,7 +3802,18 @@ IRQ:
            sta $D012               // keep raster trigger at line 0 next frame
            lda sid_music_flag      // if SID module active, call play routine each frame
            beq irq_no_music
-           jsr $1806               // SID play (Triangle Intro, 50 Hz)
+           // Bank BASIC ROM out so the player can read its data tables when
+           // the active tune lives under $A000-$BFFF (Delirious 9). Harmless
+           // for Triangle Intro (which lives at $1800). $01 is restored
+           // before the shadow copy / RTI.
+           lda $01
+           sta irq_save01
+           lda #$36
+           sta $01
+irq_play_jsr:
+           jsr $1806               // operand patched by tune_select (lo=irq_play_op)
+           lda irq_save01
+           sta $01
            // If player writes were redirected to shadow ($C000-$C01F) for the
            // tracker view, copy shadow -> real SID each frame (~450 cycles).
            lda trk_patched
@@ -3802,6 +3830,9 @@ irq_no_music:
            jsr COLWASH             // advance one step of colour-wash animation
 irq_done:
            jmp $EA7E               // KERNAL: restore saved Y/X/A, RTI
+
+// Single-byte save slot for the IRQ's $01 bank-toggle around the player call.
+irq_save01: .byte $37
 
               
 // EXITINTRO: no longer called in v1.2 (SPACE now restarts detection instead
@@ -8166,11 +8197,17 @@ tracker_patch_once:
            beq tpo_start
            rts
 tpo_start:
+           // Reads via (zp),y from $A0xx need BASIC ROM banked out (Delirious 9
+           // tune body lives in RAM under BASIC). Harmless for Triangle Intro.
+           lda $01
+           sta tpo_save01
+           lda #$36
+           sta $01
            lda #$00
            sta trk_scratch             // patch count accumulator
-           lda #$06
-           sta trk_scratch2            // scan ptr lo = $1806
-           lda #$18
+           lda tune_scan_start_lo      // scan ptr lo (set by tune_select)
+           sta trk_scratch2
+           lda tune_scan_start_hi      // scan ptr hi
            sta trk_scratch3
 tpo_loop:
            ldy #$00
@@ -8213,13 +8250,16 @@ tpo_advance:
            inc trk_scratch3
 tpo_nc:
            lda trk_scratch3
-           cmp #$20                    // past $1FFF?
+           cmp tune_scan_end_hi        // exclusive end (set by tune_select)
            bcc tpo_loop
            ldx trk_scratch
            stx trk_undo_count
            lda #$01
            sta trk_patched
+           lda tpo_save01              // restore BASIC ROM mapping
+           sta $01
            rts
+tpo_save01: .byte $37
 
 // ---------- tracker_unpatch ----------
 tracker_unpatch:
@@ -8245,6 +8285,16 @@ tu_done:
            sta trk_patched
            sta trk_undo_count
            rts
+
+// ---------- tune_select ----------
+// Apply cur_tune (0=Triangle, 1=Delirious 9) to all per-tune patch sites:
+//   - dsm_init_jsr operand (init address used by do_sid_music)
+//   - irq_play_jsr operand (play address called from raster IRQ)
+//   - tune_scan_start_lo/hi + tune_scan_end_hi (tracker_patch_once range)
+//   - tdc_title_op operand (title string address used by tracker_draw_chrome)
+// (tune_select / tune_player_init / tune_switch / tune tables / trk_title2
+//  live in a separate $C020 segment near the end of this file — they would
+//  otherwise overflow the $9200 tracker segment past $A000.)
 
 // ---------- tracker_entry ----------
 tracker_entry:
@@ -8320,26 +8370,43 @@ tl_no_render:
            jmp tracker_exit
 
 // ---------- tracker_poll_keys ----------
-// Returns C=1 if SPACE, P, or Q pressed; else C=0.
+// Returns C=1 if SPACE, P, or Q pressed (exit). Pressing '1' or '2' switches
+// the tune in place and returns C=0 so the loop continues.
 tracker_poll_keys:
            lda #$7F
-           sta $DC00
+           sta $DC00                   // select keyboard row 7
            lda $DC01
            tax
-           and #$10                    // SPACE
+           and #$10                    // SPACE (bit 4)
            beq tpk_hit
            txa
-           and #$40                    // Q
+           and #$40                    // Q (bit 6)
            beq tpk_hit
+           txa
+           and #$01                    // '1' (bit 0)
+           beq tpk_sel_t1
+           txa
+           and #$08                    // '2' (bit 3)
+           beq tpk_sel_t2
            lda #$DF
-           sta $DC00
+           sta $DC00                   // row 5
            lda $DC01
-           and #$02                    // P
+           and #$02                    // P (bit 1)
            beq tpk_hit
            clc
            rts
 tpk_hit:
            sec
+           rts
+tpk_sel_t1:
+           lda #$00
+           jsr tune_switch
+           clc
+           rts
+tpk_sel_t2:
+           lda #$01
+           jsr tune_switch
+           clc
            rts
 
 // ---------- tracker_exit ----------
@@ -8376,10 +8443,11 @@ te_relw:
 
 // ---------- tracker_draw_chrome ----------
 tracker_draw_chrome:
-           // Row 0: title
+           // Row 0: title (LDA operand patched by tune_select to select tune name)
            ldx #$00
 tdc_title:
-           lda trk_title,x
+tdc_title_op:
+           lda trk_title,x             // operand at +1/+2 (lo/hi of title string)
            sta $0400,x
            inx
            cpx #40
@@ -8910,6 +8978,8 @@ wave_names:      .text "TRI"
                  .text "---"
 
 // Screen chrome strings (40 chars each, screencode_upper).
+// trk_title2 (Delirious 9) lives in the $C020 segment; tune_select patches
+// tdc_title_op to point at the right one.
 trk_title:       .text "   SID TRACKER VIEW - TRIANGLE INTRO    "
 trk_hdr:         .text "       V1       V2       V3             "
 trk_rowlabels:   .text "NOTE:                                   "
@@ -8922,13 +8992,11 @@ trk_vu_pre:      .text "V1  ["
                  .text "V2  ["
                  .text "V3  ["
 trk_scopehdr:    .text "SCOPE  -  OSC3 OUTPUT OF VOICE 3:       "
-trk_footer:      .text "  PRESS P OR SPACE TO STOP MUSIC        "
+trk_footer:      .text "  1/2 SWITCH TUNE   P/SPACE TO EXIT     "
 .encoding "ascii"
 
-// Undo table for tracker_unpatch (max TRK_UNDO_MAX entries).
-trk_undo_count:  .byte 0
-trk_undo_lo:     .fill TRK_UNDO_MAX, 0
-trk_undo_hi:     .fill TRK_UNDO_MAX, 0
+// Undo table for tracker_unpatch — moved to the $C020 segment to keep this
+// $9200 segment under $A000 (Delirious 9 tune body lives at $A000+).
 
 // Note-frequency table (PAL SID, 96 notes C-0..B-7). Stored as two parallel
 // byte arrays (lo, hi) so lookup can compare each half without 16-bit fetch.
@@ -8976,7 +9044,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.33 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.35 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9314,7 +9382,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.33 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.35 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10120,7 +10188,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.33 README"
+    .text "SIDDETECTOR V1.4.35 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10283,6 +10351,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.35 2ND TUNE + RESTART BAR"
+    .byte 13
+    .byte $9E
     .text "  V1.4.33 SID TRACKER VIEW (P KEY)"
     .byte 13
     .byte $9E
@@ -10293,9 +10364,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.30 TEST MATRIX HTML DIAGRAM"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.29 FIX DISPLAY GAPS"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
@@ -10704,6 +10772,125 @@ duq_nodata:
 // Main screen UltiSID display strings
 ultisid_8580_int: .text "8580 INT"; .byte 0
 ultisid_6581_int: .text "6581 INT"; .byte 0
+
+// =============================================================================
+// Tune-selector segment — placed at $C020 (immediately above the tracker shadow
+// SID at $C000-$C01F, well below KERNAL ROM at $E000). Pulled out of the $9200
+// tracker segment because the additions would otherwise overflow $A000 (start
+// of the embedded Delirious 9 tune body).
+// =============================================================================
+* = $C020
+
+// ---------- tune_select ----------
+// Apply cur_tune (0=Triangle, 1=Delirious 9) to all per-tune patch sites:
+//   - tpi_init_jsr operand (init address used by tune_player_init)
+//   - irq_play_jsr operand (play address called from raster IRQ)
+//   - tune_scan_start_lo/hi + tune_scan_end_hi (tracker_patch_once range)
+//   - tdc_title_op operand (title string address used by tracker_draw_chrome)
+tune_select:
+           ldx cur_tune
+           lda tune_init_lo,x
+           sta tpi_init_jsr+1
+           lda tune_init_hi,x
+           sta tpi_init_jsr+2
+           lda tune_play_lo,x
+           sta irq_play_jsr+1
+           lda tune_play_hi,x
+           sta irq_play_jsr+2
+           lda tune_scan_start_lo_tbl,x
+           sta tune_scan_start_lo
+           lda tune_scan_start_hi_tbl,x
+           sta tune_scan_start_hi
+           lda tune_scan_end_hi_tbl,x
+           sta tune_scan_end_hi
+           lda tune_title_lo,x
+           sta tdc_title_op+1
+           lda tune_title_hi,x
+           sta tdc_title_op+2
+           rts
+
+// Per-tune dispatch tables. Index 0 = Triangle Intro, index 1 = Delirious 9.
+tune_init_lo:        .byte <$1800, <$A000
+tune_init_hi:        .byte >$1800, >$A000
+tune_play_lo:        .byte <$1806, <$A005
+tune_play_hi:        .byte >$1806, >$A005
+// Scan range used by tracker_patch_once: start at play address, stop one page
+// past the player binary's end. Triangle: $1806..$1FFF (end_hi=$20). Delirious:
+// $A005..$B3FF (end_hi=$B4 — tune ends at $B39B).
+tune_scan_start_lo_tbl: .byte $06, $05
+tune_scan_start_hi_tbl: .byte $18, $A0
+tune_scan_end_hi_tbl:   .byte $20, $B4
+tune_title_lo:       .byte <trk_title, <trk_title2
+tune_title_hi:       .byte >trk_title, >trk_title2
+
+// Live working values (updated by tune_select; read by tracker_patch_once).
+tune_scan_start_lo:  .byte $06
+tune_scan_start_hi:  .byte $18
+tune_scan_end_hi:    .byte $20
+
+// Undo table for tracker_unpatch (max TRK_UNDO_MAX entries). Moved here from
+// the $9200 segment to free space below $A000 for the Delirious 9 tune body.
+trk_undo_count:  .byte 0
+trk_undo_lo:     .fill TRK_UNDO_MAX, 0
+trk_undo_hi:     .fill TRK_UNDO_MAX, 0
+
+// Second-tune title (40 chars, screencode_upper). Triangle's title lives at
+// trk_title in the $9200 segment. tdc_title_op selects between them.
+.encoding "screencode_upper"
+trk_title2:      .text "  SID TRACKER VIEW - DELIRIOUS 9 (1990) "
+.encoding "ascii"
+
+// ---------- tune_player_init ----------
+// Init the currently selected SID player. Caller must hold SEI. Banks BASIC
+// out around the JSR so Delirious 9 (at $A000) is reachable; harmless for
+// Triangle Intro. The JSR operand at +1/+2 is patched by tune_select.
+tune_player_init:
+           lda $01
+           sta tpi_save01
+           lda #$36
+           sta $01
+           ldx #$00
+           ldy #$00
+           lda #$00                    // subtune 0 = song 1
+tpi_init_jsr:
+           jsr $1800                   // operand patched by tune_select
+           lda tpi_save01
+           sta $01
+           rts
+tpi_save01: .byte $37
+
+// ---------- tune_switch ----------
+// Switch the running tune. A = new tune index (0 or 1). No-op if same as
+// current. Stops IRQ play, silences SID + shadow, unpatches old player,
+// repatches new, re-inits, redraws chrome (title row reflects new tune).
+tune_switch:
+           cmp cur_tune
+           beq ts_done                 // already on this tune
+           pha                         // save desired tune
+           sei
+           lda #$00
+           sta sid_music_flag          // disarm IRQ play
+           sta $D418                   // silence master volume
+           sta $D404                   // voice 1 control (gate off)
+           sta $D40B                   // voice 2 control
+           sta $D412                   // voice 3 control
+           ldx #$1F
+ts_zsh:
+           sta shadowBase,x            // zero shadow so leftover writes don't leak
+           dex
+           bpl ts_zsh
+           jsr tracker_unpatch         // restore old player binary's $D4xx writes
+           pla
+           sta cur_tune
+           jsr tune_select             // patch dispatch + scan range + title ptr
+           jsr tracker_patch_once      // redirect new player's $D4xx writes
+           jsr tune_player_init        // init new tune
+           lda #$01
+           sta sid_music_flag          // re-arm IRQ play
+           cli
+           jsr tracker_draw_chrome     // re-render with new title
+ts_done:
+           rts
 
 // eof
 

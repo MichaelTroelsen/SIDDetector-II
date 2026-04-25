@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.4.35  | TRACKER 2ND TUNE + PROG BAR |
 | V1.4.33  | SID TRACKER VIEW (P KEY) |
 | V1.4.32  | SKIP PDSID D4XX MIRRORS |
 | V1.4.31  | FIX SID_LIST OVERFLOW |
