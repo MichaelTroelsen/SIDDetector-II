@@ -2,16 +2,17 @@
 
 ## New chips to detect
 
-- [x] **8-SID "Tuneful Eight" (U64)** — V1.4.36: extended `num_sids` /
-      `sid_list_l/h/t` from 8 to 9 bytes (slot 0 reserved + slots 1..8);
-      bumped the `s_s_add` cap from `cmp #$07` to `cmp #$08`, the
-      FPGASID-stereo `csfp_l_l_found` cap to `cmp #$08`, the startup
-      zero-init loop to `cpx #$09`, the debug-print loop to `cpx #$09`,
-      and the `sidstereo_print` cap to `cpy #$09`. SID rows now render
-      at rows 16..23 (one extra row over V1.4.35's 16..22); row 24 stays
-      as the action bar. U64 detection itself is unchanged (`is_u64 = 1`
-      via `$DF1F != $FF`). Verified with TLR's sid-detect2 confirming
-      hardware exposes 8 addressable SIDs.
+- [x] **8-SID "Tuneful Eight" (U64)** — V1.4.36 lifted the slot cap; V1.4.37
+      added the write-coupling scan that actually detects all 8 slots in the
+      first place. Verified on the user's U64 hardware (3/3 consecutive runs
+      → 8 SIDs at `D400 D420 D480 D4A0 D500 D520 D580 D5A0`). Per-iteration
+      flow: silence primary D400 voice 3, snapshot every already-found
+      slot's OSC3, write saw+gate to candidate's voice 3, reject if primary
+      or any found slot's OSC3 changed (write-mirror). Drops the `is_u64`
+      gate because U64 configs that disable UCI return `$DF1F = $FF` yet
+      still have multi-SID hardware; uses direct `checkrealsid` for chip
+      typing because `uci_type_for_addr` hangs in its FIFO drain loop when
+      UCI is unresponsive.
 - [ ] **EMUSID (new)** — Planned chip family (TBD vendor / protocol).
       Add detection stub + TODO.md placeholder once the magic-cookie
       spec is published; wire it through `sidstereo_print` + info page.

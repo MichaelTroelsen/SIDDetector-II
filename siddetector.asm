@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.36  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.37  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -921,6 +921,25 @@ end_pre_d400:
                 sta sid_list_h,x        // high byte = $D4 → D400
 end_pre_d400_skip:
 
+                // OSC3-fingerprint multi-slot scan (V1.4.37) — runs BEFORE
+                // any family-specific sidstereostart pass because those
+                // writes clobber per-slot OSC3 readbacks. Catches 8-SID
+                // "Tuneful Eight" U64 layouts (e.g. D400/D420/D480/D4A0/
+                // D500/D520/D580/D5A0) where every UltiSID slot keeps an
+                // independent oscillator state — independent slots have
+                // distinct $D41B readbacks, mirrors share. Skipped if
+                // primary D400 isn't a real-SID-style chip (data4 ∈ {$01,
+                // $02}); other primaries (ARMSID/SwinSID/FPGA/PD/BackSID/
+                // SKpico) have their own dedicated stereo handling.
+                lda data4
+                cmp #$01
+                beq end_run_u64fp
+                cmp #$02
+                bne end_skip_u64fp
+end_run_u64fp:
+                jsr u64_fingerprint_scan
+end_skip_u64fp:
+
                 // Scan all SID address slots (D4xx..DFxx in $20 increments)
                 // for each chip family; record results in sid_list_h/l/t.
                 // BackSID scans first so other detection writes don't disturb its echo state.
@@ -980,6 +999,10 @@ end_skip_arm2sid:
                 sta sidtype
                 jsr fiktivloop_d400
 end_skip_fiktiv:
+                // (u64_fingerprint_scan moved to run BEFORE the family-specific
+                // sidstereostart sweeps — those writes clobber per-slot OSC3
+                // fingerprints. See "// OSC3-fingerprint multi-slot scan"
+                // block earlier in start:.)
 
                 // If no SID was found at any address, record D400 as unknown ($F0)
                 // so the stereo display shows something rather than being blank.
@@ -9045,7 +9068,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.36 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.37 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9235,8 +9258,8 @@ uca_found:
 uca_sil2: sta $D412           // self-mod → mptr+$12
 uca_sil2f: sta $D40F          // self-mod → mptr+$0F (silence freq)
        lda sidnum_zp
-       cmp #$07
-       bcs uca_rts            // list full (slots 1-7 only; slot 0 unused/sentinel)
+       cmp #$08
+       bcs uca_rts            // list full (slots 1-8; slot 0 unused/sentinel)
        inc sidnum_zp
        ldx sidnum_zp
        lda mptr_zp
@@ -9251,6 +9274,9 @@ uca_sil2f: sta $D40F          // self-mod → mptr+$0F (silence freq)
        ldx x_zp               // restore slot index
        sta sid_list_t,x
        rts
+
+// (u64_fingerprint_scan moved to $C020 segment — would otherwise overflow
+//  $A000, the start of the embedded Delirious 9 tune body.)
 
 * = $6000
 // 9 bytes per array: slot 0 reserved (legacy "count" position, never read as a
@@ -9386,7 +9412,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.36 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.37 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10192,7 +10218,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.36 README"
+    .text "SIDDETECTOR V1.4.37 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10355,6 +10381,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.37 U64 8-SID FINGERPRINT SCAN"
+    .byte 13
+    .byte $9E
     .text "  V1.4.36 U64 8-SID TUNEFUL EIGHT"
     .byte 13
     .byte $9E
@@ -10365,9 +10394,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.32 SKIP PDSID D4XX MIRRORS"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.31 FIX SID_LIST OVERFLOW"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
@@ -10895,6 +10921,177 @@ ts_zsh:
            jsr tracker_draw_chrome     // re-render with new title
 ts_done:
            rts
+
+// ──────────────────────────────────────────────────────────────────────────
+// u64_fingerprint_scan: detect 8-slot U64 ("Tuneful Eight") configurations.
+// ──────────────────────────────────────────────────────────────────────────
+// When is_u64==1, the existing fiktivloop / checksecondsid noise-mirror trick
+// falsely rejects independent UltiSID slots because the FPGA runs each slot's
+// voice 3 oscillator continuously, so reads of candidate $D41B are non-zero
+// even when primary D400 has noise enabled. The mirror-rejection mistakes
+// "candidate is alive" for "candidate is a mirror".
+//
+// This scan uses the static OSC3 readback ($D41B / Dxx1B) as a per-slot
+// fingerprint. Independent slots yield distinct values; mirrors share. We
+// enumerate every $20-aligned offset across $D4xx-$D7xx, skip $D400 (primary
+// already added), skip values matching primary's OSC3 or any already-found
+// slot's OSC3, and add the rest as ULTISID via uci_type_for_addr.
+// $DExx/$DFxx skipped — UCI lives at $DF1x and cartridge IO is unsafe to probe.
+// Trashes A,X,Y,res_zp,mptr_zp,sptr_zp,x_zp,y_zp.
+u64_fingerprint_scan:
+       // Pre-silence primary D400 voice 3 so its $D41B is stable. Then per
+       // candidate, snapshot every already-found slot's OSC3, write saw+gate
+       // activation to the candidate's voice 3, and re-read each snapshot.
+       // If primary's or any found slot's OSC3 changed, the candidate's write
+       // mirrored to that slot → REJECT. Otherwise the candidate has its own
+       // independent oscillator → ADD.
+       //
+       // This is robust where pure-fingerprint comparison fails: two slots
+       // can hold identical residual OSC3 values yet still be independent
+       // — the write-coupling test catches that, fingerprint-only doesn't.
+       lda #$00
+       sta $D40F                  // primary voice 3 freq hi = 0
+       sta $D412                  // primary voice 3 ctrl = 0
+       lda $D41B
+       sta u64_prim_osc3          // baseline fingerprint for primary
+       lda #$20
+       sta mptr_zp
+       lda #$D4
+       sta mptr_zp+1
+ufs_one:
+       // Re-baseline primary OSC3. A previous iteration may have disturbed
+       // it (mirror reject silences via write to mptr — that may go to D400
+       // if mptr was a primary mirror, leaving D40F/D412 at $00 again but
+       // OSC3 at a *different* settled value than the original).
+       lda $D41B
+       sta u64_prim_osc3
+       // Snapshot OSC3 of every already-found slot into ufs_save_slots[1..N].
+       ldx sidnum_zp
+       beq ufs_snap_done
+ufs_snap_loop:
+       lda sid_list_l,x
+       clc
+       adc #$1B
+       sta ufs_snap_read+1
+       lda sid_list_h,x
+       sta ufs_snap_read+2
+ufs_snap_read:
+       lda $D41B                  // self-mod → slot[x]+$1B
+       sta ufs_save_slots,x
+       dex
+       bne ufs_snap_loop
+ufs_snap_done:
+       // Patch self-mod targets for activation + silence writes
+       // (mptr+$0F, mptr+$12). Activation and silence share the same
+       // operand bytes so a single patch covers both.
+       lda mptr_zp
+       clc
+       adc #$0F
+       sta ufs_act_freq+1
+       sta ufs_silf+1
+       lda mptr_zp
+       clc
+       adc #$12
+       sta ufs_act_ctrl+1
+       sta ufs_silc+1
+       lda mptr_zp+1
+       sta ufs_act_freq+2
+       sta ufs_act_ctrl+2
+       sta ufs_silf+2
+       sta ufs_silc+2
+       // Activate candidate voice 3: saw + gate at $FFFF freq.
+       lda #$FF
+ufs_act_freq:
+       sta $D40F                  // self-mod → mptr+$0F
+       lda #$21
+ufs_act_ctrl:
+       sta $D412                  // self-mod → mptr+$12
+       // Brief settle so the activation propagates if the slot is real.
+       ldy #$08
+ufs_settle:
+       dey
+       bne ufs_settle
+       // Coupling check: did primary's $D41B change?
+       lda $D41B
+       cmp u64_prim_osc3
+       bne ufs_silence_cand       // primary disturbed → mirror of primary
+       // Coupling check: did any found slot's OSC3 change?
+       ldx sidnum_zp
+       beq ufs_unique
+ufs_dedup:
+       lda sid_list_l,x
+       clc
+       adc #$1B
+       sta ufs_dread+1
+       lda sid_list_h,x
+       sta ufs_dread+2
+ufs_dread:
+       lda $D41B                  // self-mod → slot[x]+$1B
+       cmp ufs_save_slots,x
+       bne ufs_silence_cand       // slot disturbed → mirror of slot[x]
+       dex
+       bne ufs_dedup
+ufs_silence_cand_unused:           // (unreachable label kept for clarity)
+ufs_unique:
+       lda sidnum_zp
+       cmp #$08
+       bcs ufs_done
+       inc sidnum_zp
+       ldx sidnum_zp
+       lda mptr_zp
+       sta sid_list_l,x
+       lda mptr_zp+1
+       sta sid_list_h,x
+       // Determine ULTISID 6581/8580 via checkrealsid only — bypass
+       // uci_type_for_addr's UCI probe, which hangs on configs where
+       // UCI is unresponsive ($DF1C/$DF1E both return $FF, drain loop
+       // never terminates).
+       lda mptr_zp
+       sta sptr_zp
+       lda mptr_zp+1
+       sta sptr_zp+1
+       stx x_zp                 // save slot index (checkrealsid trashes X)
+       jsr checkrealsid         // sets data1 = $01 (8580) / $02 (6581) / $F0
+       ldx x_zp
+       lda data1
+       cmp #$02
+       beq ufs_t_6581
+       lda #$20                 // 8580 or unknown → ULTISID 8580
+       jmp ufs_t_store
+ufs_t_6581:
+       lda #$22                 // 6581 → ULTISID 6581
+ufs_t_store:
+       sta sid_list_t,x
+       // checkrealsid leaves candidate voice 3 silenced; nothing more to do.
+       jmp ufs_next
+ufs_silence_cand:
+       // Mirror detected — silence the activation we just issued. ufs_silf
+       // and ufs_silc were patched alongside ufs_act_freq/ctrl above.
+       lda #$00
+ufs_silf:
+       sta $D40F                  // self-mod → mptr+$0F (zeroed)
+       lda #$00
+ufs_silc:
+       sta $D412                  // self-mod → mptr+$12 (zeroed)
+ufs_next:
+       lda mptr_zp
+       clc
+       adc #$20
+       sta mptr_zp
+       bcc ufs_check_done
+       inc mptr_zp+1
+ufs_check_done:
+       lda mptr_zp+1
+       cmp #$D8
+       bcs ufs_done            // >= $D8: scan complete
+       jmp ufs_one             // bcc ufs_one was out of range after edits
+ufs_done:
+       rts
+u64_prim_osc3:  .byte $00
+// 9-byte snapshot array indexed by slot 1..8 (slot 0 unused). Each entry is
+// the OSC3 readback of an already-found slot, captured per-candidate before
+// activation, then re-checked for write coupling.
+ufs_save_slots: .fill 9, 0
 
 // eof
 
