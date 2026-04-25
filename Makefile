@@ -155,6 +155,9 @@ $(TEST_SUITE_PRG): $(TEST_SUITE_SRC)
 # tests/ci_result.bin (1-byte PRG containing pass_count), then quits.
 ci:
 	bash scripts/ci_test.sh
+	@echo ""
+	@echo "=== MEMORYMAP.md address-drift check ==="
+	@python scripts/check_memorymap.py
 
 # Full regression: unit tests + variant golden diff.  Use this as the pre-PR
 # / pre-release gate.  ~4 min total (30 s unit tests + 14 variant launches).

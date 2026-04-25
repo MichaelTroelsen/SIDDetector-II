@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.42  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.43  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -5827,7 +5827,7 @@ fll_try_real:
        lda is_u64
        bne fll_ultisid        // ARM2SID + U64 → UltiSID, no checkrealsid needed
 fll_not_arm2sid_u64:
-       jsr checkrealsid       // returns data1=$01(8580),$02(6581),$F0(unknown)
+       jsr checkrealsid       // returns data1=$01(6581),$02(8580),$F0(unknown)
        lda data1
        cmp #$01
        beq fll_sid_typed
@@ -6139,8 +6139,8 @@ sidstereo_print:
 //nosoundf       .text "NOSID FOUND" ,0               // data1=$f0 data2=$f0
 //fpgasidf_8580u .text "FPGASID 8580 FOUND"   ,0      // data1=$06 data2=$3f
 //fpgasidf_6581u .text "FPGASID 6581 FOUND"   ,0      // data1=$07 data2=$00
-//l6581f         .text "6581 FOUND"   ,0             // data1=$02 data2=$02
-//l8580f         .text "8580 FOUND" ,0               // data1=$01 data2=$01
+//l6581f         .text "6581 FOUND"   ,0             // data1=$01 data2=$01
+//l8580f         .text "8580 FOUND" ,0               // data1=$02 data2=$02
 //swinsidnanof   .text "SWINSID NANO FOUND" ,0        // data1=$10 data2=$10
 
 //        lda sidnum_zp
@@ -8107,9 +8107,9 @@ fpgasidf_8580u: .text "FPGASID 8580 FOUND" // data1=$06 data2=$3f
                 .byte 0      
 fpgasidf_6581u: .text "FPGASID 6581 FOUND" // data1=$07 data2=$00
                 .byte 0      
-l6581f:         .text "6581 FOUND" // data1=$02 data2=$02
+l6581f:         .text "6581 FOUND" // data1=$01 data2=$01
                 .byte 0             
-l8580f:         .text "8580 FOUND" // data1=$01 data2=$01
+l8580f:         .text "8580 FOUND" // data1=$02 data2=$02
                 .byte 0               
 swinsidnanof:   .text "SWINSID NANO FOUND" // data1=$08 data2=$08
                 .byte 0        
@@ -9112,7 +9112,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.42 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.43 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9456,7 +9456,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.42 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.43 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10262,7 +10262,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.42 README"
+    .text "SIDDETECTOR V1.4.43 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10425,6 +10425,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.43 TYPE FIX + DRAIN CAP + MEMMAP"
+    .byte 13
+    .byte $9E
     .text "  V1.4.42 U64 BEHAVIORAL THRESHOLD 4"
     .byte 13
     .byte $9E
@@ -10435,9 +10438,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.39 BAR + BANNER ON ROW 24"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.38 RESTART BAR ROW 23->24"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
@@ -10683,8 +10683,17 @@ utfa_read:
        lda $DF1C; bmi utfa_read        // DATA_AV bit 7 set → more bytes available
        jmp utfa_status                  // DATA_AV clear → FIFO empty, done
 utfa_drain:                             // discard extra bytes until FIFO empty
+       // Bound the drain to 256 iterations. When UCI is disabled or remapped
+       // the bus floats at $FF, DATA_AV (bit 7) stays set forever, and the
+       // unbounded loop hangs the CPU. The Y counter forces a deterministic
+       // exit on those configs.
+       ldy #$00
+utfa_drain_lp:
        lda $DF1C; bpl utfa_status      // DATA_AV clear → done
-       lda $DF1E; jmp utfa_drain       // discard, keep draining
+       lda $DF1E                        // discard one byte
+       dey
+       bne utfa_drain_lp
+       jmp utfa_status                  // 256 iterations: give up, treat as done
 utfa_status:
        lda #$02
        sta $DF1C               // DATA_ACC – acknowledge + reset UCI to Idle
@@ -10722,16 +10731,16 @@ utfa_checkrealsid:
        // checkrealsid overwrites x_zp; save caller's slot index on stack first.
        lda x_zp
        pha
-       jsr checkrealsid       // sptr_zp=mptr_zp; data1=$01(8580)/$02(6581)/$F0
+       jsr checkrealsid       // sptr_zp=mptr_zp; data1=$01(6581)/$02(8580)/$F0
        pla
        sta x_zp               // restore caller's slot index
        lda data1
-       cmp #$02
-       beq utfa_6581
-       lda #$20               // 8580 or unknown → ULTISID 8580
+       cmp #$01
+       beq utfa_6581          // data1=$01 → 6581
+       lda #$20               // $02 (8580) or $F0 (unknown) → ULTISID 8580
        rts
 utfa_6581:
-       lda #$22               // 6581 → ULTISID 6581
+       lda #$22               // ULTISID 6581
        rts
 utfa_map:
        // UCI type 0-6 → sid_list_t $20-$26
@@ -10993,11 +11002,15 @@ u64_fingerprint_scan:
        // This is robust where pure-fingerprint comparison fails: two slots
        // can hold identical residual OSC3 values yet still be independent
        // — the write-coupling test catches that, fingerprint-only doesn't.
+       // Silence primary D400 voice 3 so $D41B is stable (checkrealsid
+       // for primary leaves the voice 3 saw running at $FFFF freq, which
+       // makes baseline reads cycle). Per-iteration the loop re-reads
+       // primary's settled OSC3 to handle drift caused by mirror-rejects.
        lda #$00
-       sta $D40F                  // primary voice 3 freq hi = 0
-       sta $D412                  // primary voice 3 ctrl = 0
+       sta $D40F                   // primary voice 3 freq hi = 0
+       sta $D412                   // primary voice 3 ctrl = 0
        lda $D41B
-       sta u64_prim_osc3          // baseline fingerprint for primary
+       sta u64_prim_osc3
        lda #$20
        sta mptr_zp
        lda #$D4
@@ -11095,15 +11108,15 @@ ufs_unique:
        lda mptr_zp+1
        sta sptr_zp+1
        stx x_zp                 // save slot index (checkrealsid trashes X)
-       jsr checkrealsid         // sets data1 = $01 (8580) / $02 (6581) / $F0
+       jsr checkrealsid         // sets data1 = $01 (6581) / $02 (8580) / $F0
        ldx x_zp
        lda data1
-       cmp #$02
-       beq ufs_t_6581
-       lda #$20                 // 8580 or unknown → ULTISID 8580
+       cmp #$01
+       beq ufs_t_6581           // data1=$01 → 6581
+       lda #$20                 // $02 (8580) or $F0 (unknown) → ULTISID 8580
        jmp ufs_t_store
 ufs_t_6581:
-       lda #$22                 // 6581 → ULTISID 6581
+       lda #$22                 // ULTISID 6581
 ufs_t_store:
        sta sid_list_t,x
        // checkrealsid leaves candidate voice 3 silenced; nothing more to do.
