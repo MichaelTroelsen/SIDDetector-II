@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.41  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.42  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -9112,7 +9112,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.41 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.42 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9456,7 +9456,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.41 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.42 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10262,7 +10262,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.41 README"
+    .text "SIDDETECTOR V1.4.42 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10425,6 +10425,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.42 U64 BEHAVIORAL THRESHOLD 4"
+    .byte 13
+    .byte $9E
     .text "  V1.4.41 TUNEFUL 8 BANNER ON NOSID ROW"
     .byte 13
     .byte $9E
@@ -10435,9 +10438,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.38 RESTART BAR ROW 23->24"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.37 U64 8-SID FINGERPRINT SCAN"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
@@ -11132,13 +11132,13 @@ ufs_check_done:
 ufs_done:
        // Behavioral U64 detection. The primary $DF1F probe at start: misses
        // U64 configs where UCI is disabled or remapped ($DF1F = $FF). If
-       // the scan added 2+ extra slots (sidnum_zp >= 3) we know the
+       // the scan added 3+ extra slots (sidnum_zp >= 4) we know the
        // hardware exposes multiple independent FPGA-emulated SIDs, which
-       // a stock C64 + single SID can't do. Set is_u64 retroactively so
-       // the debug page reflects it and downstream guards (e.g. FM-YAM
-       // skip in checkfmyam) behave correctly.
+       // a stock C64 with a 1-/2-/3-SID stereo cartridge can't do. Set
+       // is_u64 retroactively so the debug page reflects it and downstream
+       // guards (e.g. FM-YAM skip in checkfmyam) behave correctly.
        lda sidnum_zp
-       cmp #$03
+       cmp #$04
        bcc ufs_done_rts
        lda #$01
        sta is_u64
