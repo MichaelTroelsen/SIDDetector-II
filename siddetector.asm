@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.40  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.41  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -1082,6 +1082,27 @@ fmyam_disp_skip:
                 // (handled above by checkfmyam).
                 jsr colorize_rows       // colour-code result rows in $D800
 
+                // V1.4.41: "Tuneful Eight ready on U64" banner on the
+                // NOSID row (row 11) when 8 SIDs detected on U64.
+                // Written AFTER colorize_rows so the row's white-on-black
+                // base stays clean; banner cells are recoloured explicitly.
+                lda is_u64
+                beq u64banner_skip
+                lda sidnum_zp
+                cmp #$08
+                bne u64banner_skip
+                ldx #$00
+u64banner_lp:
+                lda u64banner_msg,x
+                beq u64banner_skip
+                sta $05B8+13,x          // row 11 ($05B8) + col 13
+                lda #$0E                // light blue colour
+                sta $D9B8+13,x          // colour RAM row 11 ($D9B8) + col 13
+                inx
+                cpx #$1B                // 27 cells max (40-13)
+                bne u64banner_lp
+u64banner_skip:
+
 // Install a raster IRQ at line 0 for the colour-wash animation and
 // spacebar detection.  The IRQ fires once per frame (~50/60 Hz).
 readkey2:
@@ -1280,6 +1301,21 @@ dor_bar_color:
            jmp start
 // "*** RESTARTING ***" in C64 screen codes (A=$01 … Z=$1A, space=$20, *=$2A).
 dor_msg:   .byte $2A,$2A,$2A,$20,$12,$05,$13,$14,$01,$12,$14,$09,$0E,$07,$20,$2A,$2A,$2A,$00
+
+// "TUNEFUL EIGHT READY ON U64" in screencode_upper (T=$14 U=$15 N=$0E E=$05
+// F=$06 L=$0C I=$09 G=$07 H=$08 R=$12 A=$01 D=$04 Y=$19 O=$0F space=$20
+// digits '6'=$36 '4'=$34); null terminated.
+u64banner_msg:
+   .byte $14,$15,$0E,$05,$06,$15,$0C    // TUNEFUL
+   .byte $20
+   .byte $05,$09,$07,$08,$14            // EIGHT
+   .byte $20
+   .byte $12,$05,$01,$04,$19            // READY
+   .byte $20
+   .byte $0F,$0E                        // ON
+   .byte $20
+   .byte $15,$36,$34                    // U64
+   .byte $00
 
 do_quit:
            sei
@@ -9076,7 +9112,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.40 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.41 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9420,7 +9456,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.40 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.41 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10226,7 +10262,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.40 README"
+    .text "SIDDETECTOR V1.4.41 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10389,6 +10425,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.41 TUNEFUL 8 BANNER ON NOSID ROW"
+    .byte 13
+    .byte $9E
     .text "  V1.4.40 U64 BEHAVIORAL DETECT"
     .byte 13
     .byte $9E
@@ -10399,9 +10438,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.37 U64 8-SID FINGERPRINT SCAN"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.36 U64 8-SID TUNEFUL EIGHT"
     .byte 13
     .byte 13
     .byte 0                         // null terminator

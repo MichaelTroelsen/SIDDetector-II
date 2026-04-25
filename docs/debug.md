@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.4.41  | TUNEFUL 8 BANNER ON NOSID ROW |
 | V1.4.40  | U64 BEHAVIORAL DETECT |
 | V1.4.39  | BAR + BANNER ON ROW 24 |
 | V1.4.38  | RESTART BAR ROW 23->24 |
