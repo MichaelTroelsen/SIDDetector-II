@@ -171,6 +171,12 @@ ci-full: ci
 update-variant-goldens: $(PRG)
 	python scripts/variant_smoke.py --update
 
+# Apply bin/tt8-ultimate.cfg to the live U64, boot siddetector, assert that
+# detection finds 8 SIDs and is_u64 is set. Runtime-only (no save-to-flash).
+# Override C64U_HOST=ip.ip.ip.ip if not 192.168.1.64.
+test-tuneful-eight: $(PRG)
+	python scripts/u64_tuneful_eight_test.py
+
 # Run automated hardware smoke test on real C64 via U64.
 # Deploys siddetector.prg, presses SPACE x3 (verifies detection stable),
 # then enters every screen (I/D/R/T/P) and returns.
