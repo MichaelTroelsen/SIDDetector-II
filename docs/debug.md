@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.4.38  | RESTART BAR ROW 23->24 |
 | V1.4.37  | U64 8-SID FINGERPRINT SCAN |
 | V1.4.36  | U64 8-SID TUNEFUL EIGHT |
 | V1.4.35  | TRACKER 2ND TUNE + PROG BAR |

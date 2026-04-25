@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.37  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.38  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -1234,11 +1234,11 @@ dor_clr:   lda #$20
            inx
            cpx #$28               // 40 columns
            bne dor_clr
-           // Write "*** RESTARTING ***" at row 24, col 11 (~centered in 40 cols).
+           // Write "*** RESTARTING ***" at row 23, col 11 (~centered in 40 cols).
            ldx #$00
 dor_cpy:   lda dor_msg,x
            beq dor_clr_color      // 0 terminator → done writing text
-           sta $07CB,x             // row 24 * 40 = $07C0; +$0B = col 11
+           sta $07A3,x             // row 23 * 40 = $0798; +$0B = col 11
            inx
            bne dor_cpy             // infinite-guard: message < 256 bytes
 dor_clr_color:
@@ -1246,15 +1246,16 @@ dor_clr_color:
            // it against the usual green text.
            ldx #$00
 dor_col:   lda #$07
-           sta $DBC0,x             // colour RAM row 24
+           sta $DB98,x             // colour RAM row 23
            inx
            cpx #$28
            bne dor_col
-           // Progress bar across row 23: fill 40 cells with $A0 (reverse-space
-           // = solid block) one cell at a time. ~16 × loop1sek (~3.4 ms) per
-           // cell ≈ 54 ms × 40 cells ≈ 2.16 s — same total dwell as the old
-           // dor_dout/dor_din/dor_d3 chain, now with visible feedback.
-           // loop1sek preserves X/Y so the column counter survives.
+           // Progress bar across row 24 (one row below the banner): fill
+           // 40 cells with $A0 (reverse-space = solid block) one cell at a
+           // time. ~16 × loop1sek (~3.4 ms) per cell ≈ 54 ms × 40 cells ≈
+           // 2.16 s — same total dwell as the old dor_dout/dor_din/dor_d3
+           // chain, now with visible feedback. loop1sek preserves X/Y so
+           // the column counter survives.
            ldx #$00                // X = column index 0..39
 dor_bar:
            ldy #$10                // 16 inner ticks per column
@@ -1263,9 +1264,9 @@ dor_bar_in:
            dey
            bne dor_bar_in
            lda #$A0                // solid block (reverse-space screencode)
-           sta $0798,x             // row 23 character
+           sta $07C0,x             // row 24 character
            lda #$05                // green colour
-           sta $DB98,x             // colour RAM row 23
+           sta $DBC0,x             // colour RAM row 24
            inx
            cpx #$28               // 40 columns done?
            bne dor_bar
@@ -9068,7 +9069,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.37 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.38 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9412,7 +9413,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.37 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.38 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10218,7 +10219,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.37 README"
+    .text "SIDDETECTOR V1.4.38 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10381,6 +10382,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.38 RESTART BAR ROW 23->24"
+    .byte 13
+    .byte $9E
     .text "  V1.4.37 U64 8-SID FINGERPRINT SCAN"
     .byte 13
     .byte $9E
@@ -10391,9 +10395,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.33 SID TRACKER VIEW (P KEY)"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.32 SKIP PDSID D4XX MIRRORS"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
