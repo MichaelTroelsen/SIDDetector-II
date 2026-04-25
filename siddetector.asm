@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.39  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.40  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -9076,7 +9076,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.39 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.40 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9420,7 +9420,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.39 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.40 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10226,7 +10226,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.39 README"
+    .text "SIDDETECTOR V1.4.40 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10389,6 +10389,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.40 U64 BEHAVIORAL DETECT"
+    .byte 13
+    .byte $9E
     .text "  V1.4.39 BAR + BANNER ON ROW 24"
     .byte 13
     .byte $9E
@@ -10399,9 +10402,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.36 U64 8-SID TUNEFUL EIGHT"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.35 2ND TUNE + RESTART BAR"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
@@ -11094,6 +11094,19 @@ ufs_check_done:
        bcs ufs_done            // >= $D8: scan complete
        jmp ufs_one             // bcc ufs_one was out of range after edits
 ufs_done:
+       // Behavioral U64 detection. The primary $DF1F probe at start: misses
+       // U64 configs where UCI is disabled or remapped ($DF1F = $FF). If
+       // the scan added 2+ extra slots (sidnum_zp >= 3) we know the
+       // hardware exposes multiple independent FPGA-emulated SIDs, which
+       // a stock C64 + single SID can't do. Set is_u64 retroactively so
+       // the debug page reflects it and downstream guards (e.g. FM-YAM
+       // skip in checkfmyam) behave correctly.
+       lda sidnum_zp
+       cmp #$03
+       bcc ufs_done_rts
+       lda #$01
+       sta is_u64
+ufs_done_rts:
        rts
 u64_prim_osc3:  .byte $00
 // 9-byte snapshot array indexed by slot 1..8 (slot 0 unused). Each entry is
