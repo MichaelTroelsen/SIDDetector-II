@@ -74,6 +74,16 @@ make run-skpico6581
 make stereo-armsid     make stereo-arm2sid    make stereo-swinu
 make stereo-fpgasid    make stereo-sidfx
 
+# MIDI cartridges (codebase.c64.org/doku.php?id=base:c64_midi_interfaces).
+# Per the reference + hardware, only ONE MIDI cart can be attached at a time.
+# Detection result lands on row 11 (the NOSID line).
+# Requires VICE built with --enable-midi.
+make run-midi-sequential   # SCI/Namesoft @ $DE00/$DE02
+make run-midi-passport     # Passport/Sentech @ $DE08
+make run-midi-datel        # DATEL/Siel/JMS @ $DE04/$DE06
+make run-midi-namesoft     # Namesoft (NMI variant of Sequential, indistinguishable)
+make run-midi-maplin       # Maplin @ $DF00
+
 # Regression harnesses
 make ci                # 32-case unit tests in VICE monitor (~30 s)
 make ci-full           # above + golden-diff across all 14 variants (~4 min)

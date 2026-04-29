@@ -167,6 +167,32 @@ CASES = [
     # its CS2-DIS mirror path.  On real hardware the same setup would
     # route those addresses into open bus and the ghost wouldn't appear.
     # Test left here as a comment to document the VICE-specific quirk.)
+
+    # -----------------------------------------------------------------------
+    # MIDI cartridges — codebase.c64.org/doku.php?id=base:c64_midi_interfaces
+    # The patched WinVICE 3.9 (built with --enable-midi) emulates 5 cart
+    # types via `-midi -miditype N`.  Per the reference + user constraint,
+    # only ONE MIDI cart can be attached at a time.  All cases use the
+    # default 8580 at $D400, so r06 still says "8580 FOUND"; the MIDI
+    # detection lands on r11 (the NOSID line) at col 25.
+    # Sequential and Namesoft share the polled-read fingerprint (only the
+    # IRQ vs NMI line differs); siddetector reports both as SEQUENTIAL.
+    # -----------------------------------------------------------------------
+    ("midi-sequential",
+        ["-sidextra", "0", "-midi", "-miditype", "0"],
+        11, "SEQUENTIAL MIDI"),
+    ("midi-passport",
+        ["-sidextra", "0", "-midi", "-miditype", "1"],
+        11, "PASSPORT MIDI"),
+    ("midi-datel",
+        ["-sidextra", "0", "-midi", "-miditype", "2"],
+        11, "DATEL MIDI"),
+    ("midi-namesoft",
+        ["-sidextra", "0", "-midi", "-miditype", "3"],
+        11, "SEQUENTIAL MIDI"),    # indistinguishable from Sequential
+    ("midi-maplin",
+        ["-sidextra", "0", "-midi", "-miditype", "4"],
+        11, "MAPLIN MIDI"),
 ]
 
 
@@ -260,12 +286,16 @@ def _launch_and_capture(name, args):
     subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(0.6)
-    # `+sfxse` force-disables the SFX Sound Expander cartridge regardless of
-    # what's in ~/.vice/vice.ini — otherwise a user that's run `make sfx`
-    # once carries the SFXSoundExpander=1 setting and it perturbs the
-    # golden diff (row 18 gets "DF40 SFX/FM FOUND").
+    # `-default` resets every VICE resource to its default *before* per-test
+    # flags are applied.  Without it, persistent settings written by
+    # interactive `make stereo-*` / `make sfx` runs (Sid{2..8}AddressStart,
+    # SFXSoundExpander, etc.) leak into ~/.vice/vice.ini and bias detection
+    # — observed: stale Sid2AddressStart=$D420 rerouted skpico-8580's mirror
+    # scan onto $D420 instead of $D460.  `-default` makes the harness
+    # independent of whatever the user's local ini happens to hold.
+    # `+sfxse` is kept as a belt-and-braces guard for SFX specifically.
     proc = subprocess.Popen(
-        [VICE, "-autostart", PRG, "+sfxse",
+        [VICE, "-default", "-autostart", PRG, "+sfxse",
          "-remotemonitor", "-remotemonitoraddress", f"127.0.0.1:{PORT}"] + args,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:

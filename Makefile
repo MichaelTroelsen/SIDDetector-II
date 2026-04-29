@@ -25,6 +25,7 @@ TEST_SUITE_PRG  = tests/test_suite.prg
 	run-fpgasid8580 run-fpgasid6581 run-pdsid run-kungfusid \
 	run-backsid run-usid64 run-sidfx run-skpico8580 run-skpico6581 \
 	stereo-armsid stereo-arm2sid stereo-swinu stereo-sidfx stereo-fpgasid \
+	run-midi-sequential run-midi-passport run-midi-datel run-midi-namesoft run-midi-maplin \
 	test-variants update-variant-goldens
 
 all: $(PRG)
@@ -90,6 +91,21 @@ stereo-fpgasid: $(PRG)
 	$(VICE) -autostart $(PRG) -sidextra 1 -sidvariant2 fpgasid8580
 stereo-sidfx: $(PRG)
 	$(VICE) -autostart $(PRG) -sidextra 1 -sidvariant2 sidfx
+
+# --- MIDI cartridges (codebase.c64.org/doku.php?id=base:c64_midi_interfaces) ---
+# Default 8580 at $D400 + a single MIDI cart (per reference, max 1 attached).
+# Detection result lands on row 11 col 25 (the NOSID line).
+# Requires VICE built with --enable-midi (see docs/VICE_PROXY_BUILD.md).
+run-midi-sequential: $(PRG)
+	$(VICE) -autostart $(PRG) -midi -miditype 0
+run-midi-passport: $(PRG)
+	$(VICE) -autostart $(PRG) -midi -miditype 1
+run-midi-datel: $(PRG)
+	$(VICE) -autostart $(PRG) -midi -miditype 2
+run-midi-namesoft: $(PRG)
+	$(VICE) -autostart $(PRG) -midi -miditype 3
+run-midi-maplin: $(PRG)
+	$(VICE) -autostart $(PRG) -midi -miditype 4
 
 # Run the full variant matrix headless and print pass/fail per variant.
 test-variants: $(PRG)

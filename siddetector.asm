@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.44  -  Commodore 64 SID chip identification utility
+// SID Detector v1.4.45  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -757,7 +757,7 @@ checkphysical:
                                         // CS1 access signals ARMSID to tristate before checkrealsid.
                 jsr checkrealsid
                 lda data1
-                sta $5801               // DIAG: save step-4 checkphysical result ($5801)
+                sta diag_step4_result   // DIAG: save step-4 checkphysical result
                 ldx data1
                 cpx #$01               // $01 = 6581 confirmed
                 bne checkphysical_8580
@@ -1102,6 +1102,29 @@ u64banner_lp:
                 cpx #$1B                // 27 cells max (40-13)
                 bne u64banner_lp
 u64banner_skip:
+                // ── MIDI cartridge detection (codebase.c64.org reference) ──
+                // Probe $DE00 / $DE04 / $DE08 / $DF00 for a 6850 ACIA signature
+                // and print the cart name on row 11 col 13 — aligned with the
+                // result text on every other detection row ("8580 FOUND",
+                // "ARMSID FOUND", "NOSID FOUND", ...).  When NOSID FOUND was
+                // printed (no SID), the MIDI name overwrites it: a MIDI cart
+                // is the more informative result.  Run AFTER colorize_rows so
+                // the appended chars inherit row 11's colouring; the U64
+                // 8-SID banner above wins on its narrow conflict (U64 owns
+                // I/O2/3 → MIDI impossible).
+                jsr checkmidi
+                lda midi_kind
+                beq midi_disp_skip
+                ldx #11                 // row 11
+                ldy #13                 // col 13: aligned with NOSID FOUND
+                clc
+                jsr $E50C
+                ldx midi_kind
+                dex                     // 1..4 → 0..3
+                lda midi_str_lo,x
+                ldy midi_str_hi,x
+                jsr $AB1E
+midi_disp_skip:
 
 // Install a raster IRQ at line 0 for the colour-wash animation and
 // spacebar detection.  The IRQ fires once per frame (~50/60 Hz).
@@ -7017,6 +7040,116 @@ cfm_rst_done:
                 plp                     // restore caller's IRQ-disable state
                 rts
 
+//--------------------------------------------------------------------------------------------------
+// checkmidi: probe each documented C64 MIDI cart for a 6850 ACIA signature.
+// Reference: https://codebase.c64.org/doku.php?id=base:c64_midi_interfaces
+//
+// A 6850 ACIA after master reset (write $03 to its control register) returns
+//   status & $73 == $02   (TDRE=1, RDRF=0, no FE/OVRN/PE).
+// VICE's built-in MIDI emulation matches this.  CTS/DCD/IRQ (bits 2/3/7) are
+// masked off because they're modem-control inputs that vary by cart wiring.
+//
+// Probe order is first-hit-wins (per codebase reference + user constraint:
+// only ONE MIDI cartridge can be attached at a time):
+//   1) Sequential / Namesoft : ctrl $DE00, status $DE02
+//   2) DATEL / Siel / JMS    : ctrl $DE04, status $DE06
+//   3) Passport              : ctrl/status $DE08 (write=ctrl, read=status)
+//   4) Maplin                : ctrl/status $DF00 (write=ctrl, read=status)
+//
+// Sequential and Namesoft share the polled-read fingerprint (only IRQ vs
+// NMI line routing differs); both report as SEQUENTIAL.
+//
+// Two-read consistency check on each candidate filters open-bus jitter on
+// real hardware (no cart present → $DE/$DF reads are bus noise).
+//
+// Guards on the $DF00 (Maplin) probe — same set as checkfmyam since they
+// all contend for I/O2:
+//   - data4=$30        (SIDFX area, may also clobber SCI handshake)
+//   - is_u64 != 0      (Ultimate64 UCI at $DF1C-$DF1F)
+//   - skpico_fm >= 4   (SIDKick-pico OPL2 at $DF00)
+//   - armsid_map_h2 lo nibble = 3   (ARM2SID SFX- slot at $DF00)
+//
+// Sets midi_kind:
+//   0 = none, 1 = SEQ/Namesoft, 2 = DATEL, 3 = Passport, 4 = Maplin.
+// Trashes A.
+//--------------------------------------------------------------------------------------------------
+checkmidi:
+                lda #$00
+                sta midi_kind
+
+                // 1) Sequential / Namesoft @ $DE00 / $DE02
+                lda #$03
+                sta $DE00              // master reset → ACIA control
+                lda $DE02              // status read
+                and #$73               // mask CTS/DCD/IRQ
+                cmp #$02
+                bne cmidi_n1
+                lda $DE02              // 2nd read confirms it's not bus jitter
+                and #$73
+                cmp #$02
+                bne cmidi_n1
+                lda #$01
+                sta midi_kind
+                rts
+cmidi_n1:
+                // 2) DATEL / Siel / JMS @ $DE04 / $DE06
+                lda #$03
+                sta $DE04
+                lda $DE06
+                and #$73
+                cmp #$02
+                bne cmidi_n2
+                lda $DE06
+                and #$73
+                cmp #$02
+                bne cmidi_n2
+                lda #$02
+                sta midi_kind
+                rts
+cmidi_n2:
+                // 3) Passport @ $DE08 (CR/SR share addr; read returns SR)
+                lda #$03
+                sta $DE08
+                lda $DE08
+                and #$73
+                cmp #$02
+                bne cmidi_n3
+                lda $DE08
+                and #$73
+                cmp #$02
+                bne cmidi_n3
+                lda #$03
+                sta midi_kind
+                rts
+cmidi_n3:
+                // 4) Maplin @ $DF00 — guarded against I/O2 owners
+                lda data4
+                cmp #$30
+                beq cmidi_done         // SIDFX
+                lda is_u64
+                bne cmidi_done         // U64 UCI
+                lda skpico_fm
+                cmp #$04
+                bcs cmidi_done         // SKpico FM
+                lda armsid_map_h2
+                and #$0F
+                cmp #$03
+                beq cmidi_done         // ARM2SID SFX-
+                lda #$03
+                sta $DF00
+                lda $DF00
+                and #$73
+                cmp #$02
+                bne cmidi_done
+                lda $DF00
+                and #$73
+                cmp #$02
+                bne cmidi_done
+                lda #$04
+                sta midi_kind
+cmidi_done:
+                rts
+
 // (checksfxexpander / cse_write_a / cse_write_b removed in V1.4.22 —
 //  the legacy $DE00 clone probe kept giving bus-noise false positives.
 //  Standard CBM SFX Sound Expander and FM-YAM both live at $DF40/$DF50/$DF60
@@ -8102,7 +8235,19 @@ swinsidUf:      .text "SWINSID ULTIMATE FOUND" // data1=$04 data2=$04
 armsidf:        .text "ARMSID FOUND" // data1=$05 data2=$4f
                 .byte 0              
 nosoundf:       .text "NOSID FOUND" // data1=$f0 data2=$f0
-                .byte 0               
+                .byte 0
+// MIDI cart names printed on row 11 col 13 (NOSID line, aligned with other
+// detection results) when checkmidi finds a 6850 ACIA.
+midi_seq_str:    .text "SEQUENTIAL MIDI"
+                 .byte 0
+midi_datel_str:  .text "DATEL MIDI"
+                 .byte 0
+midi_pass_str:   .text "PASSPORT MIDI"
+                 .byte 0
+midi_maplin_str: .text "MAPLIN MIDI"
+                 .byte 0
+midi_str_lo:     .byte <midi_seq_str, <midi_datel_str, <midi_pass_str, <midi_maplin_str
+midi_str_hi:     .byte >midi_seq_str, >midi_datel_str, >midi_pass_str, >midi_maplin_str
 fpgasidf_8580u: .text "FPGASID 8580 FOUND" // data1=$06 data2=$3f
                 .byte 0      
 fpgasidf_6581u: .text "FPGASID 6581 FOUND" // data1=$07 data2=$00
@@ -8205,6 +8350,10 @@ fmyam_detected:      .byte 0     // 1 = CBM SFX / FM-YAM detected at $DF40/$DF50
 sfx_oct_offset:      .byte 0     // octave shift added to $B0 value (0/4/8 = V1/V2/V3)
 dfx_preread:         .byte $FF   // raw $DF60 value at checkfmyam first read (debug/diagnostic)
 dfx_postread:        .byte $FF   // raw $DF60 value at checkfmyam second read (debug/diagnostic)
+midi_kind:           .byte 0     // 0=none 1=SEQ/Namesoft 2=DATEL 3=Passport 4=Maplin
+diag_step4_result:   .byte 0     // legacy DIAG: chip type after checkphysical step 4
+                                 // (was hard-coded $5801 — moved to a label so MIDI
+                                 // strings can sit naturally without colliding)
 MODE6581:     .byte $f0,$f1,$f0,$f0,$f2,$f1,$f2,$f2,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f0
 MODE8580:     .byte $f0,$f0,$f1,$f0,$f0,$f0,$f1,$f0,$f2,$f2,$f1,$f2,$f0,$f0,$f1,$f0
 MODEUNKN:     .byte $f0,$f0,$f0,$f0,$f0,$f0,$f0,$f2,$f0,$f0,$f0,$f2,$f0,$f1,$f1,$f0
@@ -9112,7 +9261,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.44 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.4.45 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9456,7 +9605,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.44 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.4.45 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10262,7 +10411,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.44 README"
+    .text "SIDDETECTOR V1.4.45 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10425,6 +10574,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.4.45 MIDI CART DETECTION"
+    .byte 13
+    .byte $9E
     .text "  V1.4.44 TT8 8-SID HARDWARE TEST"
     .byte 13
     .byte $9E
@@ -10435,9 +10587,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.41 TUNEFUL 8 BANNER ON NOSID ROW"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.40 U64 BEHAVIORAL DETECT"
     .byte 13
     .byte 13
     .byte 0                         // null terminator

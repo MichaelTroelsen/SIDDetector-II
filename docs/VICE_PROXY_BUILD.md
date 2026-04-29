@@ -66,10 +66,16 @@ lines in `src/arch/gtk3/ui.c` / `actions-joystick.c` (window-title cosmetic).
 export MSYSTEM=MINGW64                 # if not launched from the MinGW64 shell
 ./autogen.sh
 ./configure --enable-native-gtk3ui \
+            --enable-midi \
             --disable-html-docs --disable-pdf-docs \
             --without-pulse --disable-desktop-files
 make -j$(nproc)
 ```
+
+`--enable-midi` is required for siddetector's MIDI-cart detection tests
+(see `make run-midi-*`); it pulls in `src/midi.c` + `src/c64/cart/c64-midi.c`
++ the win32 driver `src/arch/shared/mididrv/midi-win32-drv.c`, which links
+against `winmm` (ships with Windows — no extra package needed).
 
 After `make` succeeds the emulator binary is at `src/x64sc.exe` (~21 MB).
 
