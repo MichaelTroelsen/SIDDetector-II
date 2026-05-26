@@ -30,7 +30,7 @@ PRG  = os.path.join(ROOT, "siddetector.prg")
 PORT = 6502
 # 20 s wait — tri-SID configs (3× ResID) load slower than single-SID; 14 s
 # used to be enough but triple-SID autostart can straddle that boundary.
-WAIT = 20.0
+WAIT = 30.0
 GOLDENS = os.path.join(ROOT, "tests", "variant_goldens")
 
 # Rows included in the golden.  r00 (version banner) and r15 ($D418 decay
@@ -259,6 +259,32 @@ def render_golden(raw):
     return "\n".join(lines) + "\n"
 
 
+def _is_basic_loading_screen(raw):
+    """Detect a screen that isn't a stable siddetector result yet.
+    Two failure modes are conflated here (both produce bogus goldens):
+      1. Fully-BASIC: autostart hasn't finished — top of screen still shows
+         the C64 boot banner / "LOADING" / "SEARCHING".
+      2. Mid-paint:   detector code running but result screen not fully
+         painted — e.g. "8580 FOUND" truncated to "8580 FO", "STEREO SID.:"
+         truncated to ".TEREO SID.:", or row 16 still blank.
+
+    Readiness criterion: at least one chip-detection row (r02–r14) must
+    contain a "FOUND" token (or "MIDI" / "NO SOUND" for the MIDI / nosound
+    cases). The static UI labels ("STEREO SID.:", "ARMSID....:", etc.) are
+    drawn by printscreen at startup BEFORE detection runs, so checking for
+    labels tells us nothing about completion. "FOUND" only appears after
+    a detection step has written its result string.
+    """
+    head = "".join(decode(raw[r*40:(r+1)*40]) for r in range(0, 10))
+    if ("COMMODORE" in head) or ("BASIC BYTES" in head) or \
+       ("LOADING" in head) or ("SEARCHING" in head):
+        return True
+    band = "".join(decode(raw[r*40:(r+1)*40]) for r in range(2, 15))
+    if ("FOUND" in band) or ("MIDI" in band) or ("NO SOUND" in band):
+        return False
+    return True
+
+
 def compare_golden(name, current):
     """Return (ok, diff_text).  If no golden exists, record as missing."""
     path = os.path.join(GOLDENS, f"{name}.txt")
@@ -314,25 +340,38 @@ def run_case(name, args, row, expected, update):
     substring_ok = expected in row_text
     golden_text_first = render_golden(raw)
     golden_ok_first, _ = (True, "") if update else compare_golden(name, golden_text_first)
+    basic_screen = _is_basic_loading_screen(raw)
     # Up to 2 retries on timing flake — host-CPU variance or heavy tri-SID
     # load occasionally straddles the WAIT budget; also absorbs intermittent
     # VICE open-bus reads on $DF60 that look like SFX/FM to checkfmyam.
+    # In --update mode, only retry when we caught the BASIC loading screen
+    # (autostart not yet complete) — otherwise the new golden is whatever
+    # the detector actually shows, even if "wrong" relative to expectations.
     retries = 0
-    while not update and retries < 2 and (not substring_ok or not golden_ok_first):
+    while retries < 2 and (
+        basic_screen
+        or (not update and (not substring_ok or not golden_ok_first))
+    ):
         retries += 1
         raw = _launch_and_capture(name, args)
         row_text = decode(raw[row*40:(row+1)*40])
         substring_ok = expected in row_text
         golden_text_first = render_golden(raw)
-        golden_ok_first, _ = compare_golden(name, golden_text_first)
+        golden_ok_first, _ = (True, "") if update else compare_golden(name, golden_text_first)
+        basic_screen = _is_basic_loading_screen(raw)
     golden_text = golden_text_first
 
     if update:
-        os.makedirs(GOLDENS, exist_ok=True)
-        with open(os.path.join(GOLDENS, f"{name}.txt"), "w", encoding="utf-8") as f:
-            f.write(golden_text)
-        status = "WROTE"
-        detail = ""
+        if basic_screen:
+            # Refuse to write a BASIC-loading-screen capture — bogus golden.
+            status = "SKIP"
+            detail = "  (BASIC loading screen captured; raise WAIT or rerun)"
+        else:
+            os.makedirs(GOLDENS, exist_ok=True)
+            with open(os.path.join(GOLDENS, f"{name}.txt"), "w", encoding="utf-8") as f:
+                f.write(golden_text)
+            status = "WROTE"
+            detail = ""
     else:
         golden_ok, diff = compare_golden(name, golden_text)
         ok = substring_ok and golden_ok
