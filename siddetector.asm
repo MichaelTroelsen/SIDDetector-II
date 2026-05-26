@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.4.45  -  Commodore 64 SID chip identification utility
+// SID Detector v1.5.01  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -940,6 +940,29 @@ end_run_u64fp:
                 jsr u64_fingerprint_scan
 end_skip_u64fp:
 
+                // V1.5.01: TLR baseline sweep (family-agnostic). Walks every
+                // $20 stride in $D4xx-$D7xx + $DExx-$DFxx and appends new finds
+                // to sid_list with type=$11. Surviving $11 entries render as
+                // UNKNOWN on the stereo list (dedupe_sid_list collapses any
+                // duplicates if a family scan refines them later — rare in
+                // the $00 gate, but kept for safety).
+                //
+                // Gated to data4=$00 ONLY (no primary chip identified). When
+                // data4 ∈ {$01,$02} (real SID primary) the existing
+                // fiktivloop_d400 noise-mirror chain already detects multi-SID
+                // stereo correctly; running tlr_sweep on top would (a) falsely
+                // add D420/D440/... mirrors of D400 as separate SIDs (TLR's
+                // sid_print doesn't distinguish mirrors from independents in
+                // its outer sweep), and (b) disturb bus state for any ARMSID
+                // secondary (DIS state corruption observed in stereo-D500
+                // variant goldens). Narrow gate preserves all existing
+                // detection and adds new "find anything at all" fallback
+                // for the no-SID-identified case.
+                lda data4
+                bne end_skip_tlr        // any non-zero primary → skip
+                jsr tlr_sweep
+end_skip_tlr:
+
                 // Scan all SID address slots (D4xx..DFxx in $20 increments)
                 // for each chip family; record results in sid_list_h/l/t.
                 // BackSID scans first so other detection writes don't disturb its echo state.
@@ -1017,6 +1040,12 @@ end_skip_fiktiv:
                 lda #$D4
                 sta sid_list_h,x
 end_sid_found:
+                // V1.5.01: collapse TLR-baseline ($11) + refined duplicates.
+                // Family scans may have added a typed entry at the same
+                // address as a tlr_sweep $11 entry; dedupe keeps the refined
+                // one and removes the $11. Pure $11 entries (no family
+                // refinement) survive and render as UNKNOWN on the stereo list.
+                jsr dedupe_sid_list
                 lda #$13                // restore 'S' at $0680 (spinner left it on last frame)
                 sta $0680
                 jsr backsid_post_fixup  // print stereo SIDs + fix row 8 if BackSID found
@@ -6385,6 +6414,17 @@ ssp_u_print:
         jsr     $AB1E
         jmp     ssp_skp20
 ssp_skp16b:
+        // V1.5.01: TLR-baseline generic entry — tlr_sweep saw an oscillator
+        // here but no family-specific scan claimed/refined it. Render as
+        // UNKNOWN on the stereo list so the user sees there's *something*
+        // there. (Address is still printed normally above.)
+        cmp     #$11
+        bne     ssp_skp16c
+        lda     #<unknownsid
+        ldy     #>unknownsid
+        jsr     $ab1e
+        jmp     ssp_skp20
+ssp_skp16c:
         cmp     #$F0
         bne     ssp_skp20
         lda     #<unknownsid
@@ -9261,7 +9301,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.4.45 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.5.01 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9605,7 +9645,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.4.45 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.5.01 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10411,7 +10451,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.4.45 README"
+    .text "SIDDETECTOR V1.5.01 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10574,7 +10614,7 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
-    .text "  V1.4.45 MIDI CART DETECTION"
+    .text "  V1.5.01 TLR BASELINE SWEEP"
     .byte 13
     .byte $9E
     .text "  V1.4.44 TT8 8-SID HARDWARE TEST"
@@ -10661,6 +10701,9 @@ fiktivloop_d400:
        lda #$01
        sta cnt1_zp
        jmp fiktivloop
+
+// tlr_sweep / tls_sid_print / dedupe_sid_list (V1.5.01) live in a separate
+// $5B00 memory block at end of file — see "TLR SWEEP ($5B00 block)" below.
 
 //-------------------------------------------------------------------------
 // backsid_post_fixup: wrapper for sidstereo_print.
@@ -11311,6 +11354,343 @@ u64_prim_osc3:  .byte $00
 // the OSC3 readback of an already-found slot, captured per-candidate before
 // activation, then re-checked for write coupling.
 ufs_save_slots: .fill 9, 0
+
+// ============================================================================
+// TLR SWEEP ($5B00 block) — V1.5.01
+// ============================================================================
+// Placed in its own memory block at $5B00 (free zone between main $2400
+// segment and $6000 data segment) to avoid overflowing the $6000 segment
+// into the $9200 tracker segment. Routines: tlr_sweep, tls_sid_print,
+// dedupe_sid_list. All entry points are called via JSR from the $2400
+// segment (end: flow), so absolute address doesn't matter.
+// ============================================================================
+* = $5B00
+
+//-------------------------------------------------------------------------
+// tlr_sweep (V1.5.01): family-agnostic SID baseline scan.
+// Adapted from TLR's sid-detect2.asm (Daniel Kahlin / Wonderland XIII era).
+// Walks D400-D7E0 and DE00-DFE0 in $20 strides. At every unclassified slot,
+// runs a retriggered-sawtooth count-up test (OSC3 read must increment by 1
+// across three reads — proves an oscillator is advancing there). New finds
+// are appended to sid_list with type=$11 ("TLR-generic, unrefined").
+// Family-specific scans run AFTER this routine and may add a refined entry
+// at the same address; dedupe_sid_list collapses the duplicate at end of
+// chain, keeping the refined type.
+//
+// Populates sid_map[0..95] for debug / future visualization page:
+//   $00      = unscanned (slot inside D800-DDE0 colour-RAM / CIA gap)
+//   $80      = scanned, no SID found
+//   $10|val  = group 1 standalone (first unique SID); val = OSC3 sample
+//   $20|val  = mirror of group 1
+//   $30|val  = group 2 standalone (next unique SID), etc.
+//   $1F      = slot was pre-existing in sid_list when tlr_sweep started
+//              (i.e. data4-driven D400 pre-population at end_pre_d400)
+//
+// Gate (set by caller, see end_skip_u64fp): only runs for data4 ∈
+// {$00,$01,$02} — i.e. real-SID primaries or unknown. All other chip
+// families (ARMSID/FPGA/SwinSID/SKpico/SIDFX/etc) have their own dedicated
+// stereo scans and are sensitive to bus-state disturbance.
+//-------------------------------------------------------------------------
+tlr_sweep:
+                stx     x_zp
+                sty     y_zp
+                pha
+                // ── Zero sid_map[0..95]. ──────────────────────────────
+                lda     #$00
+                tax
+tls_zmap:
+                sta     sid_map,x
+                inx
+                cpx     #96
+                bne     tls_zmap
+                // ── Pre-stamp existing sid_list entries so we don't redetect.
+                // For each entry [x] in sid_list[1..sidnum_zp], compute slot:
+                //   slot = ((hi - $D4) * 8) + (lo >> 5)
+                // and mark sid_map[slot] = $1F.
+                ldx     sidnum_zp
+                beq     tls_init
+tls_pre_lp:
+                lda     sid_list_h,x
+                sec
+                sbc     #$D4
+                asl
+                asl
+                asl                     // (hi - $D4) * 8
+                sta     buf_zp
+                lda     sid_list_l,x
+                lsr
+                lsr
+                lsr
+                lsr
+                lsr                     // lo / $20
+                clc
+                adc     buf_zp
+                cmp     #96
+                bcs     tls_pre_skip     // out-of-range safety
+                tay
+                lda     #$1F
+                sta     sid_map,y
+tls_pre_skip:
+                dex
+                bne     tls_pre_lp
+tls_init:
+                // ── Sweep state. ──────────────────────────────────────
+                lda     #$00
+                sta     sptr_zp         // sptr = $D400
+                sta     scnt_zp         // slot index 0
+                lda     #$D4
+                sta     sptr_zp+1
+                lda     #$10
+                sta     tmp_zp          // group ID source (bumped per find)
+tls_lp:
+                // Skip colour RAM / CIA gap (sid_map indices 32..79).
+                lda     scnt_zp
+                cmp     #32
+                bcc     tls_in_range
+                cmp     #80
+                bcc     tls_skip
+tls_in_range:
+                // Already classified (pre-stamp or earlier mirror walk)?
+                ldy     scnt_zp
+                lda     sid_map,y
+                bne     tls_skip
+                // mptr = sptr (probe sptr itself).
+                lda     sptr_zp
+                sta     mptr_zp
+                lda     sptr_zp+1
+                sta     mptr_zp+1
+                lda     scnt_zp
+                sta     mcnt_zp
+                jsr     tls_sid_print
+                ldy     scnt_zp
+                bmi     tls_no_sid       // $80 = no SID here
+                // ── Found! Stamp sid_map[slot] = group | sample. ──────
+                pha
+                ora     tmp_zp
+                sta     sid_map,y
+                pla
+                // ── Append to sid_list (if room). ─────────────────────
+                ldx     sidnum_zp
+                inx
+                cpx     #$09            // cap at 8 active slots
+                bcs     tls_no_append
+                stx     sidnum_zp
+                lda     sptr_zp
+                sta     sid_list_l,x
+                lda     sptr_zp+1
+                sta     sid_list_h,x
+                lda     #$11            // TLR-generic type
+                sta     sid_list_t,x
+tls_no_append:
+                // ── Mirror walk: mark every other slot that echoes ────
+                // this SID's oscillator (same chip, different decode).
+tls_mir_lp:
+                lda     mptr_zp
+                clc
+                adc     #$20
+                sta     mptr_zp
+                bcc     tls_mir_noinc
+                inc     mptr_zp+1
+tls_mir_noinc:
+                inc     mcnt_zp
+                ldy     mcnt_zp
+                cpy     #96
+                bcs     tls_mir_done
+                cpy     #32
+                bcc     tls_mir_chk
+                cpy     #80
+                bcc     tls_mir_lp       // in gap → skip
+tls_mir_chk:
+                lda     sid_map,y
+                bne     tls_mir_lp       // already marked
+                jsr     tls_sid_print
+                ldy     mcnt_zp
+                bmi     tls_mir_lp       // not a mirror
+                ora     tmp_zp          // same group ID
+                sta     sid_map,y
+                jmp     tls_mir_lp
+tls_mir_done:
+                // Bump group ID for next standalone find.
+                lda     tmp_zp
+                clc
+                adc     #$10
+                sta     tmp_zp
+                jmp     tls_skip
+tls_no_sid:
+                lda     #$80
+                sta     sid_map,y
+                // fall through
+tls_skip:
+                // Advance sptr by $20.
+                lda     sptr_zp
+                clc
+                adc     #$20
+                sta     sptr_zp
+                bcc     tls_skip_noinc
+                inc     sptr_zp+1
+tls_skip_noinc:
+                inc     scnt_zp
+                lda     scnt_zp
+                cmp     #96
+                beq     tls_done
+                jmp     tls_lp
+tls_done:
+                pla
+                ldx     x_zp
+                ldy     y_zp
+                rts
+
+//-------------------------------------------------------------------------
+// tls_sid_print: retriggered-sawtooth count-up test (TLR's sid_print).
+// Drives sptr_zp's voice 3 with test-bit + sawtooth at freq=$2020, then
+// reads (mptr_zp)+$1B (OSC3) three times. On a real SID, sawtooth output
+// counts up by 1 each cycle; we verify the three reads form a count-up
+// triple (sample3 == sample2+1 == sample1+2). Test runs twice and must
+// pass both times to return success.
+//   In:  sptr_zp = SID being driven
+//        mptr_zp = slot being read (mirror candidate or sptr itself)
+//   Out: A = OSC3 sample (positive 0..$7F) on pass
+//        A = $80 (negative) on fail
+// Voice 3 ctrl is silenced ($00) at exit regardless of result.
+//-------------------------------------------------------------------------
+tls_sid_print:
+                // Wait for safe raster window (off-screen) — match TLR.
+tls_sp_wait:
+                lda     $d012
+                cmp     #45
+                bcs     tls_sp_wait
+                inc     $d020           // visual probe indicator
+                ldx     #2              // verify twice
+tls_sp_lp:
+                ldy     #$12
+                lda     #$7F
+                sta     (sptr_zp),y     // test bit (reset phase accumulator)
+                ldy     #$0E
+                lda     #$20
+                sta     (sptr_zp),y     // freq lo = $20
+                iny
+                sta     (sptr_zp),y     // freq hi = $20  → freq=$2020
+                ldy     #$12
+                sta     (sptr_zp),y     // sawtooth ($20)
+                ldy     #$1B            // OSC3 register
+                lda     (mptr_zp),y     // sample 1
+                sta     buf_zp
+                lda     (mptr_zp),y     // sample 2
+                sta     tmp1_zp
+                lda     (mptr_zp),y     // sample 3
+                tay
+                lda     #$80            // pre-load fail value
+                dey
+                cpy     tmp1_zp         // sample2 == sample3 - 1?
+                bne     tls_sp_fail
+                dey
+                cpy     buf_zp          // sample1 == sample3 - 2?
+                bne     tls_sp_fail
+                dex
+                bne     tls_sp_lp
+                tya                     // pass: A = sample 3
+tls_sp_fail:
+                pha
+                ldy     #$12
+                lda     #$00
+                sta     (sptr_zp),y     // silence voice 3
+                dec     $d020
+                pla
+                rts
+
+//-------------------------------------------------------------------------
+// dedupe_sid_list (V1.5.01): collapse TLR-baseline + refined duplicates.
+// After tlr_sweep populates sid_list with type=$11 generic entries, the
+// family-specific scans (fiktivloop / sidstereostart) may add a second
+// entry at the same address with a refined type ($01/$02/$06/etc).
+// This routine walks sid_list, marks the $11 entry for removal whenever
+// a non-$11 entry shares its address, then compacts the list.
+//
+// Phase 1 (mark): for each i where t[i]=$11, scan j != i. If j shares
+//                 address and t[j] != $11, set t[i] = $00 (kill).
+// Phase 2 (compact): copy surviving entries (t != $00) to low slots, then
+//                    update sidnum_zp.
+//-------------------------------------------------------------------------
+dedupe_sid_list:
+                stx     x_zp
+                sty     y_zp
+                pha
+                lda     sidnum_zp
+                beq     dsl_done        // empty list → nothing to do
+                // ── Phase 1: mark redundant $11 entries. ──────────────
+                ldx     #$01
+dsl_p1_lp:
+                lda     sid_list_t,x
+                cmp     #$11
+                bne     dsl_p1_next
+                stx     buf_zp          // remember outer index
+                ldy     #$01
+dsl_p1_scan:
+                cpy     buf_zp
+                beq     dsl_p1_sk       // skip self
+                lda     sid_list_l,y
+                cmp     sid_list_l,x
+                bne     dsl_p1_sk
+                lda     sid_list_h,y
+                cmp     sid_list_h,x
+                bne     dsl_p1_sk
+                // Same address. Is [y] refined (not $11)?
+                lda     sid_list_t,y
+                cmp     #$11
+                beq     dsl_p1_sk       // both $11 → leave both for compact
+                // [y] refined → kill [x]
+                lda     #$00
+                sta     sid_list_t,x
+                jmp     dsl_p1_next
+dsl_p1_sk:
+                iny
+                cpy     sidnum_zp
+                bcc     dsl_p1_scan
+                beq     dsl_p1_scan
+dsl_p1_next:
+                inx
+                cpx     sidnum_zp
+                bcc     dsl_p1_lp
+                beq     dsl_p1_lp
+                // ── Phase 2: compact list (drop t=$00 entries). ───────
+                ldx     #$01            // source
+                lda     #$01
+                sta     buf_zp          // dest
+dsl_p2_lp:
+                lda     sid_list_t,x
+                beq     dsl_p2_skip
+                // Keep — copy [x] → [buf_zp] if different
+                cpx     buf_zp
+                beq     dsl_p2_same
+                ldy     buf_zp
+                lda     sid_list_l,x
+                sta     sid_list_l,y
+                lda     sid_list_h,x
+                sta     sid_list_h,y
+                lda     sid_list_t,x
+                sta     sid_list_t,y
+                // Optionally zero source slot (avoid stale residue if compact ran).
+                lda     #$00
+                sta     sid_list_l,x
+                sta     sid_list_h,x
+                sta     sid_list_t,x
+dsl_p2_same:
+                inc     buf_zp
+dsl_p2_skip:
+                inx
+                cpx     sidnum_zp
+                bcc     dsl_p2_lp
+                beq     dsl_p2_lp
+                // sidnum_zp = buf_zp - 1
+                lda     buf_zp
+                sec
+                sbc     #$01
+                sta     sidnum_zp
+dsl_done:
+                pla
+                ldx     x_zp
+                ldy     y_zp
+                rts
 
 // eof
 

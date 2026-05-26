@@ -25,6 +25,29 @@
 
 ## Features
 
+### Quality (Q) info page — combined sidcheck + $D418 decay
+- [ ] **`Q` key → dedicated "Quality Fingerprint" page.** Combines two
+      orthogonal accuracy fingerprints into one screen:
+      - **sidcheck** (Wonderland XIII / Censor Designs) — combined-waveform
+        OSC3 readback after specific timed $D40E/F/D412 sequences. Produces
+        a 0–5 grade per detected SID slot ("AWFUL/BAD/GOOD/BEST"). Lifted
+        from `vice-emu-code-r46118-testprogs-SID/sidcheck/sidcheck.asm`;
+        rebased to drive `sptr_zp` so it can run against each entry in
+        `sid_list`.
+      - **$D418 decay** — existing `calcandloop` decay-rate measurement,
+        currently shown only on row 15 of the main screen when no chip was
+        identified (`data4=$F0`). On the Q page, surface it for *every*
+        detected slot so the user can compare implementations side-by-side
+        (real 8580 vs ARMSID vs FPGASID vs SwinSID emulators, etc).
+      - Layout: one row per detected SID — `D400  QUALITY 4/5 (BEST 8580)  D418=N15`
+      - Tradeoffs: needs raster-sync (sei + $d011/$d012 wait); writes to
+        voice 3 ($D40E/F/D411/D412/D40F) so must restore quiet state
+        ($D??12=0) at end of each slot probe. Per-family interpretation
+        table not calibrated for v1 — ship raw grade, future revision
+        builds per-chip expected-grade reference.
+      - Source notes: see `vice-emu-code-r46118-testprogs-SID/sidcheck/`
+        in `~/Downloads` (memory: `vice_sid_testprogs.md`).
+
 ### SID test sounds
 - [x] Play a short test tone on each detected SID so the user can hear it is working
 - [x] Use a simple triangle-wave note (voice 1, fixed frequency) per SID address

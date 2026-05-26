@@ -176,6 +176,22 @@ end:
  ├─ Save data1 → data4  (primary chip type; keep if $F0 = unknown)
  ├─ Pre-populate sid_list[1] = D400 for detected chip type
  │
+ ├─ u64_fingerprint_scan                 (only data4 ∈ {$01,$02})
+ │     OSC3-fingerprint multi-slot scan: catches U64 "Tuneful Eight"
+ │     8-SID layouts where every UltiSID slot keeps an independent
+ │     oscillator. Runs BEFORE any family-specific writes that would
+ │     clobber per-slot OSC3 readbacks.
+ │
+ ├─ tlr_sweep   (V1.5.01)               (only data4=$00 — no primary)
+ │     Family-agnostic baseline: walks D400-D7E0 + DE00-DFE0 in $20
+ │     strides. Retriggered-sawtooth count-up test at each slot.
+ │     New finds appended with type=$11 (UNKNOWNSID at render time).
+ │     Populates sid_map[0..95] with mirror grouping. Gated to
+ │     "no primary identified" only — when a real SID is at D400,
+ │     fiktivloop_d400 below already does the right noise-mirror
+ │     scan; running tlr_sweep on top would false-positive on
+ │     D420/D440/... mirrors of D400 and disturb ARMSID DIS state.
+ │
  ├─ sidstereostart (BackSID family,     sidtype=$0A)
  │     Skips D4xx mirrors; BackSID only at D400, pre-populated, skip scan
  │
@@ -198,7 +214,14 @@ end:
  │     Skips D400 (primary) and D420-D7xx mirrors
  │     Finds real independent second SIDs (DE00/DF00, stereo cartridges)
  │
- └─ If sidnum_zp==0: record D400 as unknown ($F0) so display is not blank
+ ├─ If sidnum_zp==0: record D400 as unknown ($F0) so display is not blank
+ │
+ └─ dedupe_sid_list  (V1.5.01)
+       Collapses duplicates created by tlr_sweep + family refinement:
+       when a $11 entry and a non-$11 entry share an address, the $11
+       entry is dropped (refined type wins). Surviving $11 entries
+       (TLR found something no family scan recognised) render as
+       UNKNOWN SID FOUND on the stereo list.
 ```
 
 Results are stored in:
