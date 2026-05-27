@@ -9343,7 +9343,7 @@ screen:
     .text "                                        " //21
     .text "                                        " //22
     .text "                                        " //23
-    .text "I=INFO R=README T=SOUND Q=QUIT SPACE=GO " //24
+    .text "I=INFO R=README T=SOUND Q=QUAL SPACE=GO " //24
     .encoding "ascii"
 
 //DATA TABLES FOR COLOURS
@@ -10604,7 +10604,7 @@ readme_text:
     .text "  P      TOGGLE SID MUSIC"
     .byte 13
     .byte $9E
-    .text "  Q      QUIT TO BASIC"
+    .text "  Q      QUALITY FINGERPRINT PAGE"
     .byte 13
     .byte $9E
     .text "  B/M    PREV/NEXT INFO PAGE"

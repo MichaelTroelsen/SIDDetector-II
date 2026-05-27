@@ -2,7 +2,7 @@ al C:37cf .rp_draw_footer
 al C:5835 .fpgasidf_8580u
 al C:3a1b .st_loopA
 al C:c06d .tune_scan_end_hi
-al C:8ebb .checkbacksid
+al C:8ec6 .checkbacksid
 al C:4b7d .ssp_skp12
 al C:4b8b .ssp_skp13
 al C:5600 .calc_loop
@@ -22,7 +22,7 @@ al C:6225 .quality_decay
 al C:3669 .debug_entry_p2
 al C:4ec6 .sfx_pop_is_armsid
 al C:5a8a .MODEUNKN
-al C:8da8 .snd_title
+al C:8db3 .snd_title
 al C:29ff .readkey2
 al C:5a34 .armsid_emul_mode
 al C:4609 .s_s_dup_lp
@@ -60,22 +60,22 @@ al C:423a .crs_d41b
 al C:34f3 .dbg_u_scan
 al C:4182 .cfs_D419
 al C:6415 .dbg_s_t_eq
-al C:8e6f .st_sound7
+al C:8e7a .st_sound7
 al C:32ee .dbg_adr_rvs_print
-al C:8e73 .st_sound8
+al C:8e7e .st_sound8
 al C:49d5 .csfp_l_l_found
-al C:8e61 .st_sound5
-al C:8e68 .st_sound6
+al C:8e6c .st_sound5
+al C:8e73 .st_sound6
 al C:c6e9 .qbands_hi
 al C:2cd7 .show_info_page
 al C:4c2b .agv_dly1a
 al C:5628 .calc_nohi
-al C:8e53 .st_sound3
+al C:8e5e .st_sound3
 al C:4c7c .agv_dly1b
 al C:6222 .data4
-al C:8e5a .st_sound4
-al C:8e45 .st_sound1
-al C:8e4c .st_sound2
+al C:8e65 .st_sound4
+al C:8e50 .st_sound1
+al C:8e57 .st_sound2
 al C:4187 .cfs_D41A
 al C:9fa2 .uca_rts
 al C:5274 .asl_df
@@ -83,7 +83,7 @@ al C:5a26 .data1_old
 al C:526b .asl_de
 al C:c454 .quality_band_lookup
 al C:c6d6 .qb_good
-al C:8e77 .st_sound9
+al C:8e82 .st_sound9
 al C:c1c7 .ufs_silence_cand_unused
 al C:6353 .dbg_ply_str_hi
 al C:5bee .tls_sp_lp
@@ -102,7 +102,7 @@ al C:be9 .basend
 al C:562d .calc_check
 al C:7dae .ip_backsid
 al C:50bf .sfx_dis_no_ack
-al C:8f80 .utfa_drain_lp
+al C:8f8b .utfa_drain_lp
 al C:40ee .csn_s1
 al C:2bab .tlr_entry
 al C:44da .s_s_arm_mlp
@@ -115,7 +115,7 @@ al C:7713 .ip_vice
 al C:3860 .rrc_print_start
 al C:95c1 .envfollow_v12
 al C:30e0 .dbg_a2_do
-al C:8fe5 .utfa_6581
+al C:8ff0 .utfa_6581
 al C:2dac .info_kbdwait
 al C:29d0 .u64banner_lp
 al C:46f1 .f_l_l_sec
@@ -140,7 +140,7 @@ al C:41c5 .cfs_D419_2
 al C:418f .cfs_D419_1
 al C:599d .backsidf
 al C:51fa .dpst_n10
-al C:9097 .dbg_uci_query
+al C:90a2 .dbg_uci_query
 al C:4a71 .ssp_skp4
 al C:4008 .cskp_d41D_k
 al C:4ae5 .ssp_skp8
@@ -222,7 +222,7 @@ al C:9ebf .cui_poll
 al C:4bfd .ssp_ex1
 al C:5761 .exit
 al C:37c8 .rp_row1_scr
-al C:8f2c .cbs_done
+al C:8f37 .cbs_done
 al C:441d .PRHEX
 al C:5a3d .arm2sid_mapnames
 al C:50d2 .print_armsid_ver
@@ -250,7 +250,7 @@ al C:2b76 .do_quit
 al C:3717 .readme_kbdwait
 al C:48f8 .f_l_l4
 al C:5533 .loop1sek
-al C:903d .dpf_int
+al C:9048 .dpf_int
 al C:4a35 .ssp_loop
 al C:9fa3 .uca_found
 al C:469d .s_s_lfpgasid_2
@@ -274,9 +274,9 @@ al C:4587 .s_s_arm_call_real
 al C:46e8 .s_s_l3
 al C:46d5 .s_s_l2
 al C:61fe .ArithMean
-al C:90fc .ultisid_8580_int
+al C:9107 .ultisid_8580_int
 al C:272c .cskp_fm_disp
-al C:8e08 .snd_now_testing
+al C:8e13 .snd_now_testing
 al C:c508 .qcq_wait1
 al C:c50d .qcq_wait2
 al C:c6a9 .qc_patch_operands
@@ -288,7 +288,7 @@ al C:4a9d .ssp_a2_arm2
 al C:3404 .dbg_arr1
 al C:63f6 .dbg_s_sidlist
 al C:96d5 .scope_buf
-al C:90e4 .duq_status
+al C:90ef .duq_status
 al C:c059 .tune_init_lo
 al C:459c .s_s_try_dis
 al C:9a92 .screen
@@ -301,7 +301,7 @@ al C:5a64 .fmyam_detected
 al C:455d .s_s_arm_mir_wait
 al C:865f .readme_text
 al C:7570 .ip_ulti
-al C:9051 .dpf_lookup
+al C:905c .dpf_lookup
 al C:4098 .cusid_end
 al C:40b1 .ckfs_notfound
 al C:5c35 .dsl_p1_lp
@@ -325,7 +325,7 @@ al C:2c5d .ie_not01
 al C:5227 .pmn_loop
 al C:4f19 .sfx_skp_f
 al C:92f7 .tracker_loop
-al C:90f0 .duq_nodata
+al C:90fb .duq_nodata
 al C:266d .arm2_print_found
 al C:c796 .qct_6581
 al C:3862 .rrc_print_lp
@@ -353,7 +353,7 @@ al C:3cf4 .get_emu_page
 al C:4774 .fll_mread
 al C:25fe .step2_swinsidu_d420
 al C:59f9 .usid64f
-al C:8fc8 .utfa_nodata
+al C:8fd3 .utfa_nodata
 al C:355c .dbg_sid2_skip
 al C:510b .print_armsid_ch
 al C:c212 .ufs_check_done
@@ -361,7 +361,7 @@ al C:c78f .qct_unkn
 al C:5a2b .armsid_minor
 al C:2d56 .sip_hdr_cr_ok
 al C:29ff .midi_disp_skip
-al C:8eba .bpf_done
+al C:8ec5 .bpf_done
 al C:472b .fll_preclear
 al C:58a8 .ultisidf_fc0
 al C:58b8 .ultisidf_fc1
@@ -395,10 +395,10 @@ al C:3c6e .colorize_rows
 al C:6479 .ip_nosid
 al C:4774 .fll_mrd
 al C:4477 .sss_not_sidfx
-al C:8f14 .cbs_d41F
-al C:8efa .cbs_d41C
-al C:8f04 .cbs_d41E
-al C:8eff .cbs_d41D
+al C:8f1f .cbs_d41F
+al C:8f05 .cbs_d41C
+al C:8f0f .cbs_d41E
+al C:8f0a .cbs_d41D
 al C:2edf .sip_redraw_content
 al C:5219 .print_map_name
 al C:6389 .dbg_s_fmyam
@@ -408,7 +408,7 @@ al C:50fe .pav_divdone
 al C:41c3 .fpgaclearmagic
 al C:c19e .ufs_settle
 al C:47d0 .fll_cad
-al C:8f7e .utfa_drain
+al C:8f89 .utfa_drain
 al C:3788 .rp_sdn_held
 al C:2e45 .info_wrap_last
 al C:57df .armsidf
@@ -425,7 +425,7 @@ al C:3f32 .ch_s_2
 al C:45dc .s_s_skpico
 al C:574b .nc_unknown
 al C:3f36 .ch_s_3
-al C:8d56 .readme_header
+al C:8d61 .readme_header
 al C:3f27 .ch_s_1
 al C:5547 .print_hex
 al C:44ae .s_s_is_armsid
@@ -523,7 +523,7 @@ al C:5a68 .midi_kind
 al C:2cd2 .ie_use_decay
 al C:5793 .ArrayPtr3l
 al C:4e2d .sfx_pop_s1_store
-al C:8fe8 .utfa_map
+al C:8ff3 .utfa_map
 al C:55ef .calc_start
 al C:c7b9 .qct_f858
 al C:471c .fll_std_detect
@@ -533,11 +533,11 @@ al C:2948 .end_sid_found
 al C:4a4f .ssp_loop2
 al C:516c .dbg_print_sid_typename
 al C:7c25 .ip_pubdom
-al C:8f32 .uci_type_for_addr
+al C:8f3d .uci_type_for_addr
 al C:98ad .note_freq_lo
 al C:4f4a .cfm_tah
 al C:55df .calcand_calcloop
-al C:90c6 .duq_read
+al C:90d1 .duq_read
 al C:4468 .tab1
 al C:4464 .tab2
 al C:70da .ip_fpga8580
@@ -583,7 +583,7 @@ al C:4e85 .sfx_pop_try_dis
 al C:41c8 .cfs_D41A_2
 al C:4196 .cfs_D41A_1
 al C:c1ff .ufs_silf
-al C:8fef .utfa_valid
+al C:8ffa .utfa_valid
 al C:5796 .CLCloop
 al C:55d3 .calcand_bigloop
 al C:4292 .unknown
@@ -591,7 +591,7 @@ al C:405d .cskp_notfound
 al C:c44d .quality_do_back
 al C:505d .cmidi_n3
 al C:367f .dbg2_clr
-al C:8fad .utfa_try2
+al C:8fb8 .utfa_try2
 al C:3f5c .cas_d41E_5
 al C:429b .crs_d40f_1
 al C:496a .ccas_armsid
@@ -727,7 +727,7 @@ al C:5a3c .fpgasid_fpga_rev
 al C:5866 .l8580f
 al C:2b3b .dor_bar_color
 al C:533b .ape_mode_sfx
-al C:9055 .dpf_lk_lp
+al C:9060 .dpf_lk_lp
 al C:3d82 .gep_resid6581
 al C:9ecd .cui_got_resp
 al C:9363 .te_zreal
@@ -739,7 +739,7 @@ al C:3875 .rrc_handle_cr
 al C:5c40 .dsl_p1_scan
 al C:3846 .rrc_scan
 al C:527d .asl_unk
-al C:8f64 .utfa_state_ready
+al C:8f6f .utfa_state_ready
 al C:c7f1 .qct_lo
 al C:61e0 .slabel
 al C:3757 .readme_scroll_up
@@ -773,7 +773,7 @@ al C:3f36 .cas_d41C
 al C:358b .dbg_uci_lp2
 al C:3f19 .cas_d41B
 al C:47ea .f_l_l_found
-al C:9086 .dpf_lk_nx
+al C:9091 .dpf_lk_nx
 al C:47f3 .fll_found_ok
 al C:5974 .arm2sidf
 al C:591f .sidfxu
@@ -846,7 +846,7 @@ al C:3666 .dbg_space
 al C:927f .tu_loop
 al C:3576 .dbg_uci_lp
 al C:62e1 .dbg_s_fpga_c
-al C:8f09 .cbs_poll
+al C:8f14 .cbs_poll
 al C:5c2a .dedupe_sid_list
 al C:62e9 .dbg_s_fpga_f
 al C:3551 .dbg_u_next
@@ -862,8 +862,8 @@ al C:431a .dloop2
 al C:95ef .ef1_store
 al C:3dd8 .irq_done
 al C:45ca .s_s_pdsid
-al C:90d9 .duq_drain
-al C:8e91 .bpf_scan
+al C:90e4 .duq_drain
+al C:8e9c .bpf_scan
 al C:5a39 .is_u64
 al C:3c18 .sfx_pn_loop
 al C:41b0 .fpgasidf_6581
@@ -900,7 +900,7 @@ al C:3a82 .st_p20
 al C:92d9 .te_col
 al C:60ac .snosound
 al C:3a8e .st_p21
-al C:8eeb .cbs_pre
+al C:8ef6 .cbs_pre
 al C:3a9b .st_p22
 al C:3cfd .gep_check_swinano
 al C:3aa0 .st_p23
@@ -925,7 +925,7 @@ al C:c4da .qcl_q_check
 al C:c48f .qcl_q_calcloop
 al C:492e .ccas_d41b
 al C:493e .ccas_loop
-al C:8f52 .utfa_poll
+al C:8f5d .utfa_poll
 al C:2b48 .dor_msg
 al C:959f .hex_byte_to_screen_r7
 al C:63fc .dbg_s_type
@@ -944,7 +944,7 @@ al C:60a2 .sreal6581
 al C:36c6 .dbg_str_lp
 al C:596d .tc64_text
 al C:34a2 .dbg_sids
-al C:8f28 .cbs_found
+al C:8f33 .cbs_found
 al C:3a6e .st_p17
 al C:37e7 .rp_hint_col2
 al C:3a76 .st_p18
@@ -962,7 +962,7 @@ al C:4752 .fll_mlp
 al C:3a44 .st_p11
 al C:3a51 .st_p12
 al C:3323 .dplcr_l_off
-al C:8f21 .cbs_notfound
+al C:8f2c .cbs_notfound
 al C:3e0d .lp
 al C:4973 .ccas_fpgasid
 al C:399f .snd_patch_page
@@ -975,7 +975,7 @@ al C:3cb4 .cr_not_decay
 al C:6395 .dbg_s_d418
 al C:9736 .trk_hdr
 al C:6379 .dbg_s_uci
-al C:8f8e .utfa_status
+al C:8f99 .utfa_status
 al C:5990 .pdsidf
 al C:38ad .snd_clr
 al C:5c1e .tls_sp_fail
@@ -990,11 +990,11 @@ al C:3360 .dbg_techdata_s
 al C:3776 .rp_sdn_again
 al C:2f9a .sip_rc_ret
 al C:2d5d .sip_hdr_char
-al C:8e7b .fiktivloop_d400
+al C:8e86 .fiktivloop_d400
 al C:94f2 .tg_on
 al C:6325 .dbg_s_adr_ctr
 al C:4e77 .sfx_skp_s2_match
-al C:8e17 .snd_done
+al C:8e22 .snd_done
 al C:4e81 .sfx_skp_s2_8580
 al C:512a .print_sid_type_4
 al C:73b6 .ip_sidfx
@@ -1032,7 +1032,7 @@ al C:461a .s_s_dup_nx2
 al C:4447 .SCIGET
 al C:40ac .ckfs_found
 al C:93fe .tdc_colp
-al C:90af .duq_poll
+al C:90ba .duq_poll
 al C:62d7 .dbg_s_arm_ei
 al C:4579 .s_s_arm_mir_hit
 al C:92c6 .te_clr
@@ -1050,9 +1050,9 @@ al C:63d1 .dbg_s_arr2
 al C:4d50 .a2spl_s2
 al C:63cb .dbg_s_arr1
 al C:57c8 .swinsidUf
-al C:8e9f .bpf_found
+al C:8eaa .bpf_found
 al C:63d7 .dbg_s_arr3
-al C:9105 .ultisid_6581_int
+al C:9110 .ultisid_6581_int
 al C:4479 .sss_sync
 al C:4dc0 .a2spl_s6
 al C:2e4c .info_next_page
@@ -1097,7 +1097,7 @@ al C:9ea7 .check_uci_ultisid
 al C:9200 .tracker_patch_once
 al C:4d35 .a2spl_s1
 al C:3ce3 .cr_ns
-al C:9091 .dpf_nl
+al C:909c .dpf_nl
 al C:48e1 .f_l_next
 al C:442b .REGUNHIDE
 al C:c207 .ufs_next
@@ -1114,7 +1114,7 @@ al C:94b5 .tw_not_saw
 al C:4719 .fll_u64_skip
 al C:2c16 .tlr_writ
 al C:62fd .dbg_s_sidfx_sw1
-al C:8d7f .readme_nav_hint
+al C:8d8a .readme_nav_hint
 al C:49c9 .csfp_l_l_fpga1
 al C:5b00 .tlr_sweep
 al C:510a .pav_done
@@ -1157,7 +1157,7 @@ al C:534d .ape_mode_sfxsid
 al C:4e85 .sfx_pop_skp_miss
 al C:49b1 .checksecondFPGA
 al C:6390 .dbg_s_sfx
-al C:8fd3 .utfa_checkrealsid
+al C:8fde .utfa_checkrealsid
 al C:37dd .rp_sep_scr
 al C:5bc6 .tls_skip
 al C:3cca .cr_set_yellow
@@ -1198,7 +1198,7 @@ al C:4cc8 .agv_dly_mm
 al C:60ea .s6581R3
 al C:6113 .s6581R2
 al C:2d46 .sip_hdr
-al C:8e8c .backsid_post_fixup
+al C:8e97 .backsid_post_fixup
 al C:3d0e .gep_ulti
 al C:6164 .sResid6581d
 al C:26d3 .checkbacksid_step
@@ -1223,8 +1223,8 @@ al C:5120 .print_retry_star
 al C:32e0 .dbg_print_sidtype
 al C:59b8 .cbmsfxf
 al C:7a06 .ip_sidkpic
-al C:90bf .duq_state_rdy
-al C:8f6b .utfa_read
+al C:90ca .duq_state_rdy
+al C:8f76 .utfa_read
 al C:387f .rrc_cr_ok
 al C:54da .spe_done
 al C:57ec .nosoundf
@@ -1252,7 +1252,7 @@ al C:9354 .tracker_exit
 al C:c1bc .ufs_dread
 al C:2b17 .dor_col
 al C:489d .fll_try_real
-al C:8eb2 .bpf_clr
+al C:8ebd .bpf_clr
 al C:5b45 .tls_lp
 al C:2c52 .info_entry
 al C:399c .snd_done_space
@@ -1263,7 +1263,7 @@ al C:5129 .prs_exit
 al C:47e7 .fll_czero
 al C:3afc .sfx_snd_addr
 al C:96ad .scope_col_lo
-al C:902b .dpf_ext
+al C:9036 .dpf_ext
 al C:255b .sidfxprint
 al C:93f1 .tdc_foot
 al C:c7ea .qct_nosid
@@ -1278,7 +1278,7 @@ al C:9f11 .cui_emusid2
 al C:36ef .rp_clr
 al C:4114 .csn_s2
 al C:2b0a .dor_cpy
-al C:904c .dpf_t
+al C:9057 .dpf_t
 al C:45f8 .s_s_nosound
 al C:c100 .tune_switch
 al C:57c1 .Done
@@ -1336,7 +1336,7 @@ al C:4a2a .sidstereo_print
 al C:4eca .sfx_pop_s2_add
 al C:3ff9 .cskp_d41E
 al C:3ff4 .cskp_d41F
-al C:8ff3 .dbg_print_frame
+al C:8ffe .dbg_print_frame
 al C:61f3 .Temp
 al C:9ee1 .cui_done_read
 al C:488b .fll_fpga_inherit
