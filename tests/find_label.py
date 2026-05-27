@@ -1,7 +1,8 @@
-import re, sys
+import os, re, sys
 target = int(sys.argv[1], 16)
+SYM = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "siddetector.sym")
 syms = {}
-with open("siddetector.sym") as f:
+with open(SYM) as f:
     for line in f:
         m = re.match(r"\.label\s+(\S+)\s*=\s*\$([0-9a-f]+)", line)
         if m:

@@ -11835,9 +11835,9 @@ qe_slot_loop:
            ldy #>qr_text1
            jsr $AB1E
            lda quality_score
-           cmp #$0A
+           cmp #$07               // band lookup clamps at 7; keep digit consistent
            bcc qe_score_ok
-           lda #$09
+           lda #$06               // any out-of-range score prints '6' to match BAD-clamp band
 qe_score_ok:
            clc
            adc #$30
@@ -11978,6 +11978,10 @@ quality_decay_for_sptr:
     adc #$00
     sta qcs_d418w+2
     sta qcs_d418r+2
+    // CONTINUES INTO calcandloop_q — DO NOT INSERT CODE HERE.
+    // quality_decay_for_sptr is the operand-patch prelude; it falls
+    // through into the measurement loop with no rts so callers `jsr`
+    // the pair as one unit and the loop's rts returns to them.
 
 // NOTE: deliberately does NOT use the calcandloop txs/tsx trick.  The
 // original calcandloop tail-calls funny_print (never returns to caller),
@@ -12014,21 +12018,11 @@ qcl_q_loop:
     inc $07E8
     bne qcl_q_nohi
     inc $07E9
-    bne qcl_q_spincheck
+    bne qcl_q_nohi              // (spinner removed — row 15 is part of Q-page canvas)
     inc $07EA
     lda $07EA
     cmp #$02
     beq qcl_q_check
-qcl_q_spincheck:
-    lda $07E9
-    and #$0F
-    bne qcl_q_nohi
-    lda tmp_zp
-    and #$07
-    tay
-    lda decay_spinner,y
-    sta $0658
-    inc tmp_zp
 qcl_q_nohi:
 qcs_d418r:    lda $d418
     bne qcl_q_loop
@@ -12045,6 +12039,7 @@ qcl_q_check:
     ldx ZPbigloop
     dex
     sta ArrayPtr3,x
+    cli                          // restore IRQ state (matches the SEI above)
     rts
 
 // ------------------------------------------------------------
@@ -12296,9 +12291,12 @@ qc_pt_loop:
 
 // ------------------------------------------------------------
 // Q-page strings + tables (in the same segment, so we don't punch
-// holes in the $6000 data segment).
+// holes in the $6000 data segment).  Printed via $AB1E → must be
+// PETSCII; wrap the block so future additions of lowercase / `[]@`
+// don't silently mis-encode.
 // ------------------------------------------------------------
-qb_awful:   .text "AWFUL"; .byte 0
+.encoding "petscii_upper"
+qb_awful:   .text "AWFUL"; .byte 0    // all bands are 5 chars; qe_slot_loop adds an explicit space after
 qb_bad:     .text "BAD  "; .byte 0
 qb_good:    .text "GOOD "; .byte 0
 qb_best:    .text "BEST "; .byte 0
@@ -12314,7 +12312,7 @@ qhdr_text:
     .byte 13, 0
 
 q_nav_hint:
-    .text "    SPACE = BACK TO MAIN SCREEN    "
+    .text "   SPACE / Q = BACK TO MAIN SCREEN  "
     .byte 0
 
 q_empty_msg:
@@ -12357,6 +12355,7 @@ qct_lo: .byte <qct_unkn,  <qct_6581, <qct_8580, <qct_swnn, <qct_swnu
 qct_hi: .byte >qct_unkn,  >qct_6581, >qct_8580, >qct_swnn, >qct_swnu
         .byte >qct_arms,  >qct_f858, >qct_f658, >qct_swnn, >qct_pdsid
         .byte >qct_back,  >qct_skpc, >qct_kung, >qct_u64,  >qct_skp65
+.encoding "ascii"               // restore default for any future appendage
 
 // eof
 
