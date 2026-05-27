@@ -1377,29 +1377,12 @@ u64banner_msg:
    .byte $15,$36,$34                    // U64
    .byte $00
 
-do_quit:
-           sei
-           lda #$00
-           sta $D019               // clear VIC IRQ flags
-           sta $D01A               // disable VIC raster IRQ
-           lda #$81
-           sta $DC0D               // re-enable CIA1 timer A (keyboard scan)
-           sta $DD0D               // re-enable CIA2 timer A
-           lda #$31                // restore $0314/$0315 to KERNAL default ($EA31)
-           sta $0314
-           lda #$EA
-           sta $0315
-           cli
-           jsr $FF81               // KERNAL: reset I/O and screen colours
-           jsr $E544               // KERNAL: clear screen
-           lda #<goodbye_text
-           ldy #>goodbye_text
-           jsr $AB1E               // print goodbye message
-           jmp $E37B               // KERNAL warm-start BASIC -> READY prompt
-
-goodbye_text:
-           .text "GOODBYE"
-           .byte 13, 0             // CR + null terminator
+// do_quit / goodbye_text retired in post-V1.5.03.
+// V1.5.02 rebound the Q key from quit-to-BASIC to the Quality
+// Fingerprint page (jmp do_quality); from that point on do_quit was
+// orphaned dead code.  Recover the ~30 bytes.  SPACE-restart and
+// power-off remain the practical exits; EXITINTRO below was already
+// marked "no longer called in v1.2" and is removed alongside.
 
 // ============================================================
 // TLR SECOND SID DETECTOR LAUNCHER
@@ -3966,21 +3949,10 @@ irq_done:
 irq_save01: .byte $37
 
               
-// EXITINTRO: no longer called in v1.2 (SPACE now restarts detection instead
-// of exiting to BASIC).  Kept for reference.
-EXITINTRO:
-           jsr $E544               // KERNAL: clear screen
-           lda #$81
-           stx $0314               // restore CIA1 IRQ vector to KERNAL default
-           sty $0315
-           sta $DC0D               // re-enable CIA1 interrupts
-           sta $DD0D               // re-enable CIA2 interrupts
-           lda #$00
-           sta $D019               // clear VIC IRQ flags
-           sta $D01A               // disable VIC IRQ mask
-           jsr $FF81               // KERNAL: reset screen colours (blue border+screen)
-           jmp $E37B               // KERNAL: warm-start BASIC
-              
+// (EXITINTRO removed in post-V1.5.03 — was "no longer called in v1.2";
+//  retired alongside do_quit when the Q key was rebound to the Quality
+//  Fingerprint page in V1.5.02.)
+
 // ============================================================
 // printscreen -- copies the 1000-byte screen table to video RAM
 // and initialises colour RAM to white (1).
@@ -7360,14 +7332,14 @@ dpst_n06:       cmp #$07
                 jmp dpst_done
 dpst_n07:       cmp #$01
                 bne dpst_n01
-                lda #<l8580f
-                ldy #>l8580f
+                lda #<l6581f               // type $01 = 6581 (canonical, line 753)
+                ldy #>l6581f
                 jsr $AB1E
                 jmp dpst_done
 dpst_n01:       cmp #$02
                 bne dpst_n02
-                lda #<l6581f
-                ldy #>l6581f
+                lda #<l8580f               // type $02 = 8580 (canonical, line 753)
+                ldy #>l8580f
                 jsr $AB1E
                 jmp dpst_done
 dpst_n02:       cmp #$05
