@@ -1,4 +1,4 @@
-# SID Detector v1.5.01
+# SID Detector v1.5.02
 
 A Commodore 64 diagnostic utility that identifies 24+ variants of the SID (Sound Interface Device) chip — including real hardware, FPGA clones, microcontroller emulators, and PC emulators.
 

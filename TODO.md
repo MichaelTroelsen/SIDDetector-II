@@ -26,27 +26,35 @@
 ## Features
 
 ### Quality (Q) info page — combined sidcheck + $D418 decay
-- [ ] **`Q` key → dedicated "Quality Fingerprint" page.** Combines two
-      orthogonal accuracy fingerprints into one screen:
-      - **sidcheck** (Wonderland XIII / Censor Designs) — combined-waveform
-        OSC3 readback after specific timed $D40E/F/D412 sequences. Produces
-        a 0–5 grade per detected SID slot ("AWFUL/BAD/GOOD/BEST"). Lifted
-        from `vice-emu-code-r46118-testprogs-SID/sidcheck/sidcheck.asm`;
-        rebased to drive `sptr_zp` so it can run against each entry in
-        `sid_list`.
-      - **$D418 decay** — existing `calcandloop` decay-rate measurement,
-        currently shown only on row 15 of the main screen when no chip was
-        identified (`data4=$F0`). On the Q page, surface it for *every*
-        detected slot so the user can compare implementations side-by-side
-        (real 8580 vs ARMSID vs FPGASID vs SwinSID emulators, etc).
-      - Layout: one row per detected SID — `D400  QUALITY 4/5 (BEST 8580)  D418=N15`
-      - Tradeoffs: needs raster-sync (sei + $d011/$d012 wait); writes to
-        voice 3 ($D40E/F/D411/D412/D40F) so must restore quiet state
-        ($D??12=0) at end of each slot probe. Per-family interpretation
-        table not calibrated for v1 — ship raw grade, future revision
-        builds per-chip expected-grade reference.
-      - Source notes: see `vice-emu-code-r46118-testprogs-SID/sidcheck/`
-        in `~/Downloads` (memory: `vice_sid_testprogs.md`).
+- [x] **`Q` key → dedicated "Quality Fingerprint" page.** Implemented in
+      a $C300 RAM segment (well clear of the main code body which already
+      runs $2400-$5A99). Layout matches spec: one row per `sid_list`
+      entry, `D4xx QUALITY n/5 (BAND chip6) D418=Nnn`. Pieces:
+      - **sidcheck** lifted verbatim from VICE testprogs
+        (`vice-emu-code-r46118-testprogs-SID/sidcheck/sidcheck.asm`).
+        Cycle counts of xxx1/2/3/5 preserved — every voice-3/OSC3 site
+        is an absolute `$D4xx` operand whose 2 operand bytes are
+        runtime-patched per slot by `qc_patch_operands`. The patch
+        list (36 sites) is generated at assemble time via a `qrec()`
+        macro + KickAsm `qc_sites` `List()`, so adding a new probe
+        write only needs one extra `qrec()` pseudo-line.
+      - **Decay** uses a parallel `calcandloop_q` / `calc_start_q`
+        copy that drops the row-15 `jmp funny_print` side-effect and
+        self-modifies its `sta/lda $d418` operands from
+        `sptr_zp+$18`. Existing main-screen decay path on row 15
+        (`checktypeandprint`) is untouched → variant goldens unaffected.
+      - **Band labels** AWFUL/BAD/GOOD/BEST mapped via
+        `quality_band_lookup` (7-entry table, score 6+ clamps to BAD).
+        Factored separately from `quality_print_band` so test_suite
+        can exercise lookup + clamp without touching screen RAM —
+        `dispatch_band` in tests/test_suite.asm sums first 2 chars
+        for a collision-free fingerprint per band. Tests T33–T35
+        cover score 0/5/$FF.
+      - **Chip-type short names** (6 chars each) keep the row at 38
+        cols → fits 40-col screen even at 8-SID U64 Tuneful Eight.
+      - **PAL only** for now: sidcheck `result` table calibrated on
+        PAL; NTSC scores may shift. Documented in this file (V1.5.02).
+      - Exit: SPACE or Q → `jmp start` (full re-detect cycle).
 
 ### SID test sounds
 - [x] Play a short test tone on each detected SID so the user can hear it is working

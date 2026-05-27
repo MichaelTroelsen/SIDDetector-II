@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.5.01  -  Commodore 64 SID chip identification utility
+// SID Detector v1.5.02  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -1231,7 +1231,7 @@ kbd_not_space:
            txa
            and #$40                // bit 6 = Q (0 = pressed)
            bne kbd_not_q
-           jmp do_quit
+           jmp do_quality          // Q → Quality Fingerprint page
 kbd_not_q:
            lda #$EF                // select row 4
            sta $DC00
@@ -1295,6 +1295,8 @@ do_soundtest:
            jmp sound_test_entry    // SID sound test
 do_tlr:
            jmp tlr_entry           // TLR second SID detector (copies to $0801, jmp $0815)
+do_quality:
+           jmp quality_entry       // Q: Quality Fingerprint page (sidcheck + D418 decay)
 do_restart:
            lda #$00
            sta sid_music_flag      // stop SID module before restart
@@ -1908,6 +1910,10 @@ ilr_zero:
 
 info_do_space:
            jmp start
+
+// (Quality Fingerprint painter + key wait — quality_entry, qe_*, qpc_*,
+//  quality_kbdwait/loop, quality_do_back — lives in the $C300 segment near
+//  the end of this file.  Same reason as the calcandloop_q comment above.)
 
 // ============================================================
 // sip_redraw_content: clear rows 2-22 and reprint body from
@@ -8011,10 +8017,16 @@ calc_check:
     dex
     sta ArrayPtr3,x
     rts
-    
-//---------------------------------------------------------------------    
+
+// (Quality Fingerprint code — calcandloop_q, calc_start_q,
+//  quality_decay_for_sptr, quality_check_for_sptr, qc_xxx* etc — lives
+//  in the $C300 segment near the end of this file.  Placed there because
+//  the V1.5.01 main code body already runs from $2400 to ~$5E50 and any
+//  more code at this offset would collide with the $5B00 tlr_sweep block.)
+
+//---------------------------------------------------------------------
 // new check
-//---------------------------------------------------------------------    
+//---------------------------------------------------------------------
 checktypeandprint:
 
 //    lda #<slabel 
@@ -9301,7 +9313,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.5.01 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.5.02 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9606,6 +9618,8 @@ ArrayPtr2:   .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 ArrayPtr3:   .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
 data4:       .byte 0,0
+quality_score: .byte $00 // sidcheck 0..5 score for the currently-probed slot
+quality_decay: .byte $00 // ArithMean snapshot (low byte) for the currently-probed slot
 sidfx_d41d:  .byte 0     // D41D captured during DETECTSIDFX (SW2/SW1/SCAP/PLY)
 sidfx_d41e:  .byte 0     // D41E captured during DETECTSIDFX (SID2/SID1 types)
 // SIDFX secondary SID address tables (indexed by SW1: 0=CTR 1=LFT 2=RGT)
@@ -9641,11 +9655,16 @@ info_nav_hint:
     .text "W=UP S=DN  B=PREV  M=NEXT  SPACE=BACK "
     .byte 0
 
+// (Quality Fingerprint strings + band/chip-type tables + lookup helper —
+//  qb_*, qbands_*, qhdr_text, q_nav_hint, q_empty_msg, qr_text*, qct_*,
+//  quality_band_lookup, quality_print_band — live in the $C300 segment
+//  near the end of this file, alongside the painter and probe code.)
+
 // ============================================================
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.5.01 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.5.02 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10451,7 +10470,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.5.01 README"
+    .text "SIDDETECTOR V1.5.02 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10614,6 +10633,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.5.02 QUALITY FINGERPRINT Q"
+    .byte 13
+    .byte $9E
     .text "  V1.5.01 TLR BASELINE SWEEP"
     .byte 13
     .byte $9E
@@ -10624,9 +10646,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.42 U64 BEHAVIORAL THRESHOLD 4"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.41 TUNEFUL 8 BANNER ON NOSID ROW"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
@@ -11691,6 +11710,614 @@ dsl_done:
                 ldx     x_zp
                 ldy     y_zp
                 rts
+
+// ============================================================================
+// QUALITY FINGERPRINT SEGMENT — Q key handler  ($C300 block)
+// ============================================================================
+// Placed at $C300 (free RAM: tune-selector segment ends ~$C231, KERNAL ROM
+// starts $E000). Hosts:
+//   - quality_entry (painter + slot loop)
+//   - quality_check_for_sptr (sidcheck port: xxx1/2/3/5 + check + skip2)
+//   - quality_decay_for_sptr / calcandloop_q / calc_start_q (per-slot decay)
+//   - quality_print_chiptype, quality_band_lookup, quality_print_band
+//   - All Q-page strings and chip-type / band tables
+//   - qc_patch_operands + auto-generated patch tables (qc_sites list)
+// Entry: jmp quality_entry from do_quality (siddetector.asm:1299).
+// Exit:  quality_do_back → jmp start.
+// ============================================================================
+* = $C300
+
+.var qc_sites = List()
+
+.macro qrec(off) {
+    .eval qc_sites.add(*)
+    .eval qc_sites.add(off)
+}
+
+// ------------------------------------------------------------
+// quality_entry — painter
+// ------------------------------------------------------------
+quality_entry:
+           sei
+           lda #$00
+           sta colwash_flag         // suppress COLWASH IRQ paint
+           sta sid_music_flag       // stop tracker IRQ playback if running
+           sta $D418                // master mute on primary SID
+           lda #$15
+           sta $D018
+           lda #$00
+           sta $D020
+           sta $D021
+           lda #$20
+           ldx #$00
+qe_clr256:
+           sta $0400,x
+           sta $0500,x
+           sta $0600,x
+           inx
+           bne qe_clr256
+           ldx #$00
+qe_clrrem:
+           sta $0700,x
+           inx
+           cpx #232
+           bne qe_clrrem
+           lda #$01
+           ldx #$00
+qe_col256:
+           sta $D800,x
+           sta $D900,x
+           sta $DA00,x
+           inx
+           bne qe_col256
+           ldx #$00
+qe_colrem:
+           sta $DB00,x
+           inx
+           cpx #232
+           bne qe_colrem
+           // Heading at row 0
+           ldx #$00
+           ldy #$00
+           clc
+           jsr $E50C
+           lda #<qhdr_text
+           ldy #>qhdr_text
+           jsr $AB1E
+           cli                       // probes do their own sei window
+           lda sidnum_zp
+           bne qe_have_sids
+           ldx #$05
+           ldy #$00
+           clc
+           jsr $E50C
+           lda #<q_empty_msg
+           ldy #>q_empty_msg
+           jsr $AB1E
+           jmp qe_done
+
+qe_have_sids:
+           sta tmp2_zp
+           lda #$01
+           sta tmp1_zp
+
+qe_slot_loop:
+           ldy tmp1_zp
+           lda sid_list_h,y
+           beq qe_done
+           sta sptr_zp1
+           lda sid_list_l,y
+           sta sptr_zp
+           jsr quality_check_for_sptr
+           jsr quality_decay_for_sptr
+           lda ArithMean
+           sta quality_decay
+           lda tmp1_zp
+           clc
+           adc #$01
+           tax
+           ldy #$00
+           clc
+           jsr $E50C
+           ldy tmp1_zp
+           lda sid_list_h,y
+           jsr print_hex
+           ldy tmp1_zp
+           lda sid_list_l,y
+           jsr print_hex
+           lda #<qr_text1
+           ldy #>qr_text1
+           jsr $AB1E
+           lda quality_score
+           cmp #$0A
+           bcc qe_score_ok
+           lda #$09
+qe_score_ok:
+           clc
+           adc #$30
+           jsr $FFD2
+           lda #<qr_text2
+           ldy #>qr_text2
+           jsr $AB1E
+           jsr quality_print_band
+           lda #$20
+           jsr $FFD2
+           ldy tmp1_zp
+           lda sid_list_t,y
+           jsr quality_print_chiptype
+           lda #<qr_text3
+           ldy #>qr_text3
+           jsr $AB1E
+           lda quality_decay
+           jsr print_hex
+           inc tmp1_zp
+           dec tmp2_zp
+           bne qe_slot_loop
+
+qe_done:
+           ldx #$18
+           ldy #$00
+           clc
+           jsr $E50C
+           lda #<q_nav_hint
+           ldy #>q_nav_hint
+           jsr $AB1E
+           jmp quality_kbdwait
+
+// ------------------------------------------------------------
+// quality_print_chiptype — A = sid_list_t code → 6-char short name
+// ------------------------------------------------------------
+quality_print_chiptype:
+           cmp #$30
+           beq qpc_sidfx
+           cmp #$F0
+           beq qpc_nosid
+           cmp #$0F
+           bcs qpc_unknown
+           tax
+           lda qct_lo,x
+           ldy qct_hi,x
+           jmp $AB1E
+qpc_sidfx:
+           lda #<qct_sidfx
+           ldy #>qct_sidfx
+           jmp $AB1E
+qpc_nosid:
+           lda #<qct_nosid
+           ldy #>qct_nosid
+           jmp $AB1E
+qpc_unknown:
+           lda #<qct_unkn
+           ldy #>qct_unkn
+           jmp $AB1E
+
+// ------------------------------------------------------------
+// Key wait — release SPACE/Q first, then poll for either to fire exit.
+// ------------------------------------------------------------
+quality_kbdwait:
+           lda #$7F
+           sta $DC00
+           lda $DC01
+           and #$50
+           cmp #$50
+           bne quality_kbdwait
+
+quality_kbdloop:
+           lda #$7F
+           sta $DC00
+           lda $DC01
+           tax
+           and #$10
+           beq quality_do_back
+           txa
+           and #$40
+           beq quality_do_back
+           jmp quality_kbdloop
+
+quality_do_back:
+           lda #$01
+           sta colwash_flag
+           jmp start
+
+// ------------------------------------------------------------
+// quality_band_lookup — A = score → A=lo, Y=hi (testable, no print).
+// ------------------------------------------------------------
+quality_band_lookup:
+    cmp #$07
+    bcc qbl_ok
+    lda #$06
+qbl_ok:
+    tax
+    lda qbands_lo,x
+    ldy qbands_hi,x
+    rts
+
+quality_print_band:
+    lda quality_score
+    jsr quality_band_lookup
+    jmp $AB1E
+
+// ------------------------------------------------------------
+// Per-slot decay (parallel to calcandloop; jmp funny_print is dropped so
+// no row 15 side effect, and the $D418 sta/lda operands are runtime-patched
+// from sptr_zp+$18 by quality_decay_for_sptr).
+// ------------------------------------------------------------
+quality_decay_for_sptr:
+    lda sptr_zp
+    clc
+    adc #$18
+    sta qcs_d418w+1
+    sta qcs_d418r+1
+    lda sptr_zp1
+    adc #$00
+    sta qcs_d418w+2
+    sta qcs_d418r+2
+
+calcandloop_q:
+    ldx NumberInts
+qcl_q_bigloop:
+    stx ZPbigloop
+    txs
+    jsr calc_start_q
+    tsx
+    dex
+    bne qcl_q_bigloop
+    ldx #1
+qcl_q_calcloop:
+    stx ZPArrayPtr
+    txs
+    jsr ArithmeticMean
+    tsx
+    inx
+    cpx #4
+    bne qcl_q_calcloop
+    rts
+
+calc_start_q:
+    lda #0
+    sta $07E8
+    sta $07E9
+    sta $07EA
+    sei
+    lda #$1f
+qcs_d418w:    sta $d418
+qcl_q_loop:
+    inc $07E8
+    bne qcl_q_nohi
+    inc $07E9
+    bne qcl_q_spincheck
+    inc $07EA
+    lda $07EA
+    cmp #$02
+    beq qcl_q_check
+qcl_q_spincheck:
+    lda $07E9
+    and #$0F
+    bne qcl_q_nohi
+    lda tmp_zp
+    and #$07
+    tay
+    lda decay_spinner,y
+    sta $0658
+    inc tmp_zp
+qcl_q_nohi:
+qcs_d418r:    lda $d418
+    bne qcl_q_loop
+qcl_q_check:
+    lda $07E8
+    ldx ZPbigloop
+    dex
+    sta ArrayPtr1,x
+    lda $07E9
+    ldx ZPbigloop
+    dex
+    sta ArrayPtr2,x
+    lda $07EA
+    ldx ZPbigloop
+    dex
+    sta ArrayPtr3,x
+    rts
+
+// ------------------------------------------------------------
+// sidcheck port (Wonderland XIII / Censor Designs).
+// Source: vice-emu-code-r46118-testprogs-SID/sidcheck/sidcheck.asm.
+// Cycle counts inside xxx1/2/3/5 preserved; each voice-3 / OSC3 site is
+// an absolute $D4xx operand whose bytes are runtime-patched per slot by
+// qc_patch_operands.  qrec() records each site at assemble time.
+// ------------------------------------------------------------
+quality_check_for_sptr:
+    jsr qc_patch_operands
+    sei
+    lda $d011
+    sta qc_d011_save
+    lda #$0b
+    sta $d011
+    lda $d012
+qcq_wait1:
+    bit $d011
+    bmi qcq_wait1
+qcq_wait2:
+    bit $d011
+    bpl qcq_wait2
+    jsr qc_check
+    lda qc_d011_save
+    sta $d011
+    lda #$00
+    ldy #$0e
+    sta (sptr_zp),y
+    iny
+    sta (sptr_zp),y
+    iny
+    sta (sptr_zp),y
+    iny
+    sta (sptr_zp),y
+    iny
+    sta (sptr_zp),y
+    ldy #$18
+    sta (sptr_zp),y
+    cli
+    rts
+
+qc_xxx1:
+    lda #$00
+    qrec($0f)
+    sta $d40f
+    qrec($0e)
+    sta $d40e
+    lda #$80
+    ldx #$f8
+    ldy #$07
+qc_loop1:
+    qrec($12)
+    sta $d412
+    qrec($12)
+    stx $d412
+    dey
+    bne qc_loop1
+    ldy #$05
+    ldx #$88
+qc_loop2:
+    qrec($12)
+    stx $d412
+    qrec($12)
+    sta $d412
+    dey
+    bne qc_loop2
+    ldx #$f0
+    qrec($12)
+    stx $d412
+    qrec($12)
+    sta $d412
+    ldx #$88
+    qrec($12)
+    stx $d412
+    qrec($12)
+    sta $d412
+    qrec($12)
+    stx $d412
+    qrec($12)
+    sta $d412
+    ldx #$f0
+    qrec($12)
+    stx $d412
+    qrec($12)
+    sta $d412
+    rts
+
+qc_xxx2:
+    lda #$00
+    qrec($0f)
+    sta $d40f
+    qrec($0e)
+    sta $d40e
+    lda #$08
+    qrec($12)
+    sta $d412
+    lda #$00
+    qrec($12)
+    sta $d412
+    rts
+
+qc_xxx3:
+    lda #$f0
+    qrec($0f)
+    sta $d40f
+    nop
+    nop
+    nop
+    ldx #$2d
+qc_loop3:
+    dex
+    bne qc_loop3
+    lda #$20
+    qrec($0f)
+    sta $d40f
+    lda #$10
+    qrec($0f)
+    sta $d40f
+    lda #$00
+    nop
+    nop
+    nop
+    nop
+    qrec($0f)
+    sta $d40f
+    qrec($11)
+    sta $d411
+    qrec($10)
+    sta $d410
+    rts
+
+qc_check:
+    jsr qc_xxx5
+    bne qc_skip2
+    ldx #$0e
+    jsr qc_xxx1
+    lda #$80
+    qrec($12)
+    sta $d412
+    qrec($1b)
+    lda $d41b
+    sta qc_fix1+1
+    jsr qc_xxx3
+qc_fix1:
+    lda #$00
+    bne qc_skip1
+    qrec($1b)
+    lda $d41b
+    cmp #$82
+    bne qc_skip1
+    lda #$02
+    sta quality_score
+    rts
+qc_skip1:
+    lda #$01
+    sta quality_score
+    rts
+
+qc_skip2:
+    ldx #$0e
+    jsr qc_xxx2
+    jsr qc_xxx3
+    lda #$60
+    qrec($12)
+    sta $d412
+    qrec($1b)
+    lda $d41b
+    lsr
+    lsr
+    lsr
+    lsr
+    and #$0c
+    sta qc_fix2+1
+    lda #$70
+    qrec($12)
+    sta $d412
+    qrec($1b)
+    lda $d41b
+    rol
+    rol
+    rol
+    and #$03
+qc_fix2:
+    ora #$00
+    tay
+    lda qc_result_table,y
+    sta quality_score
+    rts
+
+qc_xxx5:
+    lda #$ff
+    qrec($12)
+    sta $d412
+    qrec($0e)
+    sta $d40e
+    qrec($0f)
+    sta $d40f
+    lda #$20
+    qrec($12)
+    sta $d412
+    qrec($1b)
+    lda $d41b
+    cmp #$03
+    beq qc_xxx5_ok
+    lda #$01
+    rts
+qc_xxx5_ok:
+    lda #$00
+    rts
+
+// Result lookup (sidcheck.asm:166 verbatim).
+qc_result_table:
+    .byte $03,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$00,$05,$00
+
+qc_d011_save: .byte $00
+
+.const QC_PATCH_COUNT = qc_sites.size() / 2
+
+qc_patch_lo:
+    .fill QC_PATCH_COUNT, <qc_sites.get(i*2)
+qc_patch_hi:
+    .fill QC_PATCH_COUNT, >qc_sites.get(i*2)
+qc_patch_off:
+    .fill QC_PATCH_COUNT, qc_sites.get(i*2+1)
+
+qc_pt_ptr: .word $0000
+
+qc_patch_operands:
+    ldx #QC_PATCH_COUNT-1
+qc_pt_loop:
+    lda qc_patch_lo,x
+    sta qc_pt_ptr
+    lda qc_patch_hi,x
+    sta qc_pt_ptr+1
+    lda qc_patch_off,x
+    clc
+    adc sptr_zp
+    ldy #$01
+    sta (qc_pt_ptr),y
+    lda sptr_zp1
+    adc #$00
+    iny
+    sta (qc_pt_ptr),y
+    dex
+    bpl qc_pt_loop
+    rts
+
+// ------------------------------------------------------------
+// Q-page strings + tables (in the same segment, so we don't punch
+// holes in the $6000 data segment).
+// ------------------------------------------------------------
+qb_awful:   .text "AWFUL"; .byte 0
+qb_bad:     .text "BAD  "; .byte 0
+qb_good:    .text "GOOD "; .byte 0
+qb_best:    .text "BEST "; .byte 0
+
+// Band table: 7 entries (0=AWFUL  1..3=BAD  4=GOOD  5=BEST  6=BAD-clamp).
+qbands_lo:  .byte <qb_awful, <qb_bad, <qb_bad, <qb_bad, <qb_good, <qb_best, <qb_bad
+qbands_hi:  .byte >qb_awful, >qb_bad, >qb_bad, >qb_bad, >qb_good, >qb_best, >qb_bad
+
+qhdr_text:
+    .text "      SID QUALITY FINGERPRINT      "
+    .byte 13
+    .text "------------------------------------"
+    .byte 13, 0
+
+q_nav_hint:
+    .text "    SPACE = BACK TO MAIN SCREEN    "
+    .byte 0
+
+q_empty_msg:
+    .text "         NO SID DETECTED"
+    .byte 0
+
+qr_text1: .text " QUALITY "; .byte 0
+qr_text2: .text "/5 ("; .byte 0
+qr_text3: .text ") D418=N"; .byte 0
+
+// Chip-type short names (6 chars each).
+qct_unkn:  .text "UNKWN "; .byte 0
+qct_6581:  .text "6581  "; .byte 0
+qct_8580:  .text "8580  "; .byte 0
+qct_swnn:  .text "SWNANO"; .byte 0
+qct_swnu:  .text "SWNULT"; .byte 0
+qct_arms:  .text "ARMSID"; .byte 0
+qct_f858:  .text "F8580 "; .byte 0
+qct_f658:  .text "F6581 "; .byte 0
+qct_back:  .text "BCKSID"; .byte 0
+qct_skpc:  .text "SKPICO"; .byte 0
+qct_kung:  .text "KUNGFU"; .byte 0
+qct_u64:   .text "USID64"; .byte 0
+qct_sidfx: .text "SIDFX "; .byte 0
+qct_nosid: .text "NO SID"; .byte 0
+
+// sid_list_t code → short-name lookup ($00..$0E).  $00/$09 → UNKWN.
+qct_lo: .byte <qct_unkn, <qct_6581, <qct_8580, <qct_swnn, <qct_swnu
+        .byte <qct_arms, <qct_f858, <qct_f658, <qct_swnn, <qct_unkn
+        .byte <qct_back, <qct_skpc, <qct_kung, <qct_u64,  <qct_u64
+qct_hi: .byte >qct_unkn, >qct_6581, >qct_8580, >qct_swnn, >qct_swnu
+        .byte >qct_arms, >qct_f858, >qct_f658, >qct_swnn, >qct_unkn
+        .byte >qct_back, >qct_skpc, >qct_kung, >qct_u64,  >qct_u64
 
 // eof
 

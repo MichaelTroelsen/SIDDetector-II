@@ -1,5 +1,5 @@
 // =============================================================================
-// test_suite.asm — Full SID Detector unit test suite  (32 tests)
+// test_suite.asm — Full SID Detector unit test suite  (35 tests)
 // =============================================================================
 // Covers every detection dispatch scenario in the sequential detection chain.
 // Each test presets the relevant zero-page inputs, calls an embedded copy of
@@ -19,9 +19,10 @@
 //   S10 ARM2SID SFX   (T28–T29)   emul_mode=$01 → SFX only / $02 → SID+SFX
 //   S11 SKpico FM     (T30–T31)   skpico_fm=$04/$05 → FM Sound Expander at $DF00
 //   S12 FM-YAM OPL2   (T32)       fmyam_detected=$01 → FM-YAM/OPL2 found at $DF40
+//   S13 Quality band  (T33–T35)   score 0/5/FF → AWFUL / BEST / BAD-clamp
 //
 // Pass count written to $07E8 on completion.
-// 34 = all tests passed.
+// 35 = all tests passed.
 // =============================================================================
 
 .encoding "petscii_upper"
@@ -35,6 +36,7 @@
 .const sidnum_zp   = $F7   // number of SID chips found so far
 .const sptr_zp     = $F9   // SID base address low byte
 .const sptr_zp1    = $FA   // SID base address high byte
+.const dband_ptr   = $FB   // 2-byte ZP scratch for dispatch_band's (zp),y reads
 
 // Result codes returned by embedded dispatch routines
 .const RES_NONE       = $00   // no chip matched at this stage
@@ -800,7 +802,7 @@ t32:
     ldy #>str_t32_pass
     jsr show_result
     inc pass_count
-    jmp test_done
+    jmp t33
 t32_fail:
     lda #<str_t32_fail
     ldy #>str_t32_fail
@@ -810,6 +812,64 @@ t32_fail:
 //  $DE00 probe they mirrored was retired.)
 
 // ============================================================
+// S13: QUALITY BAND LOOKUP DISPATCH  (T33-T35)
+// Mirrors quality_band_lookup in siddetector.asm (Q-page $C300 segment).
+// dispatch_band: A=score in → A=(band[0]+band[1]) in dispatch_result.
+// Distinct sums: AWFUL=$98, BAD=$83, GOOD=$96, BEST=$87 → unique fingerprint.
+// ============================================================
+
+t33:
+    // T33: score=$00 → AWFUL  (sum $41+$57 = $98)
+    lda #$00
+    jsr dispatch_band
+    lda #$98
+    jsr assert_eq
+    bne t33_fail
+    lda #<str_t33_pass
+    ldy #>str_t33_pass
+    jsr show_result
+    inc pass_count
+    jmp t34
+t33_fail:
+    lda #<str_t33_fail
+    ldy #>str_t33_fail
+    jsr show_result
+
+t34:
+    // T34: score=$05 → BEST   (sum $42+$45 = $87)
+    lda #$05
+    jsr dispatch_band
+    lda #$87
+    jsr assert_eq
+    bne t34_fail
+    lda #<str_t34_pass
+    ldy #>str_t34_pass
+    jsr show_result
+    inc pass_count
+    jmp t35
+t34_fail:
+    lda #<str_t34_fail
+    ldy #>str_t34_fail
+    jsr show_result
+
+t35:
+    // T35: score=$FF (out-of-range) → clamp to index 6 = BAD (sum $42+$41 = $83)
+    lda #$ff
+    jsr dispatch_band
+    lda #$83
+    jsr assert_eq
+    bne t35_fail
+    lda #<str_t35_pass
+    ldy #>str_t35_pass
+    jsr show_result
+    inc pass_count
+    jmp test_done
+t35_fail:
+    lda #<str_t35_fail
+    ldy #>str_t35_fail
+    jsr show_result
+
+// ============================================================
 // SUMMARY
 // ============================================================
 test_done:
@@ -817,7 +877,7 @@ test_done:
     ldy #>str_divider
     jsr show_result
     lda pass_count
-    cmp #32
+    cmp #35
     bne td_fail
     lda #<str_all_pass
     ldy #>str_all_pass
@@ -1153,6 +1213,42 @@ dasfx_chk2:
 dasfx_exit:
     rts
 
+// ---- dispatch_band -------------------------------------------
+// Source: quality_band_lookup in siddetector.asm (Q-page $C300 segment).
+// Entry: A = quality_score (0..255).  Exit: A = first_char + second_char
+// of the selected band label (sum chosen so AWFUL/BAD/GOOD/BEST are
+// pairwise distinct: $98/$83/$96/$87).  Tests the clamp branch when
+// A >= 7 (score range guard).
+dispatch_band:
+    cmp #$07
+    bcc dband_ok
+    lda #$06                // clamp to index 6 (BAD)
+dband_ok:
+    tax
+    lda tb_qbands_lo,x
+    sta dband_ptr
+    lda tb_qbands_hi,x
+    sta dband_ptr+1
+    ldy #$00
+    lda (dband_ptr),y       // first char
+    iny
+    clc
+    adc (dband_ptr),y       // + second char (unique pair sum)
+    sta dispatch_result
+    rts
+
+tb_qb_awful: .text "AWFUL"; .byte 0
+tb_qb_bad:   .text "BAD  "; .byte 0
+tb_qb_good:  .text "GOOD "; .byte 0
+tb_qb_best:  .text "BEST "; .byte 0
+
+tb_qbands_lo:
+    .byte <tb_qb_awful, <tb_qb_bad,  <tb_qb_bad,  <tb_qb_bad
+    .byte <tb_qb_good,  <tb_qb_best, <tb_qb_bad
+tb_qbands_hi:
+    .byte >tb_qb_awful, >tb_qb_bad,  >tb_qb_bad,  >tb_qb_bad
+    .byte >tb_qb_good,  >tb_qb_best, >tb_qb_bad
+
 // ============================================================
 // calcMean — embedded copy of ArithmeticMean from siddetector.asm
 // Reads: zpArrayPtr ($A2), numInts, arr1/arr2
@@ -1350,9 +1446,21 @@ str_t32_pass: .text "T32 PASS: FMYAM=$01 -> FM-YAM"
               .byte 0
 str_t32_fail: .text "T32 FAIL: FMYAM=$01 -> FM-YAM"
               .byte 0
+str_t33_pass: .text "T33 PASS: SCORE=0 -> AWFUL"
+              .byte 0
+str_t33_fail: .text "T33 FAIL: SCORE=0 -> AWFUL"
+              .byte 0
+str_t34_pass: .text "T34 PASS: SCORE=5 -> BEST"
+              .byte 0
+str_t34_fail: .text "T34 FAIL: SCORE=5 -> BEST"
+              .byte 0
+str_t35_pass: .text "T35 PASS: SCORE=FF -> BAD (CLAMP)"
+              .byte 0
+str_t35_fail: .text "T35 FAIL: SCORE=FF -> BAD (CLAMP)"
+              .byte 0
 str_divider:  .text "--------------------------------------"
               .byte 0
-str_all_pass: .text "ALL 32 TESTS PASSED"
+str_all_pass: .text "ALL 35 TESTS PASSED"
               .byte 0
 str_some_fail:.text "SOME TESTS FAILED - CHECK ABOVE"
               .byte 0
