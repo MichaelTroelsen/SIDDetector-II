@@ -50,7 +50,7 @@ def decode(row):
 port = free_port()
 dump_path = os.path.join(ROOT, "tests", "main_screen_dump.bin")
 if os.path.exists(dump_path): os.remove(dump_path)
-subprocess.run(["taskkill", "//F", "//IM", "x64sc.exe"], capture_output=True)
+subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"], capture_output=True)
 cmd = [VICE, "-autostart", PRG, "-remotemonitor",
        "-remotemonitoraddress", f"ip4://127.0.0.1:{port}", "+confirmonexit"]
 print(f"Launching VICE (port {port}) …")
@@ -71,6 +71,6 @@ try:
     for r in range(25):
         print(f"r{r:02d}: {decode(raw[r*40:(r+1)*40])}")
 finally:
-    subprocess.run(["taskkill", "//F", "//IM", "x64sc.exe"], capture_output=True)
+    subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"], capture_output=True)
     try: proc.wait(timeout=2)
     except Exception: pass

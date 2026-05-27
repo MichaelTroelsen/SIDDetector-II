@@ -11878,6 +11878,14 @@ quality_print_chiptype:
            beq qpc_sidfx
            cmp #$F0
            beq qpc_nosid
+           cmp #$10
+           beq qpc_2nd                 // secondsid (data1=$10)
+           cmp #$20
+           beq qpc_ulti8               // ULTISID 8580
+           cmp #$21
+           beq qpc_ulti6               // ULTISID 6581
+           cmp #$22
+           beq qpc_ulti6               // ULTISID 6581 alt (uci_type_for_addr)
            cmp #$0F
            bcs qpc_unknown
            tax
@@ -11891,6 +11899,18 @@ qpc_sidfx:
 qpc_nosid:
            lda #<qct_nosid
            ldy #>qct_nosid
+           jmp $AB1E
+qpc_2nd:
+           lda #<qct_2nd
+           ldy #>qct_2nd
+           jmp $AB1E
+qpc_ulti8:
+           lda #<qct_ulti8
+           ldy #>qct_ulti8
+           jmp $AB1E
+qpc_ulti6:
+           lda #<qct_ulti6
+           ldy #>qct_ulti6
            jmp $AB1E
 qpc_unknown:
            lda #<qct_unkn
@@ -12314,20 +12334,29 @@ qct_swnu:  .text "SWNULT"; .byte 0
 qct_arms:  .text "ARMSID"; .byte 0
 qct_f858:  .text "F8580 "; .byte 0
 qct_f658:  .text "F6581 "; .byte 0
+qct_pdsid: .text "PDSID "; .byte 0   // type $09 — was wrongly UNKWN pre-V1.5.04
 qct_back:  .text "BCKSID"; .byte 0
-qct_skpc:  .text "SKPICO"; .byte 0
+qct_skpc:  .text "SKPI85"; .byte 0   // SIDKick-pico 8580 (was "SKPICO" — now disambiguates)
+qct_skp65: .text "SKPI65"; .byte 0   // SIDKick-pico 6581 (type $0E)
 qct_kung:  .text "KUNGFU"; .byte 0
-qct_u64:   .text "USID64"; .byte 0
+qct_u64:   .text "USID64"; .byte 0   // type $0D (currently unused but reserved)
+qct_2nd:   .text "2NDSID"; .byte 0   // secondsid family (type $10)
+qct_ulti8: .text "ULTI85"; .byte 0   // ULTISID 8580 (type $20)
+qct_ulti6: .text "ULTI65"; .byte 0   // ULTISID 6581 (types $21, $22)
 qct_sidfx: .text "SIDFX "; .byte 0
 qct_nosid: .text "NO SID"; .byte 0
 
-// sid_list_t code → short-name lookup ($00..$0E).  $00/$09 → UNKWN.
-qct_lo: .byte <qct_unkn, <qct_6581, <qct_8580, <qct_swnn, <qct_swnu
-        .byte <qct_arms, <qct_f858, <qct_f658, <qct_swnn, <qct_unkn
-        .byte <qct_back, <qct_skpc, <qct_kung, <qct_u64,  <qct_u64
-qct_hi: .byte >qct_unkn, >qct_6581, >qct_8580, >qct_swnn, >qct_swnu
-        .byte >qct_arms, >qct_f858, >qct_f658, >qct_swnn, >qct_unkn
-        .byte >qct_back, >qct_skpc, >qct_kung, >qct_u64,  >qct_u64
+// sid_list_t code → short-name lookup ($00..$0E).
+// $00=UNKWN, $03=SwinSID Nano (legacy), $08=SwinSID Nano (live),
+// $09=PDsid, $0D=uSID64 (reserved), $0E=SIDKick-pico 6581.
+// Codes $10/$20/$21/$22 are handled by explicit branches in
+// quality_print_chiptype (above) — not via this table.
+qct_lo: .byte <qct_unkn,  <qct_6581, <qct_8580, <qct_swnn, <qct_swnu
+        .byte <qct_arms,  <qct_f858, <qct_f658, <qct_swnn, <qct_pdsid
+        .byte <qct_back,  <qct_skpc, <qct_kung, <qct_u64,  <qct_skp65
+qct_hi: .byte >qct_unkn,  >qct_6581, >qct_8580, >qct_swnn, >qct_swnu
+        .byte >qct_arms,  >qct_f858, >qct_f658, >qct_swnn, >qct_pdsid
+        .byte >qct_back,  >qct_skpc, >qct_kung, >qct_u64,  >qct_skp65
 
 // eof
 
