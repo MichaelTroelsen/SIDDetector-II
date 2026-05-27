@@ -22,6 +22,8 @@ tests/ci_result.bin
 tests/debug_*.bin
 tests/debug_*.mon
 tests/dump_*.txt
+tests/q_page_*.bin
+tests/main_screen_dump.bin
 
 # Root-level debug artifacts
 /monitor.log
