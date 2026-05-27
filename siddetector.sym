@@ -2,7 +2,7 @@
 .label fpgasidf_8580u=$57e1
 .label st_loopA=$39e6
 .label tune_scan_end_hi=$c06d
-.label checkbacksid=$8ec6
+.label checkbacksid=$8ec2
 .label ssp_skp12=$4b29
 .label ssp_skp13=$4b37
 .label calc_loop=$55ac
@@ -22,7 +22,7 @@
 .label debug_entry_p2=$3634
 .label sfx_pop_is_armsid=$4e72
 .label MODEUNKN=$5a36
-.label snd_title=$8db3
+.label snd_title=$8daf
 .label readkey2=$29ff
 .label armsid_emul_mode=$59e0
 .label s_s_dup_lp=$45b5
@@ -60,22 +60,22 @@
 .label dbg_u_scan=$34be
 .label cfs_D419=$412e
 .label dbg_s_t_eq=$6415
-.label st_sound7=$8e7a
+.label st_sound7=$8e76
 .label dbg_adr_rvs_print=$32b9
-.label st_sound8=$8e7e
+.label st_sound8=$8e7a
 .label csfp_l_l_found=$4981
-.label st_sound5=$8e6c
-.label st_sound6=$8e73
+.label st_sound5=$8e68
+.label st_sound6=$8e6f
 .label qbands_hi=$c6fb
 .label show_info_page=$2ca2
 .label agv_dly1a=$4bd7
 .label calc_nohi=$55d4
-.label st_sound3=$8e5e
+.label st_sound3=$8e5a
 .label agv_dly1b=$4c28
 .label data4=$6222
-.label st_sound4=$8e65
-.label st_sound1=$8e50
-.label st_sound2=$8e57
+.label st_sound4=$8e61
+.label st_sound1=$8e4c
+.label st_sound2=$8e53
 .label cfs_D41A=$4133
 .label uca_rts=$9fa2
 .label asl_df=$5220
@@ -83,7 +83,7 @@
 .label asl_de=$5217
 .label quality_band_lookup=$c479
 .label qb_good=$c6e8
-.label st_sound9=$8e82
+.label st_sound9=$8e7e
 .label ufs_silence_cand_unused=$c1c7
 .label dbg_ply_str_hi=$6353
 .label tls_sp_lp=$5bee
@@ -102,7 +102,7 @@
 .label calc_check=$55d9
 .label ip_backsid=$7dae
 .label sfx_dis_no_ack=$506b
-.label utfa_drain_lp=$8f8b
+.label utfa_drain_lp=$8f87
 .label csn_s1=$409a
 .label tlr_entry=$2b76
 .label s_s_arm_mlp=$4486
@@ -115,7 +115,7 @@
 .label rrc_print_start=$382b
 .label envfollow_v12=$95c1
 .label dbg_a2_do=$30ab
-.label utfa_6581=$8ff0
+.label utfa_6581=$8fec
 .label info_kbdwait=$2d77
 .label u64banner_lp=$29d0
 .label f_l_l_sec=$469d
@@ -140,7 +140,7 @@
 .label cfs_D419_1=$413b
 .label backsidf=$5949
 .label dpst_n10=$51a6
-.label dbg_uci_query=$90a2
+.label dbg_uci_query=$909e
 .label ssp_skp4=$4a1d
 .label cskp_d41D_k=$3fb4
 .label ssp_skp8=$4a91
@@ -222,7 +222,7 @@
 .label ssp_ex1=$4ba9
 .label exit=$570d
 .label rp_row1_scr=$3793
-.label cbs_done=$8f37
+.label cbs_done=$8f33
 .label PRHEX=$43c9
 .label arm2sid_mapnames=$59e9
 .label print_armsid_ver=$507e
@@ -249,7 +249,7 @@
 .label readme_kbdwait=$36e2
 .label f_l_l4=$48a4
 .label loop1sek=$54df
-.label dpf_int=$9048
+.label dpf_int=$9044
 .label ssp_loop=$49e1
 .label uca_found=$9fa3
 .label s_s_lfpgasid_2=$4649
@@ -273,9 +273,9 @@
 .label s_s_l3=$4694
 .label s_s_l2=$4681
 .label ArithMean=$61fe
-.label ultisid_8580_int=$9107
+.label ultisid_8580_int=$9103
 .label cskp_fm_disp=$272c
-.label snd_now_testing=$8e13
+.label snd_now_testing=$8e0f
 .label qcq_wait1=$c51a
 .label qcq_wait2=$c51f
 .label qc_patch_operands=$c6bb
@@ -287,7 +287,7 @@
 .label dbg_arr1=$33cf
 .label dbg_s_sidlist=$63f6
 .label scope_buf=$96d5
-.label duq_status=$90ef
+.label duq_status=$90eb
 .label tune_init_lo=$c059
 .label s_s_try_dis=$4548
 .label screen=$9a92
@@ -300,7 +300,7 @@
 .label s_s_arm_mir_wait=$4509
 .label readme_text=$865f
 .label ip_ulti=$7570
-.label dpf_lookup=$905c
+.label dpf_lookup=$9058
 .label cusid_end=$4044
 .label ckfs_notfound=$405d
 .label dsl_p1_lp=$5c35
@@ -324,7 +324,7 @@
 .label pmn_loop=$51d3
 .label sfx_skp_f=$4ec5
 .label tracker_loop=$92f7
-.label duq_nodata=$90fb
+.label duq_nodata=$90f7
 .label arm2_print_found=$266d
 .label qct_6581=$c7a9
 .label rrc_print_lp=$382d
@@ -352,7 +352,7 @@
 .label fll_mread=$4720
 .label step2_swinsidu_d420=$25fe
 .label usid64f=$59a5
-.label utfa_nodata=$8fd3
+.label utfa_nodata=$8fcf
 .label dbg_sid2_skip=$3527
 .label print_armsid_ch=$50b7
 .label ufs_check_done=$c212
@@ -360,7 +360,7 @@
 .label armsid_minor=$59d7
 .label sip_hdr_cr_ok=$2d21
 .label midi_disp_skip=$29ff
-.label bpf_done=$8ec5
+.label bpf_done=$8ec1
 .label fll_preclear=$46d7
 .label ultisidf_fc0=$5854
 .label ultisidf_fc1=$5864
@@ -394,10 +394,10 @@
 .label ip_nosid=$6479
 .label fll_mrd=$4720
 .label sss_not_sidfx=$4423
-.label cbs_d41F=$8f1f
-.label cbs_d41C=$8f05
-.label cbs_d41E=$8f0f
-.label cbs_d41D=$8f0a
+.label cbs_d41F=$8f1b
+.label cbs_d41C=$8f01
+.label cbs_d41E=$8f0b
+.label cbs_d41D=$8f06
 .label sip_redraw_content=$2eaa
 .label print_map_name=$51c5
 .label dbg_s_fmyam=$6389
@@ -407,7 +407,7 @@
 .label fpgaclearmagic=$416f
 .label ufs_settle=$c19e
 .label fll_cad=$477c
-.label utfa_drain=$8f89
+.label utfa_drain=$8f85
 .label rp_sdn_held=$3753
 .label info_wrap_last=$2e10
 .label armsidf=$578b
@@ -424,7 +424,7 @@
 .label s_s_skpico=$4588
 .label nc_unknown=$56f7
 .label ch_s_3=$3ee2
-.label readme_header=$8d61
+.label readme_header=$8d5d
 .label ch_s_1=$3ed3
 .label print_hex=$54f3
 .label s_s_is_armsid=$445a
@@ -521,7 +521,7 @@
 .label ie_use_decay=$2c9d
 .label ArrayPtr3l=$573f
 .label sfx_pop_s1_store=$4dd9
-.label utfa_map=$8ff3
+.label utfa_map=$8fef
 .label calc_start=$559b
 .label qct_f858=$c7cc
 .label fll_std_detect=$46c8
@@ -531,11 +531,11 @@
 .label ssp_loop2=$49fb
 .label dbg_print_sid_typename=$5118
 .label ip_pubdom=$7c25
-.label uci_type_for_addr=$8f3d
+.label uci_type_for_addr=$8f39
 .label note_freq_lo=$98ad
 .label cfm_tah=$4ef6
 .label calcand_calcloop=$558b
-.label duq_read=$90d1
+.label duq_read=$90cd
 .label tab1=$4414
 .label tab2=$4410
 .label ip_fpga8580=$70da
@@ -581,7 +581,7 @@
 .label cfs_D41A_2=$4174
 .label cfs_D41A_1=$4142
 .label ufs_silf=$c1ff
-.label utfa_valid=$8ffa
+.label utfa_valid=$8ff6
 .label CLCloop=$5742
 .label calcand_bigloop=$557f
 .label unknown=$423e
@@ -589,7 +589,7 @@
 .label quality_do_back=$c472
 .label cmidi_n3=$5009
 .label dbg2_clr=$364a
-.label utfa_try2=$8fb8
+.label utfa_try2=$8fb4
 .label cas_d41E_5=$3f08
 .label crs_d40f_1=$4247
 .label ccas_armsid=$4916
@@ -727,7 +727,7 @@
 .label l8580f=$5812
 .label dor_bar_color=$2b3b
 .label ape_mode_sfx=$52e7
-.label dpf_lk_lp=$9060
+.label dpf_lk_lp=$905c
 .label gep_resid6581=$3d4d
 .label cui_got_resp=$9ecd
 .label te_zreal=$9363
@@ -739,7 +739,7 @@
 .label dsl_p1_scan=$5c40
 .label rrc_scan=$3811
 .label asl_unk=$5229
-.label utfa_state_ready=$8f6f
+.label utfa_state_ready=$8f6b
 .label qct_lo=$c827
 .label slabel=$61e0
 .label readme_scroll_up=$3722
@@ -773,7 +773,7 @@
 .label dbg_uci_lp2=$3556
 .label cas_d41B=$3ec5
 .label f_l_l_found=$4796
-.label dpf_lk_nx=$9091
+.label dpf_lk_nx=$908d
 .label fll_found_ok=$479f
 .label arm2sidf=$5920
 .label sidfxu=$58cb
@@ -847,7 +847,7 @@
 .label qct_skp65=$c7ef
 .label dbg_uci_lp=$3541
 .label dbg_s_fpga_c=$62e1
-.label cbs_poll=$8f14
+.label cbs_poll=$8f10
 .label dedupe_sid_list=$5c2a
 .label dbg_s_fpga_f=$62e9
 .label dbg_u_next=$351c
@@ -863,8 +863,8 @@
 .label ef1_store=$95ef
 .label irq_done=$3da3
 .label s_s_pdsid=$4576
-.label duq_drain=$90e4
-.label bpf_scan=$8e9c
+.label duq_drain=$90e0
+.label bpf_scan=$8e98
 .label is_u64=$59e5
 .label sfx_pn_loop=$3be3
 .label fpgasidf_6581=$415c
@@ -901,7 +901,7 @@
 .label te_col=$92d9
 .label snosound=$60ac
 .label st_p21=$3a59
-.label cbs_pre=$8ef6
+.label cbs_pre=$8ef2
 .label st_p22=$3a66
 .label gep_check_swinano=$3cc8
 .label st_p23=$3a6b
@@ -926,7 +926,7 @@
 .label qcl_q_calcloop=$c4b4
 .label ccas_d41b=$48da
 .label ccas_loop=$48ea
-.label utfa_poll=$8f5d
+.label utfa_poll=$8f59
 .label dor_msg=$2b48
 .label hex_byte_to_screen_r7=$959f
 .label dbg_s_type=$63fc
@@ -946,7 +946,7 @@
 .label dbg_str_lp=$3691
 .label tc64_text=$5919
 .label dbg_sids=$346d
-.label cbs_found=$8f33
+.label cbs_found=$8f2f
 .label st_p17=$3a39
 .label rp_hint_col2=$37b2
 .label st_p18=$3a41
@@ -964,7 +964,7 @@
 .label st_p11=$3a0f
 .label st_p12=$3a1c
 .label dplcr_l_off=$32ee
-.label cbs_notfound=$8f2c
+.label cbs_notfound=$8f28
 .label lp=$3db9
 .label ccas_fpgasid=$491f
 .label snd_patch_page=$396a
@@ -977,7 +977,7 @@
 .label dbg_s_d418=$6395
 .label trk_hdr=$9736
 .label dbg_s_uci=$6379
-.label utfa_status=$8f99
+.label utfa_status=$8f95
 .label pdsidf=$593c
 .label snd_clr=$3878
 .label tls_sp_fail=$5c1e
@@ -991,11 +991,11 @@
 .label rp_sdn_again=$3741
 .label sip_rc_ret=$2f65
 .label sip_hdr_char=$2d28
-.label fiktivloop_d400=$8e86
+.label fiktivloop_d400=$8e82
 .label tg_on=$94f2
 .label dbg_s_adr_ctr=$6325
 .label sfx_skp_s2_match=$4e23
-.label snd_done=$8e22
+.label snd_done=$8e1e
 .label sfx_skp_s2_8580=$4e2d
 .label print_sid_type_4=$50d6
 .label ip_sidfx=$73b6
@@ -1033,7 +1033,7 @@
 .label SCIGET=$43f3
 .label ckfs_found=$4058
 .label tdc_colp=$93fe
-.label duq_poll=$90ba
+.label duq_poll=$90b6
 .label dbg_s_arm_ei=$62d7
 .label s_s_arm_mir_hit=$4525
 .label te_clr=$92c6
@@ -1051,9 +1051,9 @@
 .label a2spl_s2=$4cfc
 .label dbg_s_arr1=$63cb
 .label swinsidUf=$5774
-.label bpf_found=$8eaa
+.label bpf_found=$8ea6
 .label dbg_s_arr3=$63d7
-.label ultisid_6581_int=$9110
+.label ultisid_6581_int=$910c
 .label sss_sync=$4425
 .label a2spl_s6=$4d6c
 .label info_next_page=$2e17
@@ -1102,7 +1102,7 @@
 .label tracker_patch_once=$9200
 .label a2spl_s1=$4ce1
 .label cr_ns=$3cae
-.label dpf_nl=$909c
+.label dpf_nl=$9098
 .label f_l_next=$488d
 .label REGUNHIDE=$43d7
 .label ufs_next=$c207
@@ -1119,7 +1119,7 @@
 .label fll_u64_skip=$46c5
 .label tlr_writ=$2be1
 .label dbg_s_sidfx_sw1=$62fd
-.label readme_nav_hint=$8d8a
+.label readme_nav_hint=$8d86
 .label csfp_l_l_fpga1=$4975
 .label tlr_sweep=$5b00
 .label pav_done=$50b6
@@ -1162,7 +1162,7 @@
 .label sfx_pop_skp_miss=$4e31
 .label checksecondFPGA=$495d
 .label dbg_s_sfx=$6390
-.label utfa_checkrealsid=$8fde
+.label utfa_checkrealsid=$8fda
 .label rp_sep_scr=$37a8
 .label tls_skip=$5bc6
 .label cr_set_yellow=$3c95
@@ -1203,7 +1203,7 @@
 .label s6581R3=$60ea
 .label s6581R2=$6113
 .label sip_hdr=$2d11
-.label backsid_post_fixup=$8e97
+.label backsid_post_fixup=$8e93
 .label gep_ulti=$3cd9
 .label sResid6581d=$6164
 .label checkbacksid_step=$26d3
@@ -1228,8 +1228,8 @@
 .label dbg_print_sidtype=$32ab
 .label cbmsfxf=$5964
 .label ip_sidkpic=$7a06
-.label duq_state_rdy=$90ca
-.label utfa_read=$8f76
+.label duq_state_rdy=$90c6
+.label utfa_read=$8f72
 .label rrc_cr_ok=$384a
 .label spe_done=$5486
 .label nosoundf=$5798
@@ -1257,7 +1257,7 @@
 .label ufs_dread=$c1bc
 .label dor_col=$2b17
 .label fll_try_real=$4849
-.label bpf_clr=$8ebd
+.label bpf_clr=$8eb9
 .label tls_lp=$5b45
 .label info_entry=$2c1d
 .label snd_done_space=$3967
@@ -1268,7 +1268,7 @@
 .label fll_czero=$4793
 .label sfx_snd_addr=$3ac7
 .label scope_col_lo=$96ad
-.label dpf_ext=$9036
+.label dpf_ext=$9032
 .label sidfxprint=$255b
 .label tdc_foot=$93f1
 .label qct_nosid=$c820
@@ -1284,7 +1284,7 @@
 .label rp_clr=$36ba
 .label csn_s2=$40c0
 .label dor_cpy=$2b0a
-.label dpf_t=$9057
+.label dpf_t=$9053
 .label s_s_nosound=$45a4
 .label tune_switch=$c100
 .label Done=$576d
@@ -1342,7 +1342,7 @@
 .label sfx_pop_s2_add=$4e76
 .label cskp_d41E=$3fa5
 .label cskp_d41F=$3fa0
-.label dbg_print_frame=$8ffe
+.label dbg_print_frame=$8ffa
 .label Temp=$61f3
 .label cui_done_read=$9ee1
 .label fll_fpga_inherit=$4837
