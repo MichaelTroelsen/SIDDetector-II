@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.5.02  -  Commodore 64 SID chip identification utility
+// SID Detector v1.5.03  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -148,6 +148,12 @@ tlr_data:
 // Current tune in tracker view: 0 = Triangle Intro ($1800/$1806), 1 = Delirious 9
 // ($A000/$A005, lives under BASIC ROM — IRQ banks $01=$36 around play call).
 .const cur_tune       = $C0
+
+// Q-page sidcheck patch pointer (2 bytes — MUST live in ZP because
+// qc_patch_operands uses `sta (qc_pt_ptr),y` indirect-indexed addressing).
+// KickAsm silently truncates absolute addresses passed to (zp),y, so a
+// non-ZP placement would corrupt random memory through the low-byte mod.
+.const qc_pt_ptr      = $C1   // lo  (qc_pt_ptr+1 = $C2 = hi)
 
 // Detection state ($F6-$FF)
 .const cnt2_zp  = $F6   // inner mirror-scan step counter (fiktivloop / checkanothersid)
@@ -9313,7 +9319,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.5.02 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.5.03 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9664,7 +9670,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.5.02 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.5.03 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10470,7 +10476,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.5.02 README"
+    .text "SIDDETECTOR V1.5.03 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10633,6 +10639,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.5.03 Q PAGE STACK + ZP FIX"
+    .byte 13
+    .byte $9E
     .text "  V1.5.02 QUALITY FINGERPRINT Q"
     .byte 13
     .byte $9E
@@ -10643,9 +10652,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.4.43 TYPE FIX + DRAIN CAP + MEMMAP"
-    .byte 13
-    .byte $9E
-    .text "  V1.4.42 U64 BEHAVIORAL THRESHOLD 4"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
@@ -11953,21 +11959,24 @@ quality_decay_for_sptr:
     sta qcs_d418w+2
     sta qcs_d418r+2
 
+// NOTE: deliberately does NOT use the calcandloop txs/tsx trick.  The
+// original calcandloop tail-calls funny_print (never returns to caller),
+// so its stack-pointer clobber is harmless.  calcandloop_q DOES return
+// to caller, so the SP must stay intact across iterations — restore X
+// from ZPbigloop / ZPArrayPtr instead.
 calcandloop_q:
     ldx NumberInts
 qcl_q_bigloop:
     stx ZPbigloop
-    txs
     jsr calc_start_q
-    tsx
+    ldx ZPbigloop
     dex
     bne qcl_q_bigloop
     ldx #1
 qcl_q_calcloop:
     stx ZPArrayPtr
-    txs
     jsr ArithmeticMean
-    tsx
+    ldx ZPArrayPtr
     inx
     cpx #4
     bne qcl_q_calcloop
@@ -12242,7 +12251,8 @@ qc_patch_hi:
 qc_patch_off:
     .fill QC_PATCH_COUNT, qc_sites.get(i*2+1)
 
-qc_pt_ptr: .word $0000
+// qc_pt_ptr lives in zero page ($C1/$C2) — see ZP map at top of file.
+// Necessary for the `sta (qc_pt_ptr),y` indirect-indexed addressing below.
 
 qc_patch_operands:
     ldx #QC_PATCH_COUNT-1

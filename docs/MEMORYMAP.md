@@ -315,9 +315,9 @@ Null-terminated ASCII labels used by the debug screen printer. Starting at `$55A
 
 | Address | Label | Description |
 |---------|-------|-------------|
-| $8F37 | `uci_type_for_addr` | Determine UltiSID 6581/8580 via UCI GET_HWINFO + checkrealsid fallback |
-| $8FF8 | `dbg_print_frame` | Print "Fn:$xxyy T=xx INT/EXT [curve]\n" for debug page 2 |
-| $909C | `dbg_uci_query` | Issue UCI GET_HWINFO, fill `uci_resp[0..22]`, drain FIFO |
+| $8F32 | `uci_type_for_addr` | Determine UltiSID 6581/8580 via UCI GET_HWINFO + checkrealsid fallback |
+| $8FF3 | `dbg_print_frame` | Print "Fn:$xxyy T=xx INT/EXT [curve]\n" for debug page 2 |
+| $9097 | `dbg_uci_query` | Issue UCI GET_HWINFO, fill `uci_resp[0..22]`, drain FIFO |
 | ~$7EA7 | *(end)* | Last byte of assembled binary |
 
 ---

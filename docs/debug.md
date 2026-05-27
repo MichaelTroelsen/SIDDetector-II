@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.5.03  | Q PAGE STACK + ZP FIX |
 | V1.5.02  | QUALITY FINGERPRINT Q |
 | V1.5.01  | TLR baseline sweep (family-agnostic SID detection added before family-specific scans; populates `sid_map`, adds new finds as type `$11` → UNKNOWNSID; dedupe pass collapses refined duplicates) |
 | V1.4.45  | MIDI cart detection |
