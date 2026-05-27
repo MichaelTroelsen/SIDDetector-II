@@ -117,7 +117,7 @@
 
 ## Testing
 
-### Covered by test suite (tests/test_suite.asm — 34 tests)
+### Covered by test suite (tests/test_suite.asm — 35 tests)
 - [x] Machine type dispatch: C64 / C128 / TC64 (T01–T03)
 - [x] SIDFX dispatch: found / not found (T04–T05)
 - [x] Swinsid Ultimate dispatch: data1=$04 (T06)
@@ -142,7 +142,7 @@
 - [x] ARM2SID SFX+SID: emul_mode=$02 (T29)
 - [x] SKpico FM Sound Expander: skpico_fm=$04 (T30) / $05 (T31)
 - [x] FM-YAM OPL2: fmyam_detected=$01 (T32)
-- [x] CBM SFX dispatch: flag=$00 → none (T33) / flag=$01 → found (T34) — dispatch-logic tests only (uses a fake flag var since V1.4.22 removed the live `sfxexp_detected` + `$DE00` probe)
+- [x] Q-page band lookup: score=0 → AWFUL (T33) / score=5 → BEST (T34) / score=$FF → BAD clamp (T35) — added V1.5.02 with the Quality Fingerprint page. Stale CBM SFX dispatch tests at the old T33/T34 indices were retired in V1.4.22 with the live `$DE00` probe.
 
 ### Not yet testable in VICE (require real hardware)
 - [x] `Checkarmsid` hardware probe — user-confirmed 2026-04-19 / V1.4.27; see P01 in docs/teststatus.md

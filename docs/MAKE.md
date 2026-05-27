@@ -55,10 +55,10 @@ Build & run `tests/test_arith.prg`. 4 arithmetic tests — expect `$0600 == $04`
 Build & run `tests/test_dispatch.prg`. 8 dispatch-logic tests covering ARMSID/ARM2SID/FPGASID branch conditions — expect `$0600 == $08`.
 
 ### `make test_suite`
-Build & run `tests/test_suite.prg`. 23 tests across all detection stages — expect `$0600 == $17`.
+Build & run `tests/test_suite.prg`. 35 tests across all detection stages plus the Q-page band-lookup (T33–T35) — expect `$07E8 == $23`.
 
 ### `make ci`
-Run `test_suite` headlessly via `scripts/ci_test.sh`. VICE opens briefly, runs the suite with `tests/ci.mon`, saves the pass count to `tests/ci_result.bin` (1-byte PRG), then quits. Gate for CI: all 23 tests must pass.
+Run `test_suite` headlessly via `scripts/ci_test.sh`. VICE opens briefly, runs the suite with the remote monitor, saves the pass count to `tests/ci_result.bin` (1-byte PRG), then quits. Gate for CI: all 35 tests must pass.
 
 ## Real-Hardware Smoke Test
 

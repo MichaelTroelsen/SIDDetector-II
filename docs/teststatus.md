@@ -152,7 +152,7 @@ Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed i
 
 ## Unit Tests (`make ci`)
 
-Last result: **29 / 29** ✅ (2026-04-16 — `$1D` at `$07E8` via `make ci`)
+Last result: **35 / 35** ✅ (2026-05-27 — `$23` at `$07E8` via `make ci`; V1.5.04)
 
 | # | Test | Input | Expected | Result |
 |---|------|-------|----------|--------|

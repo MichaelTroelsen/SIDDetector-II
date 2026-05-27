@@ -707,7 +707,7 @@ nosound
 calcandloop → $D418 decay fingerprint → emulator identification
 ```
 
-The full test suite in `tests/test_suite.asm` covers all dispatch branches in this chain (23 test cases). Hardware-dependent probes (the actual register reads from real chips) require physical hardware to test.
+The full test suite in `tests/test_suite.asm` covers all dispatch branches in this chain plus the Q-page band lookup — 35 test cases as of V1.5.04. Hardware-dependent probes (the actual register reads from real chips) require physical hardware to test.
 
 ---
 

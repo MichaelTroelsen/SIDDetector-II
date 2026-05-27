@@ -100,8 +100,8 @@ VICE = /path/to/GTK3VICE-3.9-win64/bin/x64sc.exe
 Then `make ci-full` should produce:
 
 ```
-=== CI: pass count = 32 / 32 ===
-PASS: all 32 tests passed.
+=== CI: pass count = 35 / 35 ===
+PASS: all 35 tests passed.
 
 === SidVariant golden-diff sweep ===
   PASS  none            r06: ... 8580 FOUND

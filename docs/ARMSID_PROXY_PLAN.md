@@ -258,7 +258,7 @@ Each phase ends with a verification step that must pass before starting the next
 - Reproduce existing `make ci` against an unmodified build.
 - Wire up a `scripts/build_vice.sh` that produces a relocatable `x64sc.exe` from the fork.
 
-**Verify:** `make ci` uses the custom binary and all 32 tests still pass.
+**Verify:** `make ci` uses the custom binary and all 35 tests still pass.
 
 ### Phase 1 — Infrastructure (1 day)
 

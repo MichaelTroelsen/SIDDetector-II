@@ -158,8 +158,8 @@ test_dispatch: $(TEST_DISP_PRG)
 $(TEST_DISP_PRG): $(TEST_DISP_SRC)
 	$(KICKASS) $(TEST_DISP_SRC) -o $(TEST_DISP_PRG)
 
-# Build and run the full test suite in VICE (23 tests across all detection stages).
-# In the VICE monitor (Alt+M): type  mem $0600  to read pass count ($17=23=all pass).
+# Build and run the full test suite in VICE (35 tests across all detection stages + Q-page band lookup).
+# In the VICE monitor (Alt+M): type  mem $07E8  to read pass count ($23=35=all pass).
 test_suite: $(TEST_SUITE_PRG)
 	$(VICE) -autostart $(TEST_SUITE_PRG) -moncommands tests/test_suite.mon
 

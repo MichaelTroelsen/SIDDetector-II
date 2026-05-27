@@ -294,11 +294,12 @@ IRQ handler (every frame ~50/60 Hz):
 
 kbdloop (direct CIA1 matrix scan):
  ├─ SPACE  → jmp start  (full re-detection)
- ├─ Q      → RTS / quit
+ ├─ Q      → quality_entry ($C300, Quality Fingerprint page)
  ├─ I      → info sub-screen for detected chip
  ├─ D      → debug page (register dump)
  ├─ R      → readme/help page
  ├─ T      → sound test page
+ ├─ L      → TLR sid-detect2 (relocated from $0A00 to $0801)
  └─ P      → toggle SID music (Triangle Intro, $1800)
 ```
 
