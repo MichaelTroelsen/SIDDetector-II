@@ -7,7 +7,7 @@
 #   (or: make ci)
 #
 # Exit codes:
-#   0 — all 35 tests passed
+#   0 — all 43 tests passed
 #   1 — build failed, VICE did not exit cleanly, or pass count is wrong
 #
 # How it works:
@@ -28,7 +28,7 @@ cd "$ROOT"
 KICKASS="java -jar C:/debugger/kickasm/KickAss.jar"
 VICE="C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
 PYTHON="/c/Python314/python"
-EXPECTED_PASS=35   # $23 hex — includes T33-T35 quality band lookup
+EXPECTED_PASS=43   # $2B hex — T33-T35 band lookup + T36-T43 sid_type_index
 
 # ---- Build ----------------------------------------------------------------
 echo "=== CI: build test_suite.prg ==="

@@ -195,7 +195,9 @@ test-tuneful-eight: $(PRG)
 
 # Run automated hardware smoke test on real C64 via U64.
 # Deploys siddetector.prg, presses SPACE x3 (verifies detection stable),
-# then enters every screen (I/D/R/T/P) and returns.
+# then enters every screen (I/D/R/T/P/Q) and returns. The Q (Quality
+# Fingerprint) step captures the per-slot sidcheck score + $D418 decay
+# off real hardware into the run report.
 # Without SCENARIO: verifies detection is stable (result matches cold-boot baseline).
 # With SCENARIO:    also checks chip types and addresses match the scenario file.
 #

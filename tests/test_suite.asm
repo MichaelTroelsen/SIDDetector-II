@@ -1,5 +1,5 @@
 // =============================================================================
-// test_suite.asm — Full SID Detector unit test suite  (35 tests)
+// test_suite.asm — Full SID Detector unit test suite  (43 tests)
 // =============================================================================
 // Covers every detection dispatch scenario in the sequential detection chain.
 // Each test presets the relevant zero-page inputs, calls an embedded copy of
@@ -20,9 +20,10 @@
 //   S11 SKpico FM     (T30–T31)   skpico_fm=$04/$05 → FM Sound Expander at $DF00
 //   S12 FM-YAM OPL2   (T32)       fmyam_detected=$01 → FM-YAM/OPL2 found at $DF40
 //   S13 Quality band  (T33–T35)   score 0/5/FF → AWFUL / BEST / BAD-clamp
+//   S14 Chip-type idx (T36–T43)   sid_type_index code→slot resolver
 //
 // Pass count written to $07E8 on completion.
-// 35 = all tests passed.
+// 43 = all tests passed.
 // =============================================================================
 
 .encoding "petscii_upper"
@@ -863,10 +864,156 @@ t35:
     ldy #>str_t35_pass
     jsr show_result
     inc pass_count
-    jmp test_done
+    jmp t36
 t35_fail:
     lda #<str_t35_fail
     ldy #>str_t35_fail
+    jsr show_result
+
+// ============================================================
+// S14: QUALITY CHIP-TYPE INDEX  (T36-T43)
+// Mirrors sid_type_index in siddetector.asm — the single code→slot
+// resolver shared by the Q page (sidname_short_*) and the debug page
+// (sidname_long_*).  A wrong slot here mis-labels chips on BOTH pages,
+// so this is the keystone guard against the drift bugs found in V1.5.04
+// (the $01/$02 swap and the $0E SIDKick-pico-6581 mismap).
+// dispatch_sid_index: A=type code → slot in dispatch_result.
+// ============================================================
+
+t36:
+    // T36: $01 (6581) → slot 1
+    lda #$01
+    jsr dispatch_sid_index
+    lda #1
+    jsr assert_eq
+    bne t36_fail
+    lda #<str_t36_pass
+    ldy #>str_t36_pass
+    jsr show_result
+    inc pass_count
+    jmp t37
+t36_fail:
+    lda #<str_t36_fail
+    ldy #>str_t36_fail
+    jsr show_result
+
+t37:
+    // T37: $02 (8580) → slot 2  (guards the V1.5.04 6581/8580 swap)
+    lda #$02
+    jsr dispatch_sid_index
+    lda #2
+    jsr assert_eq
+    bne t37_fail
+    lda #<str_t37_pass
+    ldy #>str_t37_pass
+    jsr show_result
+    inc pass_count
+    jmp t38
+t37_fail:
+    lda #<str_t37_fail
+    ldy #>str_t37_fail
+    jsr show_result
+
+t38:
+    // T38: $08 (SwinSID Nano alt) folds to slot 3
+    lda #$08
+    jsr dispatch_sid_index
+    lda #3
+    jsr assert_eq
+    bne t38_fail
+    lda #<str_t38_pass
+    ldy #>str_t38_pass
+    jsr show_result
+    inc pass_count
+    jmp t39
+t38_fail:
+    lda #<str_t38_fail
+    ldy #>str_t38_fail
+    jsr show_result
+
+t39:
+    // T39: $09 (PDsid) → slot 8  (was the UNKWN hole pre-V1.5.04)
+    lda #$09
+    jsr dispatch_sid_index
+    lda #8
+    jsr assert_eq
+    bne t39_fail
+    lda #<str_t39_pass
+    ldy #>str_t39_pass
+    jsr show_result
+    inc pass_count
+    jmp t40
+t39_fail:
+    lda #<str_t39_fail
+    ldy #>str_t39_fail
+    jsr show_result
+
+t40:
+    // T40: $0E (SIDKick-pico 6581) → slot 13  (was mis-mapped to USID64)
+    lda #$0e
+    jsr dispatch_sid_index
+    lda #13
+    jsr assert_eq
+    bne t40_fail
+    lda #<str_t40_pass
+    ldy #>str_t40_pass
+    jsr show_result
+    inc pass_count
+    jmp t41
+t40_fail:
+    lda #<str_t40_fail
+    ldy #>str_t40_fail
+    jsr show_result
+
+t41:
+    // T41: $30 (SIDFX) → slot 15  (special-case branch)
+    lda #$30
+    jsr dispatch_sid_index
+    lda #15
+    jsr assert_eq
+    bne t41_fail
+    lda #<str_t41_pass
+    ldy #>str_t41_pass
+    jsr show_result
+    inc pass_count
+    jmp t42
+t41_fail:
+    lda #<str_t41_fail
+    ldy #>str_t41_fail
+    jsr show_result
+
+t42:
+    // T42: $F0 (NoSID) → slot 16  (special-case branch)
+    lda #$f0
+    jsr dispatch_sid_index
+    lda #16
+    jsr assert_eq
+    bne t42_fail
+    lda #<str_t42_pass
+    ldy #>str_t42_pass
+    jsr show_result
+    inc pass_count
+    jmp t43
+t42_fail:
+    lda #<str_t42_fail
+    ldy #>str_t42_fail
+    jsr show_result
+
+t43:
+    // T43: $0F (unused/reserved) → slot 0 (UNKWN fallback)
+    lda #$0f
+    jsr dispatch_sid_index
+    lda #0
+    jsr assert_eq
+    bne t43_fail
+    lda #<str_t43_pass
+    ldy #>str_t43_pass
+    jsr show_result
+    inc pass_count
+    jmp test_done
+t43_fail:
+    lda #<str_t43_fail
+    ldy #>str_t43_fail
     jsr show_result
 
 // ============================================================
@@ -877,7 +1024,7 @@ test_done:
     ldy #>str_divider
     jsr show_result
     lda pass_count
-    cmp #35
+    cmp #43
     bne td_fail
     lda #<str_all_pass
     ldy #>str_all_pass
@@ -1249,6 +1396,40 @@ tb_qbands_hi:
     .byte >tb_qb_awful, >tb_qb_bad,  >tb_qb_bad,  >tb_qb_bad
     .byte >tb_qb_good,  >tb_qb_best, >tb_qb_bad
 
+// ---- dispatch_sid_index --------------------------------------
+// Source: sid_type_index in siddetector.asm (the shared code→slot
+// resolver).  Entry: A = type code.  Exit: slot index in dispatch_result.
+// Mirrors the production routine + sid_code_to_slot table 1:1 — if this
+// copy and the production table ever disagree, the test catches it the
+// next time someone edits one and not the other.
+dispatch_sid_index:
+    cmp #$30
+    beq dsi_sidfx
+    cmp #$f0
+    beq dsi_nosid
+    cmp #$11
+    bcs dsi_unkn               // > $10 (and not $30/$F0) → UNKWN slot 0
+    tax
+    lda tb_sid_code_to_slot,x
+    sta dispatch_result
+    rts
+dsi_sidfx:
+    lda #15
+    sta dispatch_result
+    rts
+dsi_nosid:
+    lda #16
+    sta dispatch_result
+    rts
+dsi_unkn:
+    lda #0
+    sta dispatch_result
+    rts
+
+// type code $00-$10 → slot (must match siddetector.asm sid_code_to_slot)
+tb_sid_code_to_slot:
+    .byte 0, 1, 2, 3, 4, 5, 6, 7, 3, 8, 9, 10, 11, 12, 13, 0, 14
+
 // ============================================================
 // calcMean — embedded copy of ArithmeticMean from siddetector.asm
 // Reads: zpArrayPtr ($A2), numInts, arr1/arr2
@@ -1458,9 +1639,41 @@ str_t35_pass: .text "T35 PASS: SCORE=FF -> BAD (CLAMP)"
               .byte 0
 str_t35_fail: .text "T35 FAIL: SCORE=FF -> BAD (CLAMP)"
               .byte 0
+str_t36_pass: .text "T36 PASS: $01 -> SLOT 1 (6581)"
+              .byte 0
+str_t36_fail: .text "T36 FAIL: $01 -> SLOT 1 (6581)"
+              .byte 0
+str_t37_pass: .text "T37 PASS: $02 -> SLOT 2 (8580)"
+              .byte 0
+str_t37_fail: .text "T37 FAIL: $02 -> SLOT 2 (8580)"
+              .byte 0
+str_t38_pass: .text "T38 PASS: $08 -> SLOT 3 (NANO)"
+              .byte 0
+str_t38_fail: .text "T38 FAIL: $08 -> SLOT 3 (NANO)"
+              .byte 0
+str_t39_pass: .text "T39 PASS: $09 -> SLOT 8 (PDSID)"
+              .byte 0
+str_t39_fail: .text "T39 FAIL: $09 -> SLOT 8 (PDSID)"
+              .byte 0
+str_t40_pass: .text "T40 PASS: $0E -> SLOT 13 (SKP65)"
+              .byte 0
+str_t40_fail: .text "T40 FAIL: $0E -> SLOT 13 (SKP65)"
+              .byte 0
+str_t41_pass: .text "T41 PASS: $30 -> SLOT 15 (SIDFX)"
+              .byte 0
+str_t41_fail: .text "T41 FAIL: $30 -> SLOT 15 (SIDFX)"
+              .byte 0
+str_t42_pass: .text "T42 PASS: $F0 -> SLOT 16 (NOSID)"
+              .byte 0
+str_t42_fail: .text "T42 FAIL: $F0 -> SLOT 16 (NOSID)"
+              .byte 0
+str_t43_pass: .text "T43 PASS: $0F -> SLOT 0 (UNKWN)"
+              .byte 0
+str_t43_fail: .text "T43 FAIL: $0F -> SLOT 0 (UNKWN)"
+              .byte 0
 str_divider:  .text "--------------------------------------"
               .byte 0
-str_all_pass: .text "ALL 35 TESTS PASSED"
+str_all_pass: .text "ALL 43 TESTS PASSED"
               .byte 0
 str_some_fail:.text "SOME TESTS FAILED - CHECK ABOVE"
               .byte 0

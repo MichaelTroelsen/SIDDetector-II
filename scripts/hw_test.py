@@ -11,6 +11,10 @@ Strategy:
     jumping to 'start' ($2400) which re-runs full detection.
   - P (music toggle) is special: it returns to the main kbdloop without restarting
     detection, so it can be toggled on/off in-place.
+  - Q (Quality Fingerprint page) is captured: the test reads screen RAM after
+    the page paints and logs the per-slot sidcheck score + $D418 decay value
+    straight off real hardware (numbers VICE can't produce), then cross-checks
+    the chip-name column against the detected baseline before exiting.
 
 Usage:
   python scripts/hw_test.py [--ip <addr>] [--wait <secs>] [--scenario <path.cfg>]
@@ -88,6 +92,41 @@ def read_mem_byte(addr):
     if not m:
         raise RuntimeError(f"Could not read byte at ${addr:04X}:\n{out}")
     return int(m.group(1), 16)
+
+def read_mem_range(addr, count):
+    """Read `count` bytes starting at addr.  Returns a bytes object.
+    Parses every 2-hex-digit token that follows an `XXXX:` address prefix in
+    the read-mem dump (handles the multi-byte-per-line format).  Falls back to
+    byte-by-byte if the ranged read returns nothing."""
+    out = c64u('read-mem', f'{addr:04X}', str(count))
+    data = bytearray()
+    for line in out.splitlines():
+        m = re.match(r'\s*[0-9A-Fa-f]{4}:\s+(.*)', line)
+        if not m:
+            continue
+        for tok in re.findall(r'[0-9A-Fa-f]{2}', m.group(1)):
+            data.append(int(tok, 16))
+    if len(data) >= count:
+        return bytes(data[:count])
+    # Fallback: ranged read not supported — read one byte at a time.
+    return bytes(read_mem_byte(addr + i) for i in range(count))
+
+def decode_screen(row_bytes):
+    """Screen-code → ASCII for one row (matches scripts/variant_smoke.py)."""
+    out = []
+    for c in row_bytes:
+        if c in (0x20, 0x00):       out.append(' ')
+        elif 0x01 <= c <= 0x1A:     out.append(chr(0x40 + c))
+        elif 0x30 <= c <= 0x39:     out.append(chr(c))
+        elif c == 0x2E:             out.append('.')
+        elif c == 0x3A:             out.append(':')
+        elif c == 0x2F:             out.append('/')
+        elif c == 0x28:             out.append('(')
+        elif c == 0x29:             out.append(')')
+        elif c == 0x3D:             out.append('=')
+        elif c == 0x2D:             out.append('-')
+        else:                        out.append('.')
+    return ''.join(out).rstrip()
 
 # ---------------------------------------------------------------------------
 # Symbol resolution
@@ -433,6 +472,78 @@ def main():
         verify_scenario("P music toggle", snap, scenario, results)
 
     # ---------------------------------------------------------
+    # TEST 9: Quality Fingerprint page (Q key)
+    # Enters the page, captures the per-slot sidcheck score + $D418
+    # decay reading straight off real hardware (the numbers VICE can't
+    # produce — reSID doesn't model $D418 read-decay), cross-checks the
+    # chip-name column against the detected baseline, then exits.
+    # ---------------------------------------------------------
+    print("\n--- TEST: Q - Quality Fingerprint page ---")
+    QUALITY_ENTRY   = sym('quality_entry')
+    QUALITY_KBDLOOP = sym('quality_kbdloop')
+    n_slots = sum(1 for s in baseline if s['addr'])
+    print(f"  >> entering quality page ({n_slots} slot(s) to probe) ...")
+    jmp_to(KBDLOOP, QUALITY_ENTRY)
+    # Decay measurement is ~0.6s/slot (6 iterations) + sidcheck per slot.
+    # 8 SIDs worst case ≈ 6s; give generous headroom.
+    paint_wait = 4 + n_slots * 1.2
+    time.sleep(paint_wait)
+
+    pause()
+    screen = read_mem_range(0x0400, 40 * 12)   # header + up to 9 slot rows
+    resume()
+    rows = [decode_screen(screen[r*40:(r+1)*40]) for r in range(12)]
+
+    header = rows[0].strip()
+    record("Q page header present",
+           "QUALITY FINGERPRINT" in header,
+           f"row0='{header}'" if "QUALITY FINGERPRINT" not in header else '')
+
+    # Parse per-slot rows: "D4xx QUALITY n/5 (BAND chip) D418=Nnn"
+    fp_re = re.compile(
+        r'(D[0-9A-F]{3})\s+QUALITY\s+(\d)/5\s+\((\w+)\s+(\S+?)\s*\)\s*D418=N([0-9A-F]{2})',
+        re.IGNORECASE)
+    q_fingerprints = []
+    name_mismatches = []
+    print("  Quality fingerprints (real hardware):")
+    for r in rows[2:]:
+        m = fp_re.search(r)
+        if not m:
+            continue
+        addr, score, band, chip, decay = m.groups()
+        line = f"{addr}: score {score}/5  {band:<5}  {chip:<6}  D418=${decay}"
+        print(f"    {line}")
+        q_fingerprints.append(line)
+        # Cross-check the chip-name column against the baseline type for this slot
+        addr_int = int(addr, 16)
+        for s in baseline:
+            if s['addr'] == addr_int:
+                want = chip_name(s['type']).upper()
+                # Q-page uses 6-char abbreviations; accept if either contains the other's stem
+                stem = chip.rstrip().upper()
+                if stem and stem[:4] not in want and want[:4] not in stem \
+                        and not (stem.startswith('SKPI') and 'SIDKICK' in want) \
+                        and not (stem.startswith('F') and 'FPGA' in want) \
+                        and not (stem.startswith('ULTI') and 'ULTISID' in want) \
+                        and not (stem == '2NDSID' and 'SECOND' in want):
+                    name_mismatches.append(f"{addr}: Q='{stem}' vs baseline='{want}'")
+                break
+
+    record("Q page rendered a fingerprint row per detected SID",
+           len(q_fingerprints) >= n_slots or n_slots == 0,
+           f"captured {len(q_fingerprints)}, expected {n_slots}")
+    record("Q page chip names match detected types",
+           not name_mismatches, '; '.join(name_mismatches))
+
+    print("  << exiting quality page ...")
+    jmp_to(QUALITY_KBDLOOP, START)
+    time.sleep(DETECT_WAIT)
+    snap = read_snapshot(SID_LIST_L, SID_LIST_H, SID_LIST_T)
+    check_stable("quality page return", snap)
+    if scenario:
+        verify_scenario("quality page return", snap, scenario, results)
+
+    # ---------------------------------------------------------
     # Summary
     # ---------------------------------------------------------
     total  = len(results)
@@ -460,6 +571,10 @@ def main():
             f.write(f"[{'PASS' if ok else 'FAIL'}] {label}\n")
             if detail:
                 f.write(f"       {detail}\n")
+        if q_fingerprints:
+            f.write(f"\nQuality fingerprints (Q page, real hardware):\n")
+            for line in q_fingerprints:
+                f.write(f"  {line}\n")
         f.write(f"\n{passed}/{total} passed   {failed} failed\n")
     print(f"\nReport: {report_path.relative_to(ROOT)}\n")
 
