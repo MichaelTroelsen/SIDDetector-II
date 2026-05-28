@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.5.05  | SHARED CHIP TABLE + DOCS |
 | V1.5.04  | CHIP TABLE + DBG SWAP FIX |
 | V1.5.03  | Q PAGE STACK + ZP FIX |
 | V1.5.02  | QUALITY FINGERPRINT Q |
