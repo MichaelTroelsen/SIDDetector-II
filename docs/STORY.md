@@ -45,7 +45,8 @@ The short version of the lessons:
 21. [Results Summary](#21-results)
 22. [Known Limitations](#22-limitations)
 23. [FM Expansion Detection — CBM SFX Sound Expander & FM-YAM (V1.4.x)](#23-fm-expansion-detection--cbm-sfx-sound-expander--fm-yam-v14x)
-24. [The Quality Fingerprint Page — Grading What You Detect (V1.5.x)](#24-the-quality-fingerprint-page--grading-what-you-detect-v15x)
+24. [MIDI Interface Detection — 6850 ACIA Signatures (V1.4.45)](#24-midi-interface-detection--6850-acia-signatures-v1445)
+25. [The Quality Fingerprint Page — Grading What You Detect (V1.5.x)](#25-the-quality-fingerprint-page--grading-what-you-detect-v15x)
 
 ---
 
@@ -1124,7 +1125,59 @@ After settling at V1.4.19 the detector correctly identifies both CBM SFX Sound E
 
 ---
 
-## 24. The Quality Fingerprint Page — Grading What You Detect (V1.5.x)
+## 24. MIDI Interface Detection — 6850 ACIA Signatures (V1.4.45)
+
+FM cartridges (§23) are not the only non-SID sound hardware that lives on the C64's I/O2 bus. MIDI interfaces do too — and a musician plugging one in usually has *no* SID-replacement card in the same machine, so without MIDI awareness the detector would just report "NO SOUND" and miss the most interesting thing in the socket. V1.4.45 added `checkmidi` so the result screen names the MIDI cart instead.
+
+### The 6850 ACIA and its reset fingerprint
+
+Every documented C64 MIDI interface is built around a Motorola 6850 ACIA (Asynchronous Communications Interface Adapter). The 6850 has a tiny register pair — a write-only control register and a read-only status register — and a defined power-on/reset state that is the detection handle. Writing `$03` to the control register issues a **master reset**; immediately after, the status register reads with a predictable bit pattern:
+
+```
+status & $73 == $02     →  TDRE=1 (transmit data register empty),
+                           RDRF=0 (no receive byte), and no
+                           framing / overrun / parity error
+```
+
+The mask `$73` deliberately *ignores* bits 2, 3 and 7 — `CTS`, `DCD` and `IRQ`. Those are modem-control inputs whose level depends on how a given cartridge wires its MIDI-in optoisolator and interrupt line, so they vary cart-to-cart and can't be part of a portable signature. What's left (`TDRE` set, `RDRF` clear, error bits clear) is the universal "freshly-reset ACIA with nothing received yet" state, and VICE's built-in MIDI emulation reproduces it faithfully.
+
+### Four carts, four address pairs, first-hit-wins
+
+The [codebase.c64.org reference](https://codebase.c64.org/doku.php?id=base:c64_midi_interfaces) catalogues four register layouts, and `checkmidi` probes them in order:
+
+| Order | Cart(s) | Control | Status |
+|-------|---------|---------|--------|
+| 1 | Sequential Circuits / Namesoft | `$DE00` | `$DE02` |
+| 2 | DATEL / Siel / JMS | `$DE04` | `$DE06` |
+| 3 | Passport | `$DE08` (write) | `$DE08` (read) |
+| 4 | Maplin | `$DF00` (write) | `$DF00` (read) |
+
+Probing is **first-hit-wins**: per the reference (and physical reality) only one MIDI cartridge can be attached at a time, so the first address pair that returns the reset signature ends the scan. Passport and Maplin share their control and status register at one address — a write hits the control register, a read returns status.
+
+Each candidate is read **twice** and must match both times. With no cart present, `$DExx`/`$DFxx` reads are open-bus noise; the master-reset write goes nowhere and the two status reads will rarely agree on exactly `$02` after masking. The double-read is the same open-bus-jitter filter the SID probes use (§17) — temporal consistency separates a real responding chip from a floating bus.
+
+Sequential Circuits and Namesoft are reported as a single `SEQUENTIAL MIDI` because their *polled-read* fingerprints are identical — the only difference is whether the receive interrupt is routed to the CPU `IRQ` or `NMI` line, which the masked-off bit 7 hides on purpose.
+
+### Sharing I/O2 with everything else
+
+The Maplin probe at `$DF00` is the awkward one: `$DF00–$DFFF` (I/O2) is the most contended page on the C64 expansion bus. The same guards `checkfmyam` uses apply here, because a write of `$03` to `$DF00` could disturb a non-MIDI owner:
+
+- `data4 == $30` — SIDFX is present (its SCI handshake also lives in this area)
+- `is_u64 != 0` — Ultimate 64 UCI registers at `$DF1C–$DF1F`
+- `skpico_fm >= 4` — SIDKick-pico OPL2 mapped at `$DF00`
+- `armsid_map_h2` low nibble `== 3` — ARM2SID SFX- slot at `$DF00`
+
+If any owner is detected, the Maplin probe is skipped — the first three address pairs (`$DE00`/`$DE04`/`$DE08`) are in I/O1 and don't collide, so the common Sequential/DATEL/Passport carts are always safe to probe.
+
+### Display and testing
+
+`checkmidi` sets `midi_kind` (0=none, 1=SEQ/Namesoft, 2=DATEL, 3=Passport, 4=Maplin). When detection found no SID, the result is painted on row 11 — the `NOSID......:` line — at column 13, aligned with the other detection rows, so the cart name replaces the "no sound" verdict.
+
+Headless testing needed a VICE that actually emulates a 6850: the patched WinVICE 3.9 was rebuilt with `--enable-midi`, which enabled `make run-midi-{sequential,passport,datel,namesoft,maplin}` and five golden-fingerprinted `variant_smoke.py` cases. A side-fix fell out of the work — a legacy diagnostic write at `$5801` had been clobbering bytes overlapping the MIDI name strings, and now stores to a labelled `diag_step4_result` byte instead.
+
+---
+
+## 25. The Quality Fingerprint Page — Grading What You Detect (V1.5.x)
 
 Detection answers *what* chip is in the socket. The Quality Fingerprint page (press **Q**, added V1.5.02) answers a different question: *how good is it?* Two implementations may both report "8580" yet differ audibly — a real MOS 8580, an FPGASID in 8580 mode, and an ARMSID all claim the part number but render combined waveforms and filters differently. The Q page puts a number on that, one row per detected SID:
 
@@ -1201,9 +1254,10 @@ Run the Q page in VICE and the `D418=` column reads `N00` for every slot. That i
 | V1.3.67 | Data table relocated `$5600` → `$6000` (1536 bytes headroom); SID1=UNKN probe chain: FPGASID → SIDKick Pico → PD SID → DIS echo (SwinSID-U / ARMSID) |
 | V1.3.68 | Fix probe ordering: `checkfpgasid` must run before `sfx_probe_skpico` (skpico dirty exit corrupts D41E, breaking FPGASID magic-cookie sequence) |
 | V1.3.70 | Document FPGASID-in-SIDFX-SID1 as accepted hardware limitation; SIDFX POT masking and SCI reaction make it fundamentally undetectable |
-| V1.4.x  | FM expansion detection (CBM SFX Sound Expander / FM-YAM) at `$DF40/$DF50/$DF60`; OPL sound test; U64 8-SID "Tuneful Eight" enumeration; MIDI cartridge detection (§23) |
+| V1.4.x  | FM expansion detection (CBM SFX Sound Expander / FM-YAM) at `$DF40/$DF50/$DF60` (§23); OPL sound test; U64 8-SID "Tuneful Eight" enumeration |
+| V1.4.45 | MIDI cartridge detection (`checkmidi`) — 6850 ACIA reset signature at `$DE00/$DE04/$DE08/$DF00` (§24) |
 | V1.5.01 | TLR family-agnostic baseline sweep (`tlr_sweep`) before family-specific scans |
-| V1.5.02 | Quality Fingerprint page (Q) — sidcheck grade + `$D418` decay per slot, in a `$C300` segment (§24) |
+| V1.5.02 | Quality Fingerprint page (Q) — sidcheck grade + `$D418` decay per slot, in a `$C300` segment (§25) |
 | V1.5.03 | Q-page fixes: `qc_pt_ptr` moved to zero page (KickAsm `(label),y` low-byte truncation); `calcandloop_q` stack-pointer clobber removed |
 | V1.5.04 | Q-page chip-table holes filled ($09/$0E/$10/$20–$22); debug-page `$01`/`$02` 6581/8580 swap fixed; `sid_type_index` single source-of-truth lookup shared by both pages; `do_quit`/`EXITINTRO` dead code retired; unit suite to 43 tests (T36–T43 cover `sid_type_index`); `hw_test.py` TEST 9 captures Q-page fingerprints off real hardware |
 
