@@ -1,7 +1,7 @@
 # Identifying Every SID Chip in Existence — Inside SID Detector
 
 *A technical deep-dive for C64 sceners, SID musicians, and hardware developers*
-*By funfun/Triangle 3532 · Version V1.3.70 · April 2026*
+*By funfun/Triangle 3532 · Version V1.5.04 · May 2026*
 
 ---
 
@@ -45,6 +45,7 @@ The short version of the lessons:
 21. [Results Summary](#21-results)
 22. [Known Limitations](#22-limitations)
 23. [FM Expansion Detection — CBM SFX Sound Expander & FM-YAM (V1.4.x)](#23-fm-expansion-detection--cbm-sfx-sound-expander--fm-yam-v14x)
+24. [The Quality Fingerprint Page — Grading What You Detect (V1.5.x)](#24-the-quality-fingerprint-page--grading-what-you-detect-v15x)
 
 ---
 
@@ -1123,6 +1124,49 @@ After settling at V1.4.19 the detector correctly identifies both CBM SFX Sound E
 
 ---
 
+## 24. The Quality Fingerprint Page — Grading What You Detect (V1.5.x)
+
+Detection answers *what* chip is in the socket. The Quality Fingerprint page (press **Q**, added V1.5.02) answers a different question: *how good is it?* Two implementations may both report "8580" yet differ audibly — a real MOS 8580, an FPGASID in 8580 mode, and an ARMSID all claim the part number but render combined waveforms and filters differently. The Q page puts a number on that, one row per detected SID:
+
+```
+D400 QUALITY 4/5 (GOOD  8580  ) D418=N15
+D420 QUALITY 2/5 (BAD   ARMSID) D418=N18
+```
+
+### Two orthogonal fingerprints
+
+The score combines two measurements that fail in different ways:
+
+- **sidcheck grade (`0–5`).** The combined-waveform OSC3 readback test from Wonderland XIII / Censor Designs (lifted from the VICE testprog suite). It writes a precise, cycle-counted sequence to voice 3's control and frequency registers, then reads `$D41B` (OSC3) back; the pattern of returned values distinguishes a faithful analog/digital path from an approximation. A 16-entry result table maps the readback to a grade, banded **AWFUL / BAD / GOOD / BEST**.
+- **`$D418` decay (`Nnn`).** The same volume-decay measurement the main screen shows on row 15 (§5), but surfaced for *every* slot instead of only when no chip was identified. Lets you line up a real 8580 against an emulator's decay curve directly.
+
+### Porting sidcheck without breaking its timing
+
+sidcheck was written for a single SID at a fixed `$D400`. The Q page has to run it against whatever addresses `sid_list` holds — `$D420`, `$D500`, up to eight slots on a U64. The obvious rebase, replacing every `sta $d40e` with `sta (sptr_zp),y`, was a non-starter: indirect-indexed addressing adds cycles, and sidcheck's whole premise is cycle-exact register timing. The frequency-sweep in `xxx3` literally counts loop iterations between writes.
+
+The solution keeps the original absolute `$D4xx` instructions and **runtime-patches their operand bytes** per slot. Every voice-3/OSC3 site is tagged at assemble time by a `qrec()` macro that appends its address to a KickAssembler list; `qc_patch_operands` walks that 36-entry list before each slot and rewrites the low/high operand bytes from `sptr_zp`. Adding a probe write is one `qrec()` line — the patch table regenerates itself. This is §16's self-modifying-code lesson applied wholesale: 36 self-modified sites instead of one.
+
+### Two bugs the emulator hid
+
+The page shipped in V1.5.02 with two latent faults that only surfaced once it was driven interactively in WinVICE — neither the 35-case unit suite nor the variant golden sweep touched the paint path:
+
+1. **A pointer outside zero page.** `qc_patch_operands` used `sta (qc_pt_ptr),y`, but `qc_pt_ptr` was declared in the `$C300` code segment, not zero page. KickAssembler **silently truncates** a non-ZP label in indirect-indexed addressing to its low byte — `sta (qc_pt_ptr),y` assembled as `sta ($A9),y`, scribbling through whatever lived at `$A9/$AA`. No warning, no error; just memory corruption every time the page opened. Fixed in V1.5.03 by moving the pointer to `$C1`.
+2. **A stack-pointer trick that only worked by accident.** The decay loop was copied from `calcandloop`, which "saves X" across a `jsr` with `txs`/`tsx` — overwriting the *stack pointer* with X. That is only safe because the original never returns to its caller (it tail-calls `jmp funny_print`). The Q-page copy *did* return via `rts`, so each iteration buried the return address and `rts` jumped into garbage — landing, of all places, mid-paint in the debug screen. Fixed by dropping the trick and restoring X from a zero-page slot.
+
+Both are now memorialised as regression tests and as the cautionary notes future copy-paste will hopefully heed.
+
+### One table, two pages
+
+The chip-name column exposed a third, older bug. The Q page and the debug page each carried their own independent code→name mapping, and they had quietly drifted: the debug page mapped type `$01` to "8580 FOUND" and `$02` to "6581 FOUND" — backwards — and the Q page mis-labelled SIDKick-pico 6581 (`$0E`) as "USID64". Two hand-maintained tables for the same fact will always drift.
+
+V1.5.04 collapsed them into one. A single `sid_type_index` routine maps a type code to a canonical slot index, backed by a 17-byte `sid_code_to_slot` table; two row-aligned name tables (`sidname_short_*` for the 6-char Q page, `sidname_long_*` for the debug page) are indexed by that slot. Adding a chip is one row in each — they cannot disagree. ULTISID's `$20–$26` band stays special-cased in both printers, because there the detail levels legitimately differ: the debug page names all seven filter-curve variants, the 6-char Q page only distinguishes 8580 from 6581 family. `sid_type_index` is now the keystone covered by unit tests T36–T43.
+
+### Why the decay column is empty under emulation
+
+Run the Q page in VICE and the `D418=` column reads `N00` for every slot. That is not a bug — reSID faithfully emulates the SID's audio path but does not model the analog volume-register *read-decay* that the `$D418` measurement depends on; the register simply doesn't bleed down on read the way real silicon does. The sidcheck grade, which reads OSC3 digital output, *is* meaningful under emulation. The real decay numbers come from hardware: `make hw_test` (TEST 9) enters the page on a real U64, reads screen RAM after the measurement settles, and logs the per-slot grade and `$D418` value into the run report. Those captures are the calibration data a future revision would use to turn the raw grade into a per-family expected-quality reference. The sidcheck `result` table itself is PAL-calibrated; NTSC scores may shift.
+
+---
+
 ## Appendix: SID Register Quick Reference
 
 | Address | Name | R/W | Notes |
@@ -1157,6 +1201,11 @@ After settling at V1.4.19 the detector correctly identifies both CBM SFX Sound E
 | V1.3.67 | Data table relocated `$5600` → `$6000` (1536 bytes headroom); SID1=UNKN probe chain: FPGASID → SIDKick Pico → PD SID → DIS echo (SwinSID-U / ARMSID) |
 | V1.3.68 | Fix probe ordering: `checkfpgasid` must run before `sfx_probe_skpico` (skpico dirty exit corrupts D41E, breaking FPGASID magic-cookie sequence) |
 | V1.3.70 | Document FPGASID-in-SIDFX-SID1 as accepted hardware limitation; SIDFX POT masking and SCI reaction make it fundamentally undetectable |
+| V1.4.x  | FM expansion detection (CBM SFX Sound Expander / FM-YAM) at `$DF40/$DF50/$DF60`; OPL sound test; U64 8-SID "Tuneful Eight" enumeration; MIDI cartridge detection (§23) |
+| V1.5.01 | TLR family-agnostic baseline sweep (`tlr_sweep`) before family-specific scans |
+| V1.5.02 | Quality Fingerprint page (Q) — sidcheck grade + `$D418` decay per slot, in a `$C300` segment (§24) |
+| V1.5.03 | Q-page fixes: `qc_pt_ptr` moved to zero page (KickAsm `(label),y` low-byte truncation); `calcandloop_q` stack-pointer clobber removed |
+| V1.5.04 | Q-page chip-table holes filled ($09/$0E/$10/$20–$22); debug-page `$01`/`$02` 6581/8580 swap fixed; `sid_type_index` single source-of-truth lookup shared by both pages; `do_quit`/`EXITINTRO` dead code retired; unit suite to 43 tests (T36–T43 cover `sid_type_index`); `hw_test.py` TEST 9 captures Q-page fingerprints off real hardware |
 
 ---
 

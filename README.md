@@ -44,6 +44,7 @@ When run on a C64 (or emulator), the program probes SID hardware registers, meas
 | Clock | PAL · NTSC |
 | Stereo | Scans D400/D500/D600/D700/DE00–DFFF for additional SID chips |
 | Info pages | Press **I** on the result screen for per-chip detail; CRSR LEFT/RIGHT to flip pages |
+| Quality page | Press **Q** for a per-slot audio-quality fingerprint (sidcheck grade + `$D418` decay) — one row per detected SID |
 
 ---
 
@@ -282,6 +283,20 @@ original bytes for a clean re-entry.
 
 Press **I** to enter the info page for the detected chip. Navigate with CRSR LEFT/RIGHT; SPACE returns to the main screen. 17 pages are available (one per chip type), browsable in any order.
 
+Press **Q** to enter the **Quality Fingerprint** page (added V1.5.02). It paints one row per detected SID, combining two orthogonal accuracy fingerprints:
+
+```
+D400 QUALITY 4/5 (GOOD  8580  ) D418=N15
+D420 QUALITY 2/5 (BAD   ARMSID) D418=N18
+```
+
+- **sidcheck grade** (`0–5`, banded AWFUL / BAD / GOOD / BEST) — the combined-waveform OSC3 readback test from Wonderland XIII / Censor Designs, lifted from the VICE testprog suite and rebased to run per `sid_list` slot. The cycle-critical writes target absolute `$D4xx` operands that are runtime-patched per slot (a 36-site patch list generated at assemble time).
+- **`$D418` decay** (`Nnn`) — the same volume-decay measurement used on the main screen's row 15, surfaced for *every* slot so implementations can be compared side by side.
+
+The chip-name column is resolved through `sid_type_index`, the single code→name table shared with the debug page. SPACE or Q returns to the main screen.
+
+**Note:** the decay column reads `N00` under VICE because reSID doesn't model `$D418` read-decay like real silicon; the sidcheck grade is meaningful in both. Real-hardware decay values are captured by `make hw_test` (TEST 9). The sidcheck `result` table is PAL-calibrated.
+
 ---
 
 ## Build
@@ -352,7 +367,7 @@ Tests are written in 6502 assembly (KickAssembler syntax) and run inside WinVICE
 ```bash
 make test           # ArithmeticMean unit tests       (4 cases)
 make test_dispatch  # ARMSID / FPGASID dispatch tests (8 cases)
-make test_suite     # Full suite — all scenarios      (23 cases)
+make test_suite     # Full suite — all scenarios      (43 cases)
 ```
 
 After VICE opens, all results are visible on screen immediately. To check the pass count in the VICE monitor (`Alt+M`):
@@ -366,7 +381,7 @@ mem $07E8 $07E8    # shows pass count; $17 (23) = all passed for test_suite
 |------|-------|--------|
 | `tests/test_arith.asm` | 4 | `ArithmeticMean` — pure computation |
 | `tests/test_dispatch.asm` | 8 | ARMSID / ARM2SID / FPGASID dispatch |
-| `tests/test_suite.asm` | 23 | All dispatch stages (see table below) |
+| `tests/test_suite.asm` | 43 | All dispatch stages (see table below) |
 
 Each file has a matching `.mon` VICE moncommands file that loads symbols and sets a breakpoint at `td_spin` (the completion spin-loop).
 
@@ -382,6 +397,12 @@ Each file has a matching `.mon` VICE moncommands file that loads symbols and set
 | S6 | T17–T18 | Second SID / no sound | `$10` → second SID · other → no sound |
 | S7 | T19–T22 | ArithmeticMean | `[10,20,30]`=20 · `[5×6]`=5 · `[100,50,75,25]`=62 · empty=0 |
 | S8 | T23 | FPGA stereo | `data1=$06` at `$D500` → recorded in `sid_list` |
+| S9 | T24–T27 | New chips | `$09` → PDsid · `$0A` → BackSID · `$0B` → SIDKick-pico · `$0C` → KungFuSID |
+| S10 | T28–T29 | ARM2SID SFX | `emul_mode=$01` → SFX only · `$02` → SID+SFX |
+| S11 | T30–T31 | SKpico FM | `skpico_fm=$04/$05` → FM Sound Expander at `$DF00` |
+| S12 | T32 | FM-YAM OPL2 | `fmyam_detected=$01` → FM-YAM/OPL2 at `$DF40` |
+| S13 | T33–T35 | Quality band | score `0` → AWFUL · `5` → BEST · `$FF` → BAD-clamp |
+| S14 | T36–T43 | Chip-type index | `sid_type_index` code→slot: `$01`→6581 · `$02`→8580 · `$08`→Nano · `$09`→PDsid · `$0E`→SKpico-6581 · `$30`→SIDFX · `$F0`→NoSID · `$0F`→UNKWN |
 
 ### Design approach
 
