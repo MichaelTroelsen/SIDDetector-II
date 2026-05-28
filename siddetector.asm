@@ -7312,86 +7312,60 @@ pst_8580:       lda #$38            // '8'
                 jmp $FFD2
 
 //--------------------------------------------------------------------------------------------------
-// dbg_print_sid_typename: print type name string for a sid_list type code.
+// sid_type_index: map a sid_list type code to a canonical name-table index.
+// Input:  A = type code.   Output: X = index into sidname_short_*/sidname_long_*.
+// Index 0 = UNKWN fallback.  ULTISID ($20-$26) is NOT handled here — callers
+// range-check that band themselves (the debug page wants 7 filter-curve names,
+// the Q page wants 2 families, so the detail levels differ legitimately).
+//
+// THIS IS THE SINGLE SOURCE OF TRUTH for code→meaning across both the debug
+// page (dbg_print_sid_typename, long strings) and the Q page
+// (quality_print_chiptype, 6-char strings).  Adding a simple chip = one row in
+// sid_code_to_slot + one row in BOTH sidname tables.  Keeping the mapping in
+// one place is what prevents the Q/debug drift that bit V1.5.04 (the $01/$02
+// swap and the $0E mismap).  Preserves A is NOT guaranteed.
+//--------------------------------------------------------------------------------------------------
+sid_type_index:
+                cmp #$30
+                beq sti_sidfx
+                cmp #$F0
+                beq sti_nosid
+                cmp #$11
+                bcs sti_unkn               // > $10 (and not $30/$F0) → UNKWN
+                tax                         // $00-$10 → direct lookup
+                lda sid_code_to_slot,x
+                tax
+                rts
+sti_sidfx:      ldx #15
+                rts
+sti_nosid:      ldx #16
+                rts
+sti_unkn:       ldx #0
+                rts
+
+//--------------------------------------------------------------------------------------------------
+// dbg_print_sid_typename: print the long type-name string for a sid_list code.
 // Input: A = type code; Preserves X (saved via x_zp). Trashes A, Y.
-// Uses KERNAL $AB1E (print zero-terminated string, lo=A hi=Y).
 //--------------------------------------------------------------------------------------------------
 dbg_print_sid_typename:
                 stx x_zp
-                cmp #$06
-                bne dpst_n06
-                lda #<fpgasidf_8580u
-                ldy #>fpgasidf_8580u
-                jsr $AB1E
-                jmp dpst_done
-dpst_n06:       cmp #$07
-                bne dpst_n07
-                lda #<fpgasidf_6581u
-                ldy #>fpgasidf_6581u
-                jsr $AB1E
-                jmp dpst_done
-dpst_n07:       cmp #$01
-                bne dpst_n01
-                lda #<l6581f               // type $01 = 6581 (canonical, line 753)
-                ldy #>l6581f
-                jsr $AB1E
-                jmp dpst_done
-dpst_n01:       cmp #$02
-                bne dpst_n02
-                lda #<l8580f               // type $02 = 8580 (canonical, line 753)
-                ldy #>l8580f
-                jsr $AB1E
-                jmp dpst_done
-dpst_n02:       cmp #$05
-                bne dpst_n05
-                lda #<armsidf
-                ldy #>armsidf
-                jsr $AB1E
-                jmp dpst_done
-dpst_n05:       cmp #$04
-                bne dpst_n04
-                lda #<swinsidUf
-                ldy #>swinsidUf
-                jsr $AB1E
-                jmp dpst_done
-dpst_n04:       cmp #$0A
-                bne dpst_n0A
-                lda #<backsidf
-                ldy #>backsidf
-                jsr $AB1E
-                jmp dpst_done
-dpst_n0A:       cmp #$0B
-                bne dpst_n0B
-                lda #<skpicof
-                ldy #>skpicof
-                jsr $AB1E
-                jmp dpst_done
-dpst_n0B:       cmp #$0E
-                bne dpst_n0E
-                lda #<skpicof_6581
-                ldy #>skpicof_6581
-                jsr $AB1E
-                jmp dpst_done
-dpst_n0E:       cmp #$10
-                bne dpst_n10
-                lda #<secondsid
-                ldy #>secondsid
-                jsr $AB1E
-                jmp dpst_done
-dpst_n10:       cmp #$20
-                bcc dpst_n20    // < $20 → hex fallback
+                cmp #$20
+                bcc dpst_simple
                 cmp #$27
-                bcs dpst_n20    // >= $27 → hex fallback
-                // UltiSID filter curve variant: type $20-$26 → table lookup
+                bcs dpst_simple            // not $20-$26 → simple path
+                // UltiSID filter-curve variant: type $20-$26 → 7-entry table
                 sec
-                sbc #$20        // index 0-6
-                asl             // × 2
+                sbc #$20                   // index 0-6
+                asl                         // × 2
                 tax
                 lda ultisid_str_lo,x
                 ldy ultisid_str_hi,x
                 jsr $AB1E
                 jmp dpst_done
-dpst_n20:       jsr print_hex   // fallback: show raw hex code
+dpst_simple:    jsr sid_type_index         // A=code → X=slot
+                lda sidname_long_lo,x
+                ldy sidname_long_hi,x
+                jsr $AB1E
 dpst_done:      ldx x_zp
                 rts
 
@@ -8343,6 +8317,32 @@ sidFXf:         .text "SIDFX FOUND"   // data1=$30
                 .byte 0
 swinsidmicrof:  .text "SWINSID MICRO FOUND"
                 .byte 0
+nosidf:         .text "NO SID"        // slot 16 long name (debug page)
+                .byte 0
+
+// ============================================================
+// Canonical chip-type name registry (single source of truth).
+// sid_type_index maps a type code → a slot index here; the debug page
+// reads sidname_long_*, the Q page reads sidname_short_* (in the $C300
+// segment).  Keep all three tables row-aligned by slot.
+//   slot: 0 UNKWN 1 6581 2 8580 3 SwinNano 4 SwinUlt 5 ARMSID
+//         6 FPGA8580 7 FPGA6581 8 PDsid 9 BackSID 10 SKpico8580
+//         11 KungFu 12 uSID64 13 SKpico6581 14 2ndSID 15 SIDFX 16 NoSID
+// ============================================================
+// Type code ($00-$10) → slot.  $08 folds to SwinNano(3); $0F unused→0.
+sid_code_to_slot:
+    .byte 0, 1, 2, 3, 4, 5, 6, 7, 3, 8, 9, 10, 11, 12, 13, 0, 14
+
+sidname_long_lo:
+    .byte <unknownsid, <l6581f, <l8580f, <swinsidnanof, <swinsidUf
+    .byte <armsidf, <fpgasidf_8580u, <fpgasidf_6581u, <pdsidf, <backsidf
+    .byte <skpicof, <kungfusidf, <usid64f, <skpicof_6581, <secondsid
+    .byte <sidfxu, <nosidf
+sidname_long_hi:
+    .byte >unknownsid, >l6581f, >l8580f, >swinsidnanof, >swinsidUf
+    .byte >armsidf, >fpgasidf_8580u, >fpgasidf_6581u, >pdsidf, >backsidf
+    .byte >skpicof, >kungfusidf, >usid64f, >skpicof_6581, >secondsid
+    .byte >sidfxu, >nosidf
 
 
 
@@ -11846,37 +11846,15 @@ qe_done:
 // quality_print_chiptype — A = sid_list_t code → 6-char short name
 // ------------------------------------------------------------
 quality_print_chiptype:
-           cmp #$30
-           beq qpc_sidfx
-           cmp #$F0
-           beq qpc_nosid
-           cmp #$10
-           beq qpc_2nd                 // secondsid (data1=$10)
            cmp #$20
-           beq qpc_ulti8               // ULTISID 8580
-           cmp #$21
-           beq qpc_ulti6               // ULTISID 6581
-           cmp #$22
-           beq qpc_ulti6               // ULTISID 6581 alt (uci_type_for_addr)
-           cmp #$0F
-           bcs qpc_unknown
-           tax
-           lda qct_lo,x
-           ldy qct_hi,x
-           jmp $AB1E
-qpc_sidfx:
-           lda #<qct_sidfx
-           ldy #>qct_sidfx
-           jmp $AB1E
-qpc_nosid:
-           lda #<qct_nosid
-           ldy #>qct_nosid
-           jmp $AB1E
-qpc_2nd:
-           lda #<qct_2nd
-           ldy #>qct_2nd
-           jmp $AB1E
-qpc_ulti8:
+           bcc qpc_simple
+           cmp #$27
+           bcs qpc_simple              // not $20-$26 → simple path
+           // ULTISID range: $20 = 8580 (per uci_type_for_addr), rest = 6581
+           // family.  The debug page shows the precise filter-curve name;
+           // the 6-char Q page only distinguishes family.
+           cmp #$20
+           bne qpc_ulti6
            lda #<qct_ulti8
            ldy #>qct_ulti8
            jmp $AB1E
@@ -11884,9 +11862,10 @@ qpc_ulti6:
            lda #<qct_ulti6
            ldy #>qct_ulti6
            jmp $AB1E
-qpc_unknown:
-           lda #<qct_unkn
-           ldy #>qct_unkn
+qpc_simple:
+           jsr sid_type_index          // A=code → X=slot (shared with debug page)
+           lda sidname_short_lo,x
+           ldy sidname_short_hi,x
            jmp $AB1E
 
 // ------------------------------------------------------------
@@ -12316,17 +12295,21 @@ qct_ulti6: .text "ULTI65"; .byte 0   // ULTISID 6581 (types $21, $22)
 qct_sidfx: .text "SIDFX "; .byte 0
 qct_nosid: .text "NO SID"; .byte 0
 
-// sid_list_t code → short-name lookup ($00..$0E).
-// $00=UNKWN, $03=SwinSID Nano (legacy), $08=SwinSID Nano (live),
-// $09=PDsid, $0D=uSID64 (reserved), $0E=SIDKick-pico 6581.
-// Codes $10/$20/$21/$22 are handled by explicit branches in
-// quality_print_chiptype (above) — not via this table.
-qct_lo: .byte <qct_unkn,  <qct_6581, <qct_8580, <qct_swnn, <qct_swnu
-        .byte <qct_arms,  <qct_f858, <qct_f658, <qct_swnn, <qct_pdsid
-        .byte <qct_back,  <qct_skpc, <qct_kung, <qct_u64,  <qct_skp65
-qct_hi: .byte >qct_unkn,  >qct_6581, >qct_8580, >qct_swnn, >qct_swnu
-        .byte >qct_arms,  >qct_f858, >qct_f658, >qct_swnn, >qct_pdsid
-        .byte >qct_back,  >qct_skpc, >qct_kung, >qct_u64,  >qct_skp65
+// Short-name table — row-aligned by slot with sidname_long_* (main segment)
+// and driven by the shared sid_type_index.  Slot order:
+//   0 UNKWN 1 6581 2 8580 3 SwinNano 4 SwinUlt 5 ARMSID 6 FPGA8580
+//   7 FPGA6581 8 PDsid 9 BackSID 10 SKpico8580 11 KungFu 12 uSID64
+//   13 SKpico6581 14 2ndSID 15 SIDFX 16 NoSID
+sidname_short_lo:
+    .byte <qct_unkn, <qct_6581, <qct_8580, <qct_swnn, <qct_swnu
+    .byte <qct_arms, <qct_f858, <qct_f658, <qct_pdsid, <qct_back
+    .byte <qct_skpc, <qct_kung, <qct_u64, <qct_skp65, <qct_2nd
+    .byte <qct_sidfx, <qct_nosid
+sidname_short_hi:
+    .byte >qct_unkn, >qct_6581, >qct_8580, >qct_swnn, >qct_swnu
+    .byte >qct_arms, >qct_f858, >qct_f658, >qct_pdsid, >qct_back
+    .byte >qct_skpc, >qct_kung, >qct_u64, >qct_skp65, >qct_2nd
+    .byte >qct_sidfx, >qct_nosid
 .encoding "ascii"               // restore default for any future appendage
 
 // eof
