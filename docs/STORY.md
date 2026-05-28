@@ -1,7 +1,7 @@
 # Identifying Every SID Chip in Existence — Inside SID Detector
 
 *A technical deep-dive for C64 sceners, SID musicians, and hardware developers*
-*By funfun/Triangle 3532 · Version V1.5.04 · May 2026*
+*By funfun/Triangle 3532 · Version V1.5.05 · May 2026*
 
 ---
 
@@ -1039,6 +1039,19 @@ Step 5b   — $D418 decay fingerprint (calcandloop / ArithmeticMean)
 | EMU64 | — | D418 decay fingerprint | ✅ |
 | NOSID | — | All probes fail | ✅ |
 
+**Non-SID sound / interface cartridges (§23–§24):**
+
+| Device | Probe | Address | Status |
+|--------|-------|---------|--------|
+| CBM SFX Sound Expander | OPL2 status `(s & $E0)==0` | `$DF40/$DF50/$DF60` | ✅ |
+| FM-YAM | same OPL2 probe (shared chip family) | `$DF40/$DF50/$DF60` | ✅ |
+| Sequential / Namesoft MIDI | 6850 ACIA reset `(s & $73)==$02` | `$DE00/$DE02` | ✅ |
+| DATEL / Siel / JMS MIDI | 6850 ACIA reset signature | `$DE04/$DE06` | ✅ |
+| Passport MIDI | 6850 ACIA reset signature | `$DE08` | ✅ |
+| Maplin MIDI | 6850 ACIA reset (I/O2-guarded) | `$DF00` | ✅ |
+
+Beyond identification, the **Quality Fingerprint page** (§25) grades every detected SID slot — a sidcheck combined-waveform OSC3 score (`0–5`) plus the `$D418` decay reading — so two chips that both report "8580" can be compared by render quality.
+
 **Stereo SIDFX secondary identification (V1.3.x):**
 
 | Secondary chip | Probe | SID2 | SID1 (UNKN) |
@@ -1259,7 +1272,8 @@ Run the Q page in VICE and the `D418=` column reads `N00` for every slot. That i
 | V1.5.01 | TLR family-agnostic baseline sweep (`tlr_sweep`) before family-specific scans |
 | V1.5.02 | Quality Fingerprint page (Q) — sidcheck grade + `$D418` decay per slot, in a `$C300` segment (§25) |
 | V1.5.03 | Q-page fixes: `qc_pt_ptr` moved to zero page (KickAsm `(label),y` low-byte truncation); `calcandloop_q` stack-pointer clobber removed |
-| V1.5.04 | Q-page chip-table holes filled ($09/$0E/$10/$20–$22); debug-page `$01`/`$02` 6581/8580 swap fixed; `sid_type_index` single source-of-truth lookup shared by both pages; `do_quit`/`EXITINTRO` dead code retired; unit suite to 43 tests (T36–T43 cover `sid_type_index`); `hw_test.py` TEST 9 captures Q-page fingerprints off real hardware |
+| V1.5.04 | Q-page chip-table holes filled ($09/$0E/$10/$20–$22); debug-page `$01`/`$02` 6581/8580 swap fixed; `do_quit`/`EXITINTRO` dead code retired |
+| V1.5.05 | `sid_type_index` + `sid_code_to_slot` single source-of-truth lookup shared by both pages (`sidname_short_*` / `sidname_long_*`); unit suite to 43 tests (T36–T43 cover `sid_type_index`); `hw_test.py` TEST 9 captures Q-page fingerprints off real hardware; README/STORY/MIDI (§24) documentation |
 
 ---
 

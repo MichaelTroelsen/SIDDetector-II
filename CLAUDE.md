@@ -12,7 +12,7 @@ SID Detector is a Commodore 64 diagnostic utility written in 6502 assembly that 
 make             # assemble siddetector.asm → siddetector.prg using KickAssembler
 make run         # launch detector in the patched WinVICE 3.9
 make run-armsid  # launch with ARMSID personality at D400  (see Makefile for full list)
-make ci          # unit tests (32 cases)
+make ci          # unit tests (43 cases) + MEMORYMAP.md drift check
 make ci-full     # unit tests + golden-diff sweep across all 14 variants
 make clean       # remove siddetector.prg
 ```
@@ -39,8 +39,13 @@ The program executes a sequential detection chain at startup, testing SID regist
 7. **`checksecondsid`** — Scans for additional SIDs at D500/D600/D700/DE00/DF00 (stereo configs)
 8. **`checkkungfusid`** — KungFuSID via D41D echo/ACK
 9. **`checkswinsidnano`** — SwinSID Nano via dual-frequency oscillator test (D41B)
+10. **`checkfmyam`** — Yamaha OPL2 FM expansion (CBM SFX Sound Expander / FM-YAM) at $DF40/$DF50/$DF60 (V1.4.x)
+11. **`checkmidi`** — C64 MIDI cartridges (Sequential/Namesoft/DATEL/Passport/Maplin) via 6850 ACIA reset signature (V1.4.45)
+12. **`tlr_sweep`** — family-agnostic baseline scan (TLR `sid-detect2`); runs only when no primary chip identified (`data4=$00`); finds get type `$11`, deduped against family-specific results (V1.5.01)
 
 Emulator detection (VICE ResID/FastSID, HOXS64, Frodo, YACE64, EMU64) runs as a fallback when no hardware SID is identified.
+
+**Screens:** the result screen offers I (per-chip info), Q (Quality Fingerprint — sidcheck grade + $D418 decay per slot, V1.5.02), D (debug), R (readme), T (sound test), P (tracker view), L (TLR detector), SPACE (restart).
 
 ### Key Techniques
 
@@ -53,14 +58,21 @@ Emulator detection (VICE ResID/FastSID, HOXS64, Frodo, YACE64, EMU64) runs as a 
 
 | Address | Contents |
 |---------|----------|
-| `$0801` | BASIC stub + main code |
-| `$1D00` | Detection result tables: `num_sids`, `sid_list_l/h/t`, `sid_map` |
+| `$0801` | BASIC stub (`SYS 9216` → `$2400`) |
+| `$1800` / `$A000` | Embedded SID tunes (Triangle Intro / Delirious 9) |
+| `$0A00` | Embedded TLR `sid-detect2` (copied to `$0801` on **L**) |
+| `$2400` | Main program — `start:` + all detection routines (`~$5A99`) |
+| `$5B00` | `tlr_sweep` baseline scan (V1.5.01) |
+| `$6000` | Detection tables (`num_sids`, `sid_list_l/h/t`, `sid_map`) + screen/string/colour data |
+| `$9200` | SID Tracker View code (V1.4.33) |
+| `$C000`/`$C020` | Tracker shadow SID + tune-selector segment |
+| `$C300` | Quality Fingerprint page code + tables (V1.5.02) |
 
-Zero-page `$A2–$AF` and `$F6–$FF` hold working variables and detection state.
+Zero-page `$A2–$AF`, `$B0–$C2`, and `$F6–$FF` hold working variables and detection state (`$C1/$C2` = Q-page patch pointer `qc_pt_ptr`).
 
 ### Detected SID Types
 
-Real chips (6581 R2/R3/R4/R4AR, 8580), FPGASID, ARMSID, Swinsid Nano, Swinsid Ultimate, uSID64, ULTISID (U64), SIDFX, and emulators: VICE ResID, VICE FastSID, HOXS64, Frodo, YACE64, EMU64, plus UNKNOWNSID and No Sound fallbacks.
+Real chips (6581 R2/R3/R4/R4AR, 8580), FPGASID, ARMSID/ARM2SID, Swinsid Nano/Ultimate/Micro, SIDKick-pico (8580/6581), KungFuSID, BackSID, PD SID, uSID64, ULTISID (U64), SIDFX; FM expansion (CBM SFX Sound Expander / FM-YAM); MIDI cartridges (Sequential/Namesoft/DATEL/Passport/Maplin); emulators VICE ResID/FastSID, HOXS64, Frodo, YACE64, EMU64; plus UNKNOWNSID and No Sound fallbacks. The chip-type→name mapping is centralised in `sid_type_index` + `sid_code_to_slot`, shared by the debug page (`sidname_long_*`) and the Q page (`sidname_short_*`).
 
 ## SidVariant proxy (headless testing in WinVICE)
 

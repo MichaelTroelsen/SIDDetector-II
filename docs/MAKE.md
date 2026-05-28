@@ -7,7 +7,7 @@ Build, test, and deployment commands for SID Detector.
 | Variable    | Value                                 | Purpose                      |
 |-------------|---------------------------------------|------------------------------|
 | `KICKASS`   | `java -jar C:/debugger/kickasm/KickAss.jar` | KickAssembler (needs Java) |
-| `VICE`      | `C:/winvice/bin/x64sc.exe`            | WinVICE C64 emulator         |
+| `VICE`      | `…/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe` | Patched WinVICE 3.9 (`-sidvariant` layer; required for all VICE-based tests) |
 | `U64REMOTE` | `.\bin\u64remote.exe`                 | Upload/run PRG over network  |
 | `U64C64`    | `.\bin\c64u`                          | Ultimate64 REST-API CLI      |
 | `U64IP`     | `192.168.1.64`                        | Ultimate64 IP address        |
@@ -55,17 +55,18 @@ Build & run `tests/test_arith.prg`. 4 arithmetic tests — expect `$0600 == $04`
 Build & run `tests/test_dispatch.prg`. 8 dispatch-logic tests covering ARMSID/ARM2SID/FPGASID branch conditions — expect `$0600 == $08`.
 
 ### `make test_suite`
-Build & run `tests/test_suite.prg`. 35 tests across all detection stages plus the Q-page band-lookup (T33–T35) — expect `$07E8 == $23`.
+Build & run `tests/test_suite.prg`. 43 tests across all detection stages plus the Q-page band-lookup (T33–T35) and the `sid_type_index` resolver (T36–T43) — expect `$07E8 == $2B`.
 
 ### `make ci`
-Run `test_suite` headlessly via `scripts/ci_test.sh`. VICE opens briefly, runs the suite with the remote monitor, saves the pass count to `tests/ci_result.bin` (1-byte PRG), then quits. Gate for CI: all 35 tests must pass.
+Run `test_suite` headlessly via `scripts/ci_test.sh`. VICE opens briefly, runs the suite with the remote monitor, saves the pass count to `tests/ci_result.bin` (1-byte PRG), then quits. Gate for CI: all 43 tests must pass. `make ci` then also runs `scripts/check_memorymap.py` as a doc-drift guard against `docs/MEMORYMAP.md`.
 
 ## Real-Hardware Smoke Test
 
 ### `make hw_test`
 Run `scripts/hw_test.py` against the U64. Deploys `siddetector.prg`, then:
 - Presses `SPACE` 3× to verify detection remains stable across restarts.
-- Enters every screen (`I`, `D`, `R`, `T`, `P`) and returns.
+- Enters every screen (`I`, `D`, `D→D`, `R`, `T`, `P`, `Q`) and returns.
+- **TEST 9 (Quality page):** enters the `Q` page, reads screen RAM after the decay measurement settles, and logs the per-slot sidcheck grade + `$D418` decay into the run report — the real-hardware numbers VICE can't produce. Also cross-checks the Q-page chip-name column against the detected baseline.
 - Verifies the detection result matches the cold-boot baseline.
 
 ### `make hw_test SCENARIO=<name>`

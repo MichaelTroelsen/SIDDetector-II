@@ -40,11 +40,26 @@ When run on a C64 (or emulator), the program probes SID hardware registers, meas
 | FPGA clones | FPGASID (6581 mode · 8580 mode) |
 | Microcontroller | ARMSID · ARM2SID · Swinsid Ultimate · Swinsid Nano · Swinsid Micro · SIDKick-pico · KungFuSID · BackSID · PD SID · SIDFX · ULTISID (U64) · uSID64 |
 | Emulators | VICE 3.3 ResID 6581/8580 · VICE 3.3 FastSID · HOXS64 · Frodo · YACE64 · EMU64 · C64DBG |
+| FM expansion | CBM SFX Sound Expander · FM-YAM (Yamaha OPL2 / YM3812 at `$DF40`) |
+| MIDI interfaces | Sequential Circuits · Namesoft · DATEL/Siel/JMS · Passport · Maplin (6850 ACIA) |
 | Machine type | C64 · C128 · TC64 (Turbo Chameleon 64) |
 | Clock | PAL · NTSC |
 | Stereo | Scans D400/D500/D600/D700/DE00–DFFF for additional SID chips |
 | Info pages | Press **I** on the result screen for per-chip detail; CRSR LEFT/RIGHT to flip pages |
 | Quality page | Press **Q** for a per-slot audio-quality fingerprint (sidcheck grade + `$D418` decay) — one row per detected SID |
+
+### Keys on the result screen
+
+| Key | Action |
+|-----|--------|
+| **SPACE** | Restart the full detection sequence (raster-stable; silences all voices) |
+| **I** | Per-chip info pages (CRSR LEFT/RIGHT or B/M to flip; SPACE returns) |
+| **Q** | Quality Fingerprint page (sidcheck grade + `$D418` decay per slot) |
+| **D** | Debug page — raw detection values, UCI/SIDFX state (D again → page 2) |
+| **R** | README / help viewer (W/S to scroll) |
+| **T** | SID sound test — plays the 3-voice melody on every detected slot |
+| **P** | SID Tracker View — live per-voice display while music plays |
+| **L** | TLR `sid-detect2` second-SID detector (copied to `$0801` and run) |
 
 ---
 
@@ -168,6 +183,18 @@ Sets the volume register D418 = `$1F` then counts CPU cycles until it decays to 
 
 This fingerprint distinguishes VICE ResID, VICE FastSID, HOXS64, Frodo, YACE64, and EMU64.
 
+### Step 7 — TLR baseline sweep (`tlr_sweep`, V1.5.01)
+
+Runs only when no primary chip was identified (`data4=$00`). A family-agnostic scan adapted from TLR's `sid-detect2`: walks `$D400–$D7E0` and `$DE00–$DFE0` in `$20` strides and, at each unclassified slot, runs a retriggered-sawtooth OSC3 count-up test (the readback must increment across three reads — proof an oscillator is advancing there). New finds are appended to `sid_list` as type `$11` ("TLR-generic"); a dedupe pass collapses duplicates against the family-specific results, keeping the refined type.
+
+### Step 8 — FM expansion (`checkfmyam`, V1.4.x)
+
+Probes `$DF40/$DF50/$DF60` for a Yamaha OPL family chip (YM3526 / YM3812) — the CBM SFX Sound Expander and FM-YAM both decode there identically. Detection uses an `(status & $E0) == 0` two-read check: a real OPL drives status into `$00–$1F`; open bus has the high bits set. Reported on the next free stereo row as `DF40 SFX/FM FOUND`. One detection path covers both products (see [STORY.md §23](docs/STORY.md)).
+
+### Step 9 — MIDI cartridge (`checkmidi`, V1.4.45)
+
+Probes the four documented C64 MIDI interfaces for a 6850 ACIA reset signature: write `$03` (master reset) to the control register, then status reads `& $73 == $02` (transmit-empty, nothing received, no errors). Address pairs, first-hit-wins: Sequential/Namesoft `$DE00/$DE02`, DATEL/Siel/JMS `$DE04/$DE06`, Passport `$DE08`, Maplin `$DF00`. A two-read consistency check rejects open-bus jitter; the `$DF00` probe is guarded against SIDFX / U64 / SIDKick-pico FM / ARM2SID SFX- ownership. When no SID was found, the cart name overwrites the NOSID row. See [STORY.md §24](docs/STORY.md).
+
 ---
 
 ## Machine type detection
@@ -196,10 +223,17 @@ Result stored in `za7` (`$A7`).
 
 | Address | Contents |
 |---------|----------|
-| `$0801` | BASIC stub: `SYS 2061` |
-| `$080D` | Main program, all subroutines |
-| `$1E00` | Detection result tables: `num_sids`, `sid_list_l/h/t`, `sid_map` |
-| `$1E25+` | Screen data, info page text, string labels, colour table |
+| `$0801` | BASIC stub: `SYS 9216` (→ `$2400`) |
+| `$1800` | Embedded SID tune 1 (Triangle Intro, `$1806` play) |
+| `$0A00` | Embedded TLR `sid-detect2` (copied to `$0801` on **L**) |
+| `$2400` | Main program — `start:` and all detection subroutines (`$2400`–`~$5A99`) |
+| `$5B00` | `tlr_sweep` family-agnostic baseline scan (V1.5.01) |
+| `$6000` | Detection result tables (`num_sids`, `sid_list_l/h/t`, `sid_map`), screen data, info-page text, string labels, colour table |
+| `$9200` | SID Tracker View code (V1.4.33) |
+| `$A000` | Embedded SID tune 2 (Delirious 9, under BASIC ROM) |
+| `$C000` | Tracker shadow SID (`$C000`–`$C01F`) |
+| `$C020` | Tune-selector segment (V1.4.35) |
+| `$C300` | Quality Fingerprint page code + tables (V1.5.02) |
 
 ### Zero-page variables
 
@@ -228,9 +262,10 @@ Result stored in `za7` (`$A7`).
 | `$08` | Swinsid Nano |
 | `$09` | PD SID |
 | `$0A` | BackSID |
-| `$0B` | SIDKick-pico |
+| `$0B` | SIDKick-pico (8580) |
 | `$0C` | KungFuSID |
 | `$0D` | uSID64 |
+| `$0E` | SIDKick-pico (6581) |
 | `$10` | Second SID found |
 | `$20`–`$21`/`$24`–`$26` | ULTISID 8580 |
 | `$22`–`$23` | ULTISID 6581 |
@@ -240,10 +275,10 @@ Result stored in `za7` (`$A7`).
 
 ---
 
-## Screen layout (v1.3.83)
+## Screen layout (v1.5.05)
 
 ```
-            siddetector v1.3.83
+            siddetector v1.5.05
 
 row  2: armsid.....:  [result]
 row  3: swinsid....:  [result]
@@ -372,7 +407,7 @@ make test_suite     # Full suite — all scenarios      (43 cases)
 
 After VICE opens, all results are visible on screen immediately. To check the pass count in the VICE monitor (`Alt+M`):
 ```
-mem $07E8 $07E8    # shows pass count; $17 (23) = all passed for test_suite
+mem $07E8 $07E8    # shows pass count; $2B (43) = all passed for test_suite
 ```
 
 ### Test files

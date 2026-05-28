@@ -1,6 +1,6 @@
 # SID Chips and Replacements — Complete Reference
 
-Reference for every SID variant detected by SID Detector v1.3.58, plus chips with placeholder screen rows. Covers the original hardware, all known clones and emulators, and how the detection code identifies each one.
+Reference for every SID variant detected by SID Detector v1.5.05, plus chips with placeholder screen rows. Covers the original hardware, all known clones and emulators, and how the detection code identifies each one.
 
 > **Note on links:** Retro hardware websites move frequently. All links were current at time of writing — verify before purchasing.
 
@@ -707,7 +707,7 @@ nosound
 calcandloop → $D418 decay fingerprint → emulator identification
 ```
 
-The full test suite in `tests/test_suite.asm` covers all dispatch branches in this chain plus the Q-page band lookup — 35 test cases as of V1.5.04. Hardware-dependent probes (the actual register reads from real chips) require physical hardware to test.
+The full test suite in `tests/test_suite.asm` covers all dispatch branches in this chain plus the Q-page band lookup and the shared `sid_type_index` chip-name resolver — 43 test cases as of V1.5.05. Hardware-dependent probes (the actual register reads from real chips) require physical hardware to test.
 
 ---
 

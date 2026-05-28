@@ -1,8 +1,8 @@
 # SID Detector — Test Status
 
-**Last updated:** 2026-04-19  
-**Build:** `$2400–$5D87` (code) `$6000–$910E` (data)  
-**Version:** V1.4.33  
+**Last updated:** 2026-05-28  
+**Build:** `$2400–$5A99` (code) `$6000–$911A` (data) `$C300–$C81E` (Q-page)  
+**Version:** V1.5.05  
 Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 
 ---
@@ -152,7 +152,7 @@ Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed i
 
 ## Unit Tests (`make ci`)
 
-Last result: **35 / 35** ✅ (2026-05-27 — `$23` at `$07E8` via `make ci`; V1.5.04)
+Last result: **43 / 43** ✅ (2026-05-28 — `$2B` at `$07E8` via `make ci`; V1.5.05)
 
 | # | Test | Input | Expected | Result |
 |---|------|-------|----------|--------|
@@ -185,8 +185,22 @@ Last result: **35 / 35** ✅ (2026-05-27 — `$23` at `$07E8` via `make ci`; V1.
 | U27 | KungFuSID dispatch | `data1=$0C` | KUNGFUSID | 🟢 |
 | U28 | ARM2SID SFX-only | `armsid_emul_mode=$01, armsid_major=ARM2` | ARM2SID SFX mode | 🟢 |
 | U29 | ARM2SID SFX+SID | `armsid_emul_mode=$02, armsid_major=ARM2` | ARM2SID SFX+SID mode | 🟢 |
+| T30 | SKpico FM | `skpico_fm=$04` | SKPICO FM | 🟢 |
+| T31 | SKpico FM | `skpico_fm=$05` | SKPICO FM | 🟢 |
+| T32 | FM-YAM OPL2 | `fmyam_detected=$01` | FM-YAM | 🟢 |
+| T33 | Quality band | `score=$00` | AWFUL | 🟢 |
+| T34 | Quality band | `score=$05` | BEST | 🟢 |
+| T35 | Quality band clamp | `score=$FF` | BAD (clamp) | 🟢 |
+| T36 | `sid_type_index` | `$01` | slot 1 (6581) | 🟢 |
+| T37 | `sid_type_index` | `$02` | slot 2 (8580) | 🟢 |
+| T38 | `sid_type_index` | `$08` | slot 3 (SwinNano fold) | 🟢 |
+| T39 | `sid_type_index` | `$09` | slot 8 (PDsid) | 🟢 |
+| T40 | `sid_type_index` | `$0E` | slot 13 (SKpico-6581) | 🟢 |
+| T41 | `sid_type_index` | `$30` | slot 15 (SIDFX) | 🟢 |
+| T42 | `sid_type_index` | `$F0` | slot 16 (NoSID) | 🟢 |
+| T43 | `sid_type_index` | `$0F` | slot 0 (UNKWN) | 🟢 |
 
-> All 29 unit tests pass as of 2026-04-16. Run `make ci` to verify.
+> All 43 unit tests pass as of 2026-05-28. Run `make ci` to verify.
 
 ---
 
