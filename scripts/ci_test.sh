@@ -27,7 +27,7 @@ cd "$ROOT"
 
 KICKASS="java -jar C:/debugger/kickasm/KickAss.jar"
 VICE="C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
-PYTHON="/c/Python314/python"
+PYTHON="python"
 EXPECTED_PASS=43   # $2B hex — T33-T35 band lookup + T36-T43 sid_type_index
 
 # ---- Build ----------------------------------------------------------------
