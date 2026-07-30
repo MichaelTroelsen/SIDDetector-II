@@ -4,7 +4,7 @@ JSR tune_select + JSR tracker_draw_chrome to verify the title row repaints
 and the dispatch operands are patched to the Delirious play address."""
 import os, time, socket, subprocess, re
 
-VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
+VICE = __import__("toolpaths").VICE
 PRG  = r"C:/Users/mit/claude/c64server/siddetector2/siddetector.prg"
 PORT = 6502
 

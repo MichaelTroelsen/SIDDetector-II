@@ -2,7 +2,7 @@
 """Verify SPACE reaches VICE: read $07FF (incremented by do_restart) before/after SPACE."""
 import os,time,socket,subprocess,re
 import win32gui,win32con,pyautogui
-VICE=r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
+VICE=__import__("toolpaths").VICE
 PRG=r"C:/Users/mit/claude/c64server/siddetector2/siddetector.prg"
 PORT=6502
 SHOT=os.environ.get("TMP","/tmp")

@@ -2,7 +2,7 @@
 """Enter tracker, let it run, jump to tracker_exit, verify we return to detection."""
 import os, time, socket, subprocess, re
 
-VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
+VICE = __import__("toolpaths").VICE
 PRG  = r"C:/Users/mit/claude/c64server/siddetector2/siddetector.prg"
 PORT = 6502
 DO_SID_MUSIC = 0x2a63

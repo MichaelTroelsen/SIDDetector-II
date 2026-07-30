@@ -90,6 +90,14 @@ tlr_data:
 // Zero-page and constant equates
 // =============================================================================
 
+// Highest valid info-page index.  Must be declared before info_prev_page /
+// info_next_page use it, and it is CHECKED against the real info_page_*
+// pointer tables by an .errorif beside them - so adding a page without
+// bumping this fails the build instead of silently making the new page
+// unreachable.  Not hypothetical: the wrap limit was once #16 while 19
+// pages existed, and pages 17 and 18 could not be reached at all.
+.const INFO_PAGE_MAX = 18
+
 // KERNAL addresses
 .const nmivec        = $0318   // NMI interrupt vector (patched during PAL/NTSC check)
 .const readkeyboard  = $ffe4   // KERNAL: read keyboard (not used in final build)
@@ -1799,13 +1807,13 @@ info_prev_page:
            dec tmp1_zp
            jmp show_info_page
 info_wrap_last:
-           lda #18                 // last valid index (was #16 — skipped pages 17,18)
+           lda #INFO_PAGE_MAX      // wrap to the last page (derived from info_page_hi)
            sta tmp1_zp
            jmp show_info_page
 info_crsr_right:
 info_next_page:
            lda tmp1_zp
-           cmp #18                 // last valid index (was #16 — skipped pages 17,18)
+           cmp #INFO_PAGE_MAX      // at the last page? (derived from info_page_hi)
            bcs info_wrap_first
            inc tmp1_zp
            jmp show_info_page
@@ -4009,74 +4017,78 @@ Checkarmsid:
 //                ldy     sptr_zp
 //                ldx     sptr_zp+1
                 
+                // Patch the operand bytes of the self-modifying accesses below
+                // from sptr_zp, so this routine can probe whichever SID slot
+                // the caller selected.  (Each line used to repeat the same
+                // 'timing issue requieres runtime mod of upcodes' comment.)
                 lda     sptr_zp+1
-                sta     cas_d418+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_1+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_2+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_3+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_4+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_5+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_1+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_2+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_3+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_4+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_5+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_6+2      // timing issue requieres runtime mod of upcodes.
+                sta     cas_d418+2
+                sta     cas_d418_1+2
+                sta     cas_d418_2+2
+                sta     cas_d418_3+2
+                sta     cas_d418_4+2
+                sta     cas_d418_5+2
+                sta     cas_d41D+2
+                sta     cas_d41D_1+2
+                sta     cas_d41D_2+2
+                sta     cas_d41D_3+2
+                sta     cas_d41D_4+2
+                sta     cas_d41D_5+2
+                sta     cas_d41D_6+2
                 sta     cas_d41d7+2     // ARM2SID data3 read — was left hard-wired to $D41D
-                sta     cas_d41B+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41C+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41E+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41E_3+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41E_4+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41E_5+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41F+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41F_3+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41F_4+2      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41F_5+2      // timing issue requieres runtime mod of upcodes.
+                sta     cas_d41B+2
+                sta     cas_d41C+2
+                sta     cas_d41E+2
+                sta     cas_d41E_3+2
+                sta     cas_d41E_4+2
+                sta     cas_d41E_5+2
+                sta     cas_d41F+2
+                sta     cas_d41F_3+2
+                sta     cas_d41F_4+2
+                sta     cas_d41F_5+2
 //
                 lda     sptr_zp
                 clc
-                adc     #$18            // Voice 3 control at D418
-                sta     cas_d418+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_1+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_2+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_3+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_4+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d418_5+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$18            // +$18 = master volume / filter select
+                sta     cas_d418+1
+                sta     cas_d418_1+1
+                sta     cas_d418_2+1
+                sta     cas_d418_3+1
+                sta     cas_d418_4+1
+                sta     cas_d418_5+1
                 lda     sptr_zp
                 clc
-                adc     #$1D            // Voice 3 control at D418
-                sta     cas_d41D+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_1+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_2+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_3+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_4+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_5+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41D_6+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$1D            // +$1D = unused on a real SID; vendor config register
+                sta     cas_d41D+1
+                sta     cas_d41D_1+1
+                sta     cas_d41D_2+1
+                sta     cas_d41D_3+1
+                sta     cas_d41D_4+1
+                sta     cas_d41D_5+1
+                sta     cas_d41D_6+1
                 sta     cas_d41d7+1     // ARM2SID data3 read — was left hard-wired to $D41D
                 lda     sptr_zp
                 clc
-                adc     #$1b            // Voice 3 control at D418
-                sta     cas_d41B+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$1b            // +$1B = OSC3 - voice 3 waveform output (read-only)
+                sta     cas_d41B+1
                 lda     sptr_zp
                 clc
-                adc     #$1C            // Voice 3 control at D418
-                sta     cas_d41C+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$1C            // +$1C = ENV3 - voice 3 envelope output (read-only)
+                sta     cas_d41C+1
                 lda     sptr_zp
                 clc
-                adc     #$1E            // Voice 3 control at D418
-                sta     cas_d41E+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41E_3+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41E_4+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41E_5+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$1E            // +$1E = unused on a real SID; vendor config register
+                sta     cas_d41E+1
+                sta     cas_d41E_3+1
+                sta     cas_d41E_4+1
+                sta     cas_d41E_5+1
                 lda     sptr_zp
                 clc
-                adc     #$1F            // Voice 3 control at D418
-                sta     cas_d41F+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41F_3+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41F_4+1      // timing issue requieres runtime mod of upcodes.
-                sta     cas_d41F_5+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$1F            // +$1F = unused on a real SID; vendor config register
+                sta     cas_d41F+1
+                sta     cas_d41F_3+1
+                sta     cas_d41F_4+1
+                sta     cas_d41F_5+1
 // -- hack --
 
                 lda #0    // 
@@ -4149,6 +4161,10 @@ checkpdsid:
                 sty y_zp
                 pha
 
+                // Patch the operand bytes of the self-modifying accesses below
+                // from sptr_zp, so this routine can probe whichever SID slot
+                // the caller selected.  (Each line used to repeat the same
+                // 'timing issue requieres runtime mod of upcodes' comment.)
                 lda sptr_zp+1
                 sta cpds_d41D+2         // high byte → D41D instruction
                 sta cpds_d41E_w+2       // high byte → D41E write
@@ -4156,11 +4172,11 @@ checkpdsid:
 
                 lda sptr_zp
                 clc
-                adc #$1D                // offset $1D = voice3 freq lo (D41D)
+                adc #$1D                // +$1D = unused on a real SID; vendor config register
                 sta cpds_d41D+1
                 lda sptr_zp
                 clc
-                adc #$1E                // offset $1E = voice3 freq hi (D41E)
+                adc #$1E                // +$1E = unused on a real SID; vendor config register
                 sta cpds_d41E_w+1
                 sta cpds_d41E_r+1
 
@@ -4212,6 +4228,10 @@ checkskpico:
                 pha
                 lda #$00
                 sta skpico_fm       // default: no FM; set by Phase 3 if chip found
+                // Patch the operand bytes of the self-modifying accesses below
+                // from sptr_zp, so this routine can probe whichever SID slot
+                // the caller selected.  (Each line used to repeat the same
+                // 'timing issue requieres runtime mod of upcodes' comment.)
                 lda sptr_zp+1
                 sta cskp_d41F+2
                 sta cskp_d41E+2
@@ -4220,16 +4240,16 @@ checkskpico:
                 sta cskp_d41D_k+2
                 lda sptr_zp
                 clc
-                adc #$1F            // offset $1F = D41F
+                adc #$1F            // +$1F = unused on a real SID; vendor config register
                 sta cskp_d41F+1
                 lda sptr_zp
                 clc
-                adc #$1E            // offset $1E = D41E
+                adc #$1E            // +$1E = unused on a real SID; vendor config register
                 sta cskp_d41E+1
                 sta cskp_d41E2+1
                 lda sptr_zp
                 clc
-                adc #$1D            // offset $1D = D41D
+                adc #$1D            // +$1D = unused on a real SID; vendor config register
                 sta cskp_d41D_s+1
                 sta cskp_d41D_k+1
                 // Phase 1: identity via VERSION_STR
@@ -4481,6 +4501,10 @@ checkfpgasid:
     // When the value matches, FPGASID is identified.
     // set config mode.
 
+                // Patch the operand bytes of the self-modifying accesses below
+                // from sptr_zp, so this routine can probe whichever SID slot
+                // the caller selected.  (Each line used to repeat the same
+                // 'timing issue requieres runtime mod of upcodes' comment.)
                 lda     sptr_zp+1
                 sta     cfs_D419+2
                 sta     cfs_D419_1+2
@@ -4581,39 +4605,43 @@ checkrealsid:
 //                ldy     sptr_zp
 //                ldx     sptr_zp+1
                 
+                // Patch the operand bytes of the self-modifying accesses below
+                // from sptr_zp, so this routine can probe whichever SID slot
+                // the caller selected.  (Each line used to repeat the same
+                // 'timing issue requieres runtime mod of upcodes' comment.)
                 lda     sptr_zp+1
-                sta     crs_d412+2      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d412_1+2      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d412_2+2      // timing issue requieres runtime mod of upcodes.
+                sta     crs_d412+2
+                sta     crs_d412_1+2
+                sta     crs_d412_2+2
                 sta     crs_d412_retry+2  // patch retry stop-oscillator STA
-                sta     crs_d40f+2      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d40f_1+2      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b+2      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b_1+2      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b_2+2      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b_3+2      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b_4+2      // timing issue requieres runtime mod of upcodes.
+                sta     crs_d40f+2
+                sta     crs_d40f_1+2
+                sta     crs_d41b+2
+                sta     crs_d41b_1+2
+                sta     crs_d41b_2+2
+                sta     crs_d41b_3+2
+                sta     crs_d41b_4+2
 //
                 lda     sptr_zp
                 clc
-                adc     #$12            // Voice 3 control at D418
-                sta     crs_d412+1      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d412_1+1      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d412_2+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$12            // +$12 = voice 3 control (waveform + gate)
+                sta     crs_d412+1
+                sta     crs_d412_1+1
+                sta     crs_d412_2+1
                 sta     crs_d412_retry+1  // patch retry stop-oscillator STA
                 lda     sptr_zp
                 clc
-                adc     #$0f            // Voice 3 control at D418
-                sta     crs_d40f+1      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d40f_1+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$0f            // +$0F = voice 3 freq hi
+                sta     crs_d40f+1
+                sta     crs_d40f_1+1
                 lda     sptr_zp
                 clc
-                adc     #$1b            // Voice 3 control at D418
-                sta     crs_d41b+1      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b_1+1      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b_2+1      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b_3+1      // timing issue requieres runtime mod of upcodes.
-                sta     crs_d41b_4+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$1b            // +$1B = OSC3 - voice 3 waveform output (read-only)
+                sta     crs_d41b+1
+                sta     crs_d41b_1+1
+                sta     crs_d41b_2+1
+                sta     crs_d41b_3+1
+                sta     crs_d41b_4+1
                 
 // -- hack --
 // Retry up to 3 times: VIC bad-line DMA steals can corrupt timing on any
@@ -4707,33 +4735,37 @@ checksecondsid:
                 sta data1
 css_begin:                
                 // High byte
+                // Patch the operand bytes of the self-modifying accesses below
+                // from sptr_zp, so this routine can probe whichever SID slot
+                // the caller selected.  (Each line used to repeat the same
+                // 'timing issue requieres runtime mod of upcodes' comment.)
                 lda     sptr_zp+1
-                sta     css_d412_5+2      // timing issue requieres runtime mod of upcodes.
-                sta     css_d40f_5+2      // timing issue requieres runtime mod of upcodes.
-                sta     css_d412+2      // timing issue requieres runtime mod of upcodes.
-                sta     css_d40f+2      // timing issue requieres runtime mod of upcodes.
+                sta     css_d412_5+2
+                sta     css_d40f_5+2
+                sta     css_d412+2
+                sta     css_d40f+2
 
                 lda     mptr_zp+1
-                sta     css_d41b+2      // timing issue requieres runtime mod of upcodes.
-                sta     css_d41b_5+2      // timing issue requieres runtime mod of upcodes.
+                sta     css_d41b+2
+                sta     css_d41b_5+2
                 // low byte
                 lda     sptr_zp
                 clc
-                adc     #$12            // Voice 3 control at D418
-                sta     css_d412_5+1      // timing issue requieres runtime mod of upcodes.
-                sta     css_d412+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$12            // +$12 = voice 3 control (waveform + gate)
+                sta     css_d412_5+1
+                sta     css_d412+1
 
                 lda     mptr_zp
                 clc
-                adc     #$1b            // Voice 3 control at D41B
-                sta     css_d41b+1      // timing issue requieres runtime mod of upcodes.
-                sta     css_d41b_5+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$1b            // +$1B = OSC3 - voice 3 waveform output (read-only)
+                sta     css_d41b+1
+                sta     css_d41b_5+1
 
                 lda     sptr_zp
                 clc
-                adc     #$0f            // Voice 3 control at D40F
-                sta     css_d40f+1      // timing issue requieres runtime mod of upcodes.
-                sta     css_d40f_5+1      // timing issue requieres runtime mod of upcodes.
+                adc     #$0f            // +$0F = voice 3 freq hi
+                sta     css_d40f+1
+                sta     css_d40f_5+1
                 
 // -- hack --
 css_hack1:
@@ -5252,7 +5284,7 @@ s_s_arm_mir_go:
        // test bit in a prior checkrealsid and hasn't had time to recover.
        lda sid_list_l,x
        clc
-       adc #$0F               // found_sid+$0F = voice3 freq_hi
+       adc #$0F               // +$0F = voice 3 freq hi
        sta s_s_arm_mir_fh+1
        sta s_s_arm_mir_fhz+1
        sta s_s_arm_mir_fhz2+1
@@ -5683,7 +5715,7 @@ fll_checks:
        // Pre-patch mptr+$1B read instruction used by BOTH checks below.
        lda mptr_zp
        clc
-       adc #$1B            // mptr + $1B = voice 3 waveform output
+       adc #$1B            // +$1B = OSC3 - voice 3 waveform output (read-only)
        sta fll_mread+1
        sta fll_cread+1
        lda mptr_zp+1
@@ -5712,7 +5744,7 @@ fll_mlp:
 fll_mlp_go:
        lda sid_list_l,x
        clc
-       adc #$12            // found SID[x] + $12 = voice 3 control
+       adc #$12            // +$12 = voice 3 control (waveform + gate)
        sta fll_menbl+1
        sta fll_mclra+1
        sta fll_mclrb+1
@@ -6765,6 +6797,10 @@ sfx_pop_done:   rts
 //--------------------------------------------------------------------------------------------------
 sfx_probe_skpico:
                 // Patch self-modifying addresses with secondary SID base
+                // Patch the operand bytes of the self-modifying accesses below
+                // from sptr_zp, so this routine can probe whichever SID slot
+                // the caller selected.  (Each line used to repeat the same
+                // 'timing issue requieres runtime mod of upcodes' comment.)
                 lda sptr_zp+1
                 sta sfx_skp_f+2
                 sta sfx_skp_e1+2
@@ -9485,6 +9521,10 @@ info_page_hi:
     .byte >ip_sidfx,    >ip_ulti,    >ip_vice,     >ip_hoxs
     .byte >ip_sidkpic,  >ip_pubdom,  >ip_backsid,  >ip_kungfusid
     .byte >ip_unknown,  >ip_usid64,  >ip_fmyam
+info_page_hi_end:
+// Compile-time guard: INFO_PAGE_MAX (declared near the top, where the wrap
+// logic can see it) must agree with the real length of this table.
+.errorif (info_page_hi_end - info_page_hi) != INFO_PAGE_MAX + 1, "INFO_PAGE_MAX is out of step with the info_page_* tables - add the new page to both tables and bump the constant"
 
 // Navigation hint shown at row 24 of all info pages
 info_nav_hint:
@@ -10616,6 +10656,10 @@ checkbacksid:
                 sty y_zp
                 pha
                 // patch self-modifying addresses for D41C..D41F (D41B via (sptr_zp),y)
+                // Patch the operand bytes of the self-modifying accesses below
+                // from sptr_zp, so this routine can probe whichever SID slot
+                // the caller selected.  (Each line used to repeat the same
+                // 'timing issue requieres runtime mod of upcodes' comment.)
                 lda sptr_zp+1
                 sta cbs_d41C+2
                 sta cbs_d41D+2
@@ -10624,7 +10668,7 @@ checkbacksid:
                 sta cbs_pre+2       // also patch the pre-check read
                 lda sptr_zp
                 clc
-                adc #$1C            // $1C = D41C offset
+                adc #$1C            // +$1C = ENV3 - voice 3 envelope output (read-only)
                 sta cbs_d41C+1
                 adc #$01
                 sta cbs_d41D+1

@@ -26,9 +26,23 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
-KICKASS="java -jar C:/debugger/kickasm/KickAss.jar"
-VICE="C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
+# Tool locations come from the single source of truth shared with the Makefile
+# and scripts/toolpaths.py.  Keeping a private copy here is what produced commit
+# 63659cd ("fix: correct stale Python path in ci_test.sh").
+# shellcheck disable=SC1091
+. "$ROOT/toolpaths.env"
+KICKASS="java -jar $KICKASS_JAR"
+VICE="$VICE_X64SC"
 PYTHON="python"
+
+for _tool in "$KICKASS_JAR" "$VICE"; do
+    if [ ! -f "$_tool" ]; then
+        echo "ERROR: required tool not found:" >&2
+        echo "         $_tool" >&2
+        echo "       Fix the path in $ROOT/toolpaths.env" >&2
+        exit 1
+    fi
+done
 # No EXPECTED_PASS constant here any more: the suite reports its own total at
 # $07E9 alongside the pass count at $07E8, and we compare the two. Adding a
 # test used to require editing this number, the `cmp` in test_suite.asm and the

@@ -587,6 +587,7 @@
 .label cfm_body=$4ec3
 .label MODE8580=$594b
 .label s_s_arm_mir_lp=$4515
+.label info_page_hi_end=$6254
 .label nts_digit=$95bd
 .label checktypeandprint=$54fd
 .label dbg_print_sw_lcr=$3321

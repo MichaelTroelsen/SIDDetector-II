@@ -11,7 +11,7 @@ import argparse, os, re, socket, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
+VICE = __import__("toolpaths").VICE
 PRG = os.path.join(ROOT, "siddetector.prg")
 DETECT_WAIT = 22.0  # wait for siddetector to finish detection (matches variant_smoke)
 PAINT_WAIT = 10.0   # wait for Q-page paint (decay measurement is slow)

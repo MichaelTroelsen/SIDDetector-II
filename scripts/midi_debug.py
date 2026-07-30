@@ -3,7 +3,7 @@
 several wait intervals to locate where startup is stalling."""
 import os, re, socket, subprocess, sys, time
 
-VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
+VICE = __import__("toolpaths").VICE
 PRG  = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "siddetector.prg"))
 PORT = 6502
 

@@ -587,6 +587,7 @@ al C:3f5b .cas_d41E_4
 al C:4ec3 .cfm_body
 al C:594b .MODE8580
 al C:4515 .s_s_arm_mir_lp
+al C:6254 .info_page_hi_end
 al C:95bd .nts_digit
 al C:54fd .checktypeandprint
 al C:3321 .dbg_print_sw_lcr

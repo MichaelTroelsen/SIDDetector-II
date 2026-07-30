@@ -3,7 +3,7 @@ import os, re, socket, subprocess, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
+VICE = __import__("toolpaths").VICE
 PRG = os.path.join(ROOT, "siddetector.prg")
 DETECT_WAIT = 22.0
 

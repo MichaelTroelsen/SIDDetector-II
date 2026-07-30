@@ -1,8 +1,13 @@
-KICKASS   = java -jar C:/debugger/kickasm/KickAss.jar
-# Patched VICE 3.9 with -sidvariant personality layer (see docs/ARMSID_PROXY_PLAN.md).
-# Fall back to the upstream 3.7 install at C:/winvice/bin/x64sc.exe if the
-# patched build is not present.
-VICE      = C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe
+# Tool locations live in ONE place, shared with scripts/ci_test.sh and every
+# Python harness via scripts/toolpaths.py.  They were previously copy-pasted
+# here, into ci_test.sh and into 15 separate scripts, and they drifted — see
+# commit 63659cd, "fix: correct stale Python path in ci_test.sh".
+include toolpaths.env
+
+KICKASS   = java -jar $(KICKASS_JAR)
+# Patched VICE 3.9 with the -sidvariant personality layer; stock VICE does not
+# understand -sidvariant (see docs/ARMSID_PROXY_PLAN.md).
+VICE      = $(VICE_X64SC)
 U64REMOTE = .\bin\u64remote.exe
 U64C64    = .\bin\c64u
 U64IP     = 192.168.1.64
@@ -182,7 +187,8 @@ $(TEST_SUITE_PRG): $(TEST_SUITE_SRC)
 # Run tests headlessly in VICE and gate on pass count (all 43 must pass).
 # VICE opens briefly with -remotemonitor on a dynamically chosen free port;
 # scripts/vice_monitor.py connects, breakpoints td_spin, saves $07E8
-# (pass_count) to tests/ci_result.bin, then quits.  tests/ci.mon is NOT used.
+# (pass_count) to tests/ci_result.bin, then quits.  No -moncommands file is
+# involved; the old tests/ci*.mon recipes are retired in tests/attic/.
 ci: python_tests
 	bash scripts/ci_test.sh
 	@echo ""
@@ -194,6 +200,7 @@ python_tests:
 	@echo "=== Python host tests ==="
 	@python tests/test_hw_snapshot.py
 	@python tests/test_variant_render.py
+	@python tests/test_c64screen.py
 
 # Full regression: unit tests + variant golden diff.  Use this as the pre-PR
 # / pre-release gate.  scripts/variant_smoke.py runs 30 cases; budget ~10-16

@@ -806,10 +806,13 @@ hand-expanding the recipes in a shell.
 | P2-11 | `arm2sid_populate_sid_list` bounds guard | **fixed** - all 7 slot stores guard on `sidnum_zp >= 8` |
 | P3-1 | Dead code / stray artifacts | fixed - unreachable `rts`, `scope_col_lo`, `KBDLOOP_ORIG`, `monlog_out.txt` |
 | P4-1/2/3/4 | Doc + comment drift | fixed - counts corrected across 9 files; source header, BackSID protocol, `tlr_sweep` gate rewritten from the code |
-| P2-4 | Tool paths duplicated in 3 files | **not done** - wants a `paths.mk` / env decision |
+| P2-4 | Tool paths duplicated in 3 files | **fixed** - it was **17** files, not 3. One `toolpaths.env` is now included by the Makefile, sourced by ci_test.sh and parsed by scripts/toolpaths.py; a bad path fails with one clear message from one place |
 | P2-7 | `txs`/`tsx` register-save with IRQs on | **fixed** - 19 print-dispatch sites now use a `plot_x_save` slot; readkey2's SP reset and calcandloop's tail-call trick deliberately untouched |
-| P2-10 | Two divergent screen decoders | **not done** - would change golden text; only the `*` mapping was added (P0-4) |
-| P3-2..P3-6 | Comment noise, magic constants, helpers | **not done** - pure cleanup |
+| P2-10 | Two divergent screen decoders | **fixed** - one `scripts/c64screen.py` built on "$20-$3F are ASCII-identical"; 11 tests, and no golden changed |
+| P3-2 | Copy-paste comment noise in patch blocks | **fixed** - 78 duplicated comments stripped, **21 actively wrong** register labels corrected (they all said "Voice 3 control at D418", including for $0F/$12/$1B-$1F); binary byte-identical |
+| P3-3 | Magic `#18` for the info-page count | **fixed** - `INFO_PAGE_MAX` + an `.errorif` that fails the build if it drifts from the pointer tables (positive-controlled) |
+| P3-6 | Dead `.mon` files in tests/ | **fixed** - 6 unreferenced recipes moved to `tests/attic/` with a README saying why; `tests/` now holds only the 4 live ones |
+| P3-4 | Extract a `sid_list_append` helper | **not done, deliberately** - see below |
 
 **Variant sweep - before and after the P0-1 fix:**
 
@@ -868,13 +871,42 @@ compared 43 against 43 and passed — silently, with three tests dead. That is
 the concrete payoff of P2-5, and it is worth remembering when adding a test:
 **chain the previous test's success `jmp` to the new label.**
 
+### Why P3-4 (`sid_list_append`) was left alone
+
+It would fold six near-identical "bounds-check, inx, store l/h/t" sequences into
+one helper and save perhaps 80 bytes. I skipped it on purpose: those six sites
+sit in the most delicate code in the program - `s_s_add`, the `fll_*` paths,
+`uca_found`, `tls_no_append`, `arm2sid_populate_sid_list` - and the bounds
+policy they share is already uniform since P2-11. So the remaining benefit is
+byte count and tidiness, against a real risk of disturbing list construction in
+a path the emulator exercises only partially. Not a good trade at this point;
+worth doing in a session that starts with it rather than ends with it.
+
 ### Remaining order
+
+Everything reachable from this machine is done. What is left needs hardware or
+is a deliberate non-goal:
 
 1. **`make hw_test` on the U64** - re-confirm Tuneful Eight still reports 8/8
    after the P0-1 change. `ufs_chk_u64` is designed to keep it byte-identical,
-   but only hardware can prove it. This is the one item gating a release.
-2. **P0-5** - D5xx ARMSID / SwinSID U naming. Needs the real ARMSID: either the
-   proxy does not implement DIS at a secondary base, or the probe needs a
-   different sequence there. Not answerable from the emulator.
-3. P2-4 (one source for tool paths), P2-10 (one shared screen decoder),
-   P3-2/3/4/5/6 (comment noise, magic constants, `sid_list_append` helper).
+   so this is a regression check on a feature already verified 3/3, not a hunt
+   for something suspected broken. The user reports this rig takes days to set
+   up, so it is a release gate rather than a blocker on the code.
+2. **P0-5** - D5xx ARMSID / SwinSID U naming. Now root-caused (see above): the
+   proxy answers DIS correctly and `s_s_arm_chk`'s cross-read rejects the slot
+   on residual OSC3 before the probe runs. The fix is a mirror-detection
+   heuristic change and wants the MixSID rig to validate.
+3. **P3-4** (`sid_list_append`) - skipped on a risk/benefit judgement, see the
+   section above.
+
+Also worth knowing for whoever picks this up: **16 ad-hoc scripts in `scripts/`
+still call `taskkill /F /IM x64sc.exe`**, the same "kills every VICE on the
+machine" problem fixed in `ci_test.sh` and `variant_smoke.py` under P2-1. They
+are one-off debug tools, so the blast radius is limited to whoever runs them
+while an interactive session is open, but the list is:
+`debug_04aa.py eight_sid_smoke.py main_screen_dump.py midi_debug.py
+pdsid_probe.py q_page_smoke.py tracker_exit_test.py tracker_smoke.py
+tracker_switch_smoke.py tracker_timelapse.py u64_tuneful_eight_test.py
+vice_banner_direct.py vice_banner_snap.py vice_coldboot_test.py
+vice_diag_space.py vice_restart_test.py`. Each needs its `Popen` handle
+threaded to the kill, which is why it was not done mechanically here.

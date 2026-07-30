@@ -3,7 +3,7 @@
 import os, sys, time, socket, subprocess, re
 import win32gui, win32con, pyautogui
 HERE=os.path.dirname(os.path.abspath(__file__));ROOT=os.path.dirname(HERE)
-VICE=r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe";PRG=os.path.join(ROOT,"siddetector.prg")
+VICE=__import__("toolpaths").VICE;PRG=os.path.join(ROOT,"siddetector.prg")
 PORT=6502;SHOT=os.environ.get("TMP","/tmp")
 
 def connect():

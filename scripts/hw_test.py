@@ -32,6 +32,8 @@ With --scenario: additionally verifies that the detected chip types and
 """
 
 import subprocess, sys, time, re, argparse, configparser
+
+import c64screen
 from datetime import datetime
 from pathlib import Path
 
@@ -110,21 +112,15 @@ def read_mem_range(addr, count):
     return bytes(read_mem_byte(addr + i) for i in range(count))
 
 def decode_screen(row_bytes):
-    """Screen-code → ASCII for one row (matches scripts/variant_smoke.py)."""
-    out = []
-    for c in row_bytes:
-        if c in (0x20, 0x00):       out.append(' ')
-        elif 0x01 <= c <= 0x1A:     out.append(chr(0x40 + c))
-        elif 0x30 <= c <= 0x39:     out.append(chr(c))
-        elif c == 0x2E:             out.append('.')
-        elif c == 0x3A:             out.append(':')
-        elif c == 0x2F:             out.append('/')
-        elif c == 0x28:             out.append('(')
-        elif c == 0x29:             out.append(')')
-        elif c == 0x3D:             out.append('=')
-        elif c == 0x2D:             out.append('-')
-        else:                        out.append('.')
-    return ''.join(out).rstrip()
+    """Screen-code -> ASCII for one row.
+
+    Delegates to scripts/c64screen.py, which is shared with variant_smoke.py.
+    The private copy this replaced claimed in its docstring to match
+    variant_smoke's, but did not: it had ( ) = and lacked + and *, while
+    variant_smoke had + and * and lacked ( ) =.
+    """
+    return c64screen.decode_row(row_bytes)
+
 
 # ---------------------------------------------------------------------------
 # Symbol resolution

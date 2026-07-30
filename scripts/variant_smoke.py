@@ -23,9 +23,16 @@ Usage:
 """
 import os, re, socket, subprocess, sys, time
 
+import c64screen
+import toolpaths
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
+# Path comes from toolpaths.env (shared with the Makefile and ci_test.sh).  It is
+# read as a plain string here and only validated at first use in
+# _launch_and_capture, so host-only tests can import this module on a machine
+# with no emulator installed.
+VICE = toolpaths.VICE
 PRG  = os.path.join(ROOT, "siddetector.prg")
 
 # Readiness is polled rather than slept through.  The old code slept a flat
@@ -278,18 +285,13 @@ def dump_screen(path, port):
 
 
 def decode(row_bytes):
-    def dec(c):
-        if c in (0x20, 0x00): return " "
-        if 0x01 <= c <= 0x1A: return chr(ord('A') + c - 1)
-        if 0x30 <= c <= 0x39: return chr(c)
-        if c == 0x2E: return "."
-        if c == 0x3A: return ":"
-        if c == 0x2F: return "/"
-        if c == 0x2B: return "+"
-        if c == 0x2D: return "-"
-        if c == 0x2A: return "*"   # print_retry_star; see strip_retry_star()
-        return "."
-    return "".join(dec(b) for b in row_bytes).rstrip()
+    """Decode one screen row. Shared with hw_test.py via scripts/c64screen.py.
+
+    This was a private table that had drifted out of step with hw_test's copy —
+    each had characters the other lacked, and anything unmapped became '.', which
+    is how a retry '*' came to read as '.' (see strip_retry_star below).
+    """
+    return c64screen.decode_row(row_bytes)
 
 
 def strip_retry_star(line):
@@ -390,6 +392,7 @@ def _terminate(proc):
 
 
 def _launch_and_capture(name, args):
+    toolpaths.vice()            # validate here, not at import (see VICE above)
     port = _free_port()
     # `-default` resets every VICE resource to its default *before* per-test
     # flags are applied.  Without it, persistent settings written by
