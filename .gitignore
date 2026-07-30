@@ -44,3 +44,9 @@ __pycache__/
 # Per-run U64 test artifacts (snapshot before-test, JSON of cfg after-convert)
 bin/_u64_pretest_backup.json
 bin/tt8-ultimate.json
+
+# tokensave local index - rebuildable cache, not shared state.
+.tokensave/
+
+# VICE monitor capture left behind by ad-hoc debugging runs
+/monlog_out.txt

@@ -86,7 +86,7 @@ make run-midi-maplin       # Maplin @ $DF00
 
 # Regression harnesses
 make ci                # 32-case unit tests in VICE monitor (~30 s)
-make ci-full           # above + golden-diff across all 14 variants (~4 min)
+make ci-full           # above + golden-diff across all 30 variant cases (~10-16 min)
 make test-variants     # standalone variant-only sweep
 make update-variant-goldens    # after intentional UI / personality change
 ```

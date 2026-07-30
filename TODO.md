@@ -13,6 +13,21 @@
       still have multi-SID hardware; uses direct `checkrealsid` for chip
       typing because `uci_type_for_addr` hangs in its FIFO drain loop when
       UCI is unresponsive.
+      **Post-V1.5.05 correction:** dropping the `is_u64` gate meant the scan
+      also ran on plain C64s, where it stamped an ULTISID curve code ($20/$22)
+      on *every* independent slot it found in `$D4xx-$D7xx` — so an ordinary
+      second 8580, an ARMSID or a SwinSID U in a stereo cartridge all reported
+      as a U64 UltiSID, and because this scan runs before the family sweeps
+      their address dedup locked that answer in. The scan now records the type
+      it actually measured plus a per-slot `sid_prov` "provisional" flag; the
+      family sweeps refine the type **in place** while that flag is set
+      (`s_s_dup_lp`, `fll_dup_lp` → `fll_refine`); and when `is_u64` is set
+      (probe or the `sidnum >= 4` heuristic) `ufs_chk_u64` converts the
+      provisional entries to the ULTISID curve codes, so Tuneful Eight is
+      unchanged. Fixing this also exposed two self-comparison bugs — both
+      mirror checks were testing the candidate against itself once it carried a
+      real `$01`/`$02` type — see `CODE-REVIEW.md` P0-1.
+      *Still needs a `make hw_test` on the U64 to re-confirm 8/8 detection.*
 - [ ] **EMUSID (new)** — Planned chip family (TBD vendor / protocol).
       Add detection stub + TODO.md placeholder once the magic-cookie
       spec is published; wire it through `sidstereo_print` + info page.
@@ -20,7 +35,7 @@
 - [x] **OPL sound test** — V1.4.13+: Sound test (T) plays the same 7-note C-major arpeggio (`C E G C G E C`) across 3 octaves per instrument, matching SID's 3-voice pattern. Three FM instruments: Flute (pure sine, no FM), Organ (FM sustained w/ feedback), Bell (FM percussive). Global OPL init sequence (`$01=$20`, `$08=$00`, `$BD=$C0`) per XeNTaX edlib player. V1.4.14: SID pulse width table reorder fix — pulse was silent after waveform reorder. V1.4.15: three FM instruments added.
 - [x] **KungFuSID** — Detected via D41D echo: write $A5, read back. Old firmware returns $A5 (register echo); new firmware returns $5A (FW_UPDATE_START_ACK). Both accepted. Detection placed after all other hardware checks (position 5b). `data1=$0C`.
 - [x] **SIDKick-pico** — Detected via config mode VERSION_STR: write $FF to D41F, $E0 to D41E, skip 20 bytes from D41D, read 'S'/$53 + 'K'/$4B (data1=$0B)
-- [x] **BackSID** — Detected via register echo: write $42 to D41C, $B5 to D41D, $1D to D41E, read D41F; if D41F==$42 → BackSID (data1=$0A)
+- [x] **BackSID** — Detected via unlock + polled echo (`checkbacksid`, protocol reverse-engineered from `bin/backsid.prg`): cold-read D41F first and bail if it already reads $01 (NOSID/U64 bus artifact), then write D41B=$02, D41C=$01, D41D=$B5, D41E=$1D and poll up to 15× — re-arming D41B=$02 and waiting ~42 ms each pass — until D41F echoes $01 → BackSID (data1=$0A). (The older "write $42 to D41C … D41F==$42" description never matched the code.)
 - [x] **PD SID** — Detected via register echo: write 'P' to D41D, 'D' to D41E, read 'S' from D41E (data1=$09)
 
 ## Features
@@ -117,7 +132,7 @@
 
 ## Testing
 
-### Covered by test suite (tests/test_suite.asm — 35 tests)
+### Covered by test suite (tests/test_suite.asm — 43 tests)
 - [x] Machine type dispatch: C64 / C128 / TC64 (T01–T03)
 - [x] SIDFX dispatch: found / not found (T04–T05)
 - [x] Swinsid Ultimate dispatch: data1=$04 (T06)
@@ -143,6 +158,10 @@
 - [x] SKpico FM Sound Expander: skpico_fm=$04 (T30) / $05 (T31)
 - [x] FM-YAM OPL2: fmyam_detected=$01 (T32)
 - [x] Q-page band lookup: score=0 → AWFUL (T33) / score=5 → BEST (T34) / score=$FF → BAD clamp (T35) — added V1.5.02 with the Quality Fingerprint page. Stale CBM SFX dispatch tests at the old T33/T34 indices were retired in V1.4.22 with the live `$DE00` probe.
+- [x] `sid_type_index` code→slot resolver (T36–T43): $01→1, $02→2 (guards the V1.5.04 6581/8580 swap), $08→3 (Nano fold), $09→8 (PDsid), $0E→13 (SKpico-6581 mismap), $30→15 (SIDFX), $F0→16 (NoSID), $0F→0 (UNKWN fallback). This is the shared resolver behind BOTH the debug page's long names and the Q page's short names, so a wrong slot mislabels chips on two screens at once.
+
+### Host-side Python tests (`make python_tests`, no emulator)
+- [x] `tests/test_hw_snapshot.py` — guards `hw_test.py`'s sid_list snapshot against the slot-8 blind spot (sid_list_* have 9 entries and the U64 Tuneful Eight fills slots 1–8; the reader used to stop at index 7 and silently drop the last SID from every stability comparison).
 
 ### Not yet testable in VICE (require real hardware)
 - [x] `Checkarmsid` hardware probe — user-confirmed 2026-04-19 / V1.4.27; see P01 in docs/teststatus.md

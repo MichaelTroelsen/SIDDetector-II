@@ -188,7 +188,7 @@ x                    — exit monitor (run freely)
 ## Unit tests
 
 ```bash
-make test_suite      # 35 tests — all should pass ($23 at $07E8)
+make test_suite      # 43 tests — all should pass ($2B at $07E8)
 make test            # arithmetic tests only
 make test_dispatch   # dispatch logic tests only
 ```

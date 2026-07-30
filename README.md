@@ -353,7 +353,7 @@ make stereo-fpgasid   make stereo-sidfx
 
 # Regression harnesses
 make ci               # 32 unit tests       (~30 s)
-make ci-full          # ci + 14 variant goldens  (~4 min)
+make ci-full          # ci + 30 variant goldens  (~10-16 min)
 make test-variants    # variant sweep alone
 make update-variant-goldens    # after intentional UI or personality change
 ```
@@ -378,7 +378,7 @@ This makes CI exercise every chip family without plugging anything into a
 real C64.  The window title shows the active personality (e.g. `VICE
 (C64SC)  [SidVariant=sidfx]`) so you always know what's loaded.
 
-`make ci-full` runs 32 unit tests + a 14-case variant sweep that byte-diffs
+`make ci-full` runs 43 unit tests + a 30-case variant sweep that byte-diffs
 each variant's detection screen against a stored *golden* (in
 `tests/variant_goldens/`).  If a regression changes what a variant looks
 like, the diff is printed and CI fails loudly.

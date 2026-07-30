@@ -43,13 +43,56 @@ if [ "$BRANCH" != "master" ]; then
     exit 1
 fi
 
-# Warn about untracked/modified files that aren't ours to change
-DIRTY=$(git status --porcelain | grep -v '^\?\?' | grep -v '^[ M]' || true)
+# Warn about changes that this release will NOT carry.
+#
+# Stage 6 stages an explicit file list. Anything dirty outside that list is
+# silently left behind, which is the failure worth catching here.
+#
+# The previous check was:
+#     git status --porcelain | grep -v '^??' | grep -v '^[ M]'
+# `^[ M]` drops every line whose first status column is a space or 'M' — that
+# is both unstaged AND staged modifications — and `^??` drops untracked. The
+# result was empty for essentially every real working tree, so this guard has
+# never actually fired.
+RELEASE_PATHS=(
+    siddetector.asm siddetector.prg siddetector.dbg siddetector.sym siddetector.vs
+    Makefile README.md TODO.md
+    docs/CHIPS.md docs/debug.md docs/teststatus.md docs/MEMORYMAP.md
+    tests/test_suite.prg tests/test_suite.dbg tests/test_suite.sym tests/test_suite.vs
+    .version
+)
+
+is_release_path() {
+    local candidate="$1" rp
+    for rp in "${RELEASE_PATHS[@]}"; do
+        [ "$candidate" = "$rp" ] && return 0
+    done
+    return 1
+}
+
+DIRTY=""
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    path="${line:3}"          # porcelain v1: two status columns + a space
+    path="${path##* -> }"     # renames render as "R  old -> new"
+    path="${path%\"}"; path="${path#\"}"
+    if ! is_release_path "$path"; then
+        DIRTY="${DIRTY}${line}"$'\n'
+    fi
+done < <(git status --porcelain)
+
 if [ -n "$DIRTY" ]; then
-    echo "WARNING: working tree has staged/untracked changes:"
-    echo "$DIRTY"
-    read -rp "Continue anyway? [y/N] " CONFIRM
-    [[ "$CONFIRM" =~ ^[Yy]$ ]] || exit 1
+    echo "WARNING: the following changes are NOT in the release commit list and"
+    echo "         will be left out of ${0##*/}'s commit:"
+    printf '%s' "$DIRTY"
+    if [ -t 0 ]; then
+        read -rp "Continue anyway? [y/N] " CONFIRM
+        [[ "$CONFIRM" =~ ^[Yy]$ ]] || exit 1
+    else
+        echo "ERROR: non-interactive shell — refusing to release with unrelated" >&2
+        echo "       changes present. Commit, stash, or clean them first." >&2
+        exit 1
+    fi
 fi
 
 # ---- 2. Clean build --------------------------------------------------------
@@ -86,7 +129,8 @@ git add \
     TODO.md \
     docs/CHIPS.md \
     docs/debug.md \
-    docs/teststatus.md
+    docs/teststatus.md \
+    docs/MEMORYMAP.md
 
 # Stage test outputs if they changed
 git add tests/test_suite.prg tests/test_suite.dbg \

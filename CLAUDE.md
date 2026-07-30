@@ -13,7 +13,7 @@ make             # assemble siddetector.asm → siddetector.prg using KickAssemb
 make run         # launch detector in the patched WinVICE 3.9
 make run-armsid  # launch with ARMSID personality at D400  (see Makefile for full list)
 make ci          # unit tests (43 cases) + MEMORYMAP.md drift check
-make ci-full     # unit tests + golden-diff sweep across all 14 variants
+make ci-full     # unit tests + golden-diff sweep across all 30 variant cases
 make clean       # remove siddetector.prg
 ```
 
@@ -85,7 +85,7 @@ synthesises audio.
 
 This lets CI exercise every chip family without hardware:
 - `make run-<variant>` / `make stereo-<variant>` — one-shot interactive launch.
-- `make test-variants` — 14-case headless sweep, pass/fail per variant.
+- `make test-variants` — 30-case headless sweep, pass/fail per variant.
 - `make ci-full` — unit tests + variant golden diff; pre-PR gate.
 - `tests/variant_goldens/*.txt` — reference screen dumps per variant.
 - `patches/vice-sidvariant-v1.patch` — the source diff against pristine VICE 3.9.

@@ -101,7 +101,7 @@ Then `make ci-full` should produce:
 
 ```
 === CI: pass count = 35 / 35 ===
-PASS: all 35 tests passed.
+PASS: all 43 tests passed.
 
 === SidVariant golden-diff sweep ===
   PASS  none            r06: ... 8580 FOUND
