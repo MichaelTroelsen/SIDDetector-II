@@ -807,7 +807,7 @@ hand-expanding the recipes in a shell.
 | P3-1 | Dead code / stray artifacts | fixed - unreachable `rts`, `scope_col_lo`, `KBDLOOP_ORIG`, `monlog_out.txt` |
 | P4-1/2/3/4 | Doc + comment drift | fixed - counts corrected across 9 files; source header, BackSID protocol, `tlr_sweep` gate rewritten from the code |
 | P2-4 | Tool paths duplicated in 3 files | **not done** - wants a `paths.mk` / env decision |
-| P2-7 | `txs`/`tsx` register-save with IRQs on | **not done** - ~25 sites, timing-sensitive, no active bug |
+| P2-7 | `txs`/`tsx` register-save with IRQs on | **fixed** - 19 print-dispatch sites now use a `plot_x_save` slot; readkey2's SP reset and calcandloop's tail-call trick deliberately untouched |
 | P2-10 | Two divergent screen decoders | **not done** - would change golden text; only the `*` mapping was added (P0-4) |
 | P3-2..P3-6 | Comment noise, magic constants, helpers | **not done** - pure cleanup |
 
@@ -829,6 +829,25 @@ Both intermittent cases seen mid-pass have been dealt with: `sidfx` was the
 retry star (P0-4, now normalised out of the golden and covered by tests) and
 `stereo-DE00-swinu` was the 12-second-poll perturbation (P0-4's sibling, fixed
 by raising MIN_WAIT to 22 s).
+
+### P2-7 note - why the emulator was enough here
+
+Unlike P0-5, this one did not need hardware. The `txs`/`tsx` sites *are* the
+result-print dispatch, so their observable behaviour is precisely the screen the
+30 goldens capture byte for byte. `skpico-6581` is the sharpest case: at
+`cskp_disp` the restored X is actually consumed (`cpx #$0E` picks the 6581 vs
+8580 string), so a broken save shows up immediately as the wrong chip name.
+
+The transformation is flag-preserving, which is what makes it mechanical: `txs`
+sets no flags and neither does `stx`; `tsx` sets N/Z from the value transferred
+and so does `ldx`. Two sites are deliberately left alone - `readkey2`'s
+`ldx #$FF / txs` (a real SP reset, not a save) and `calcandloop`'s trick, which
+is safe because it tail-calls out via `jmp` and never returns.
+
+One site (the ARM2SID branch) turned out to have a `txs` whose matching `tsx`
+sat *after* a `jmp end` and was therefore unreachable: it parked a screen row
+number in SP and never restored it, which is exactly why `readkey2` needs its
+repair. That dead `tsx` is gone and the save is now a plain store.
 
 ### Two things the test pass taught me (worth keeping in mind)
 
@@ -857,8 +876,5 @@ the concrete payoff of P2-5, and it is worth remembering when adding a test:
 2. **P0-5** - D5xx ARMSID / SwinSID U naming. Needs the real ARMSID: either the
    proxy does not implement DIS at a secondary base, or the probe needs a
    different sequence there. Not answerable from the emulator.
-3. P2-7 (`txs`/`tsx` sweep) as a single commit gated on a full golden run. ~25
-   sites in timing-sensitive code with no active bug behind it, so it is
-   deliberately last: the downside of getting it wrong exceeds the upside.
-4. P2-4 (one source for tool paths), P2-10 (one shared screen decoder),
+3. P2-4 (one source for tool paths), P2-10 (one shared screen decoder),
    P3-2/3/4/5/6 (comment noise, magic constants, `sid_list_append` helper).

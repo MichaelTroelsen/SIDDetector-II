@@ -216,23 +216,33 @@ init_sid_list:                          // zero the 9-slot SID result tables (A=
                 jsr checkpalntsc
                 lda $02a6               // read KERNAL PAL/NTSC variable
                 beq cntsc               // 0 = NTSC
-                txs                     // KERNAL cursor call uses X/Y; TXS preserves X
+                // X is preserved across the KERNAL PLOT call in a plain save
+                // slot.  This used to be `txs` ... `tsx`, i.e. it parked X in
+                // the STACK POINTER.  During detection interrupts are often
+                // enabled (palntsc and checkrealsid both end in cli), so an IRQ
+                // arriving while SP held a screen row number (as low as 2) would
+                // push through the bottom of page 1 and wrap.  It survived only
+                // because nothing else owned page 1, and it is why readkey2 has
+                // to repair SP with `ldx #$FF / txs` before enabling the raster
+                // IRQ.  (calcandloop keeps the trick deliberately - it tail-calls
+                // out via jmp and never returns, so its SP clobber is harmless.)
+                stx plot_x_save
                 ldx #13                 // row 13 = "pal/ntsc..:" screen line
                 ldy #13                 // col 13 = result field
                 clc
                 jsr $E50C               // KERNAL $E50C: position cursor (row=X, col=Y)
-                tsx
+                ldx plot_x_save
                 lda #<pal_text
                 ldy #>pal_text
                 jsr  $AB1E              // KERNAL $AB1E: print zero-terminated PETSCII string
                 jmp check_cbmtype
 cntsc:
-                txs
+                stx plot_x_save
                 ldx #13
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<ntsc_text
                 ldy #>ntsc_text
                 jsr  $AB1E
@@ -243,12 +253,12 @@ cntsc:
 // non-$FF but leaves $D0FE as open bus ($FF), so za7 = $FF -> C64 (correct).
 check_cbmtype:
                 jsr check128
-                txs
+                stx plot_x_save
                 ldx #13                 // same row as PAL/NTSC; col 30 for machine label
                 ldy #30
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda za7
                 cmp #$FF
                 bne c128_c128           // not $FF -> check C128 vs TC64
@@ -349,12 +359,12 @@ step0_real_skip:
                 lda data1
                 cmp #$0D
                 bne csn_not_usid64      // not uSID64 → confirmed SwinSID Nano
-                txs
+                stx plot_x_save
                 ldx #$0E               // row 14 = "USID64.....:"
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<usid64f
                 ldy #>usid64f
                 jsr $AB1E
@@ -374,12 +384,12 @@ step1_sidfx:
                 bne nosidfxl
                 lda #$30
                 sta data4              // remember SIDFX was found
-                txs
+                stx plot_x_save
                 ldx #12                // row 12 = "sidfx......:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<sidfxu
                 ldy #>sidfxu
                 jmp sidfxprint
@@ -512,12 +522,12 @@ step2_after_armsid:
                 ldx data1
                 cpx #04                // $04 = 'S' in D41B -> Swinsid Ultimate
                 bne armsid
-                txs
+                stx plot_x_save
                 ldx #03                // row 3 = "swinsid...:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<swinsidUf
                 ldy #>swinsidUf
                 jsr $AB1E
@@ -537,7 +547,7 @@ armsid:
                 cmp #$03               // firmware major version 3 -> ARM2SID confirmed
                 bne armsidlo
                 // ARM2SID confirmed (armsid_major=$03)
-                txs
+                stx plot_x_save
                 ldx #02                // row 2 = "armsid....:" line
                 ldy #13
                 clc
@@ -568,15 +578,14 @@ arm2_print_ver:
                 jsr print_sid_type_4   // "6581" or "8580"
 arm2_sfx_done:
                 jmp end
-                tsx                    // unreachable; kept for padding
 armsidlo:
                 // Plain ARMSID (armsid_major != $03)
-                txs
+                stx plot_x_save
                 ldx #02
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<armsidf
                 ldy #>armsidf
                 jsr $AB1E
@@ -597,12 +606,12 @@ checkpdsid_step:
                 ldx data1
                 cpx #$09               // $09 = PDsid confirmed
                 bne checkbacksid_step
-                txs
+                stx plot_x_save
                 ldx #10                // row 10 = "PD SID....:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<pdsidf
                 ldy #>pdsidf
                 jsr $AB1E
@@ -620,12 +629,12 @@ checkbacksid_step:
                 ldx data1
                 cpx #$0A               // $0A = BackSID confirmed
                 bne checkskpico_step
-                txs
+                stx plot_x_save
                 ldx #08                // row 8 = "BACKSID....:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<backsidf
                 ldy #>backsidf
                 jsr $AB1E
@@ -646,12 +655,12 @@ checkskpico_step:
                 cpx #$0E               // $0E = SIDKick-pico 6581
                 bne fpgasid
 cskp_disp:
-                txs                    // save data1 ($0B/$0E) in SP
+                stx plot_x_save
                 ldx #07                // row 7 = "SIDKICK....:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx                    // restore data1 to X
+                ldx plot_x_save
                 cpx #$0E               // 6581?
                 bne cskp_print_8580
                 lda #<skpicof_6581
@@ -690,12 +699,12 @@ fpgasid:
                 ldx data1
                 cpx #$06               // $06 = FPGASID in 8580 mode
                 bne fpgasidf_6581_l
-                txs
+                stx plot_x_save
                 ldx #04                // row 4 = "fpgasid...:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<fpgasidf_8580u
                 ldy #>fpgasidf_8580u
                 jsr $AB1E
@@ -704,12 +713,12 @@ fpgasidf_6581_l:
                 ldx data1
                 cpx #$07               // $07 = FPGASID in 6581 mode
                 bne checkusid64_entry
-                txs
+                stx plot_x_save
                 ldx #04
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<fpgasidf_6581u
                 ldy #>fpgasidf_6581u
                 jsr $AB1E
@@ -724,12 +733,12 @@ checkusid64_entry:
                 lda data1
                 cmp #$0D
                 bne checkphysical
-                txs
+                stx plot_x_save
                 ldx #$0E               // row 14 = "USID64.....:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<usid64f
                 ldy #>usid64f
                 jsr $AB1E
@@ -755,12 +764,12 @@ checkphysical:
                 ldx data1
                 cpx #$01               // $01 = 6581 confirmed
                 bne checkphysical_8580
-                txs
+                stx plot_x_save
                 ldx #05                // row 5 = "6581 sid..:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<l6581f
                 ldy #>l6581f
                 jsr $AB1E
@@ -770,12 +779,12 @@ checkphysical_8580:
                 ldx data1
                 cpx #$02               // $02 = 8580 confirmed
                 bne checkphysical2
-                txs
+                stx plot_x_save
                 ldx #06                // row 6 = "8550 sid..:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<l8580f
                 ldy #>l8580f
                 jsr $AB1E
@@ -793,12 +802,12 @@ checkphysical2:
                 ldx data1
                 cpx #$10               // $10 = second SID slot detected
                 bne swinmicro
-                txs
+                stx plot_x_save
                 ldx #11                // row 11 = "nosid......:" (shows UNKNOWN here)
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<unknownsid
                 ldy #>unknownsid
                 jsr $AB1E
@@ -830,12 +839,12 @@ check_swin_nano:
                 lda res_zp
                 cmp #$08
                 bne nosound
-                txs
+                stx plot_x_save
                 ldx #03                // row 3 = "swinsid...:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<swinsidnanof
                 ldy #>swinsidnanof
                 jsr $AB1E
@@ -843,12 +852,12 @@ check_swin_nano:
                 sta data1              // → end_pre_d400 pre-populates "D400 SWINSID NANO"
                 jmp end                //   on the stereo list (was UNKNOWN before)
 nosound:                               // no SID chip detected
-                txs
+                stx plot_x_save
                 ldx #11                // row 11 = "nosid......:" line
                 ldy #13
                 clc
                 jsr $E50C
-                tsx
+                ldx plot_x_save
                 lda #<nosoundf
                 ldy #>nosoundf
                 jsr $AB1E 
@@ -8228,6 +8237,9 @@ sfx_oct_offset:      .byte 0     // octave shift added to $B0 value (0/4/8 = V1/
 dfx_preread:         .byte $FF   // raw $DF60 value at checkfmyam first read (debug/diagnostic)
 dfx_postread:        .byte $FF   // raw $DF60 value at checkfmyam second read (debug/diagnostic)
 midi_kind:           .byte 0     // 0=none 1=SEQ/Namesoft 2=DATEL 3=Passport 4=Maplin
+plot_x_save:         .byte 0     // X saved across jsr $E50C (KERNAL PLOT) by the
+                                 // result-print dispatch in start:; replaces the
+                                 // old txs/tsx stack-pointer parking trick
 diag_step4_result:   .byte 0     // legacy DIAG: chip type after checkphysical step 4
                                  // (was hard-coded $5801 — moved to a label so MIDI
                                  // strings can sit naturally without colliding)
