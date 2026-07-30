@@ -1,5 +1,5 @@
 // =============================================================================
-// test_suite.asm — Full SID Detector unit test suite  (43 tests)
+// test_suite.asm — Full SID Detector unit test suite  (TEST_TOTAL tests)
 // =============================================================================
 // Covers every detection dispatch scenario in the sequential detection chain.
 // Each test presets the relevant zero-page inputs, calls an embedded copy of
@@ -9,7 +9,7 @@
 // Sections:
 //   S1  Machine type  (T01–T03)   za7 → C64 / C128 / TC64
 //   S2  SIDFX         (T04–T05)   data1=$30/$31 → found / not found
-//   S3  Swinsid/ARMSID(T06–T10)   data1+data2+data3 → Swinsid-U/ARM2SID/ARMSID/none
+//   S3  Swinsid/ARMSID(T06–T10)   data1+data2+armsid_major → SwinU/ARM2SID/ARMSID/none
 //   S4  FPGASID       (T11–T13)   data1=$06/$07/$F0 → 8580 / 6581 / none
 //   S5  Real SID      (T14–T16)   data1=$01/$02/$F0 → 6581 / 8580 / none
 //   S6  Second SID    (T17–T18)   data1=$10/$F0 → second SID / no sound
@@ -21,12 +21,22 @@
 //   S12 FM-YAM OPL2   (T32)       fmyam_detected=$01 → FM-YAM/OPL2 found at $DF40
 //   S13 Quality band  (T33–T35)   score 0/5/FF → AWFUL / BEST / BAD-clamp
 //   S14 Chip-type idx (T36–T43)   sid_type_index code→slot resolver
+//   S15 ULTISID family (T44–T46)   $20-$26 → 8580 / 6581 curve split
 //
-// Pass count written to $07E8 on completion.
-// 43 = all tests passed.
+// On completion the suite writes TWO bytes into off-screen RAM:
+//   $07E8 = pass_count      (how many tests actually passed)
+//   $07E9 = TEST_TOTAL      (how many tests exist)
+// scripts/ci_test.sh compares the two and needs no hard-coded expectation, so
+// adding a test no longer means updating a constant in three separate files
+// (the shell script, the `cmp` below, and the summary string) and getting a
+// confusing count mismatch when one of them is forgotten.
 // =============================================================================
 
 .encoding "petscii_upper"
+
+// Total number of tests in this suite. Single source of truth: it drives the
+// end-of-run comparison AND the byte handed to CI at $07E9.
+.const TEST_TOTAL = 46
 
 // Zero-page registers (same addresses as siddetector.asm)
 .const data1       = $A4
@@ -62,17 +72,19 @@
 .const RES_ARM2SFX    = $13   // ARM2SID SFX-only mode (emul_mode=1)
 .const RES_ARM2SFXSID = $14   // ARM2SID SFX+SID mode  (emul_mode=2)
 
-// ARM2SID config variables (absolute addresses from siddetector.sym)
-.const armsid_emul_mode = $5592  // bits[1:0]: 0=SID,1=SFX,2=SFX+SID
-.const armsid_major_var = $5588  // firmware major (2=ARMSID, 3=ARM2SID)
-
-// SIDKick-pico config variables (absolute addresses from siddetector.sym)
-.const skpico_fm_var    = $55c1  // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
+// Chip-config inputs the dispatch copies read.
+//
+// These were previously declared as absolute constants ($5592, $5588, $55c1,
+// $55c2) with a comment claiming they came "from siddetector.sym".  They did
+// not: this suite assembles as a standalone PRG at $0801 and never links
+// against siddetector, so those addresses were simply unrelated scratch RAM
+// inside the test image — and they silently pointed somewhere different every
+// time siddetector's code size changed.  They are ordinary labels now (defined
+// in the Data section) so the tests own their own inputs.
 .const RES_SKPICO_FM    = $15   // SIDKick-pico FM Sound Expander detected
-
-// FM-YAM Sound Expander variables (absolute addresses from siddetector.sym)
-.const fmyam_detected_var = $55c2  // 1 = OPL2 found at $DF00 via timer probe
-.const RES_FMYAM          = $16   // FM-YAM / OPL2 Sound Expander at $DF00
+.const RES_FMYAM        = $16   // FM-YAM / OPL2 Sound Expander at $DF00
+.const RES_ULTI_8580    = $17   // ULTISID slot resolved to the 8580 family
+.const RES_ULTI_6581    = $18   // ULTISID slot resolved to the 6581 family
 
 // CBM SFX Sound Expander variables (absolute addresses from siddetector.sym)
 // (sfxexp_detected_var / RES_SFXEXP removed in V1.4.22 — legacy $DE00 probe retired)
@@ -221,13 +233,13 @@ t06_fail:
     jsr show_result
 
 t07:
-    // T07: data1=$05 data2=$4F data3=$53 → ARM2SID  ('N','O','R')
+    // T07: data1=$05 ('N') data2=$4F ('O') + armsid_major=$03 → ARM2SID
     lda #$05
     sta data1
     lda #$4f
     sta data2
-    lda #$53
-    sta data3
+    lda #$03
+    sta armsid_major_var    // firmware major 3 = ARM2SID
     jsr dispatch_armsid
     lda #RES_ARM2SID
     jsr assert_eq
@@ -243,13 +255,13 @@ t07_fail:
     jsr show_result
 
 t08:
-    // T08: data1=$05 data2=$4F data3=$00 → ARMSID  ('N','O', not 'R')
+    // T08: data1=$05 ('N') data2=$4F ('O') + armsid_major=$02 → plain ARMSID
     lda #$05
     sta data1
     lda #$4f
     sta data2
-    lda #$00
-    sta data3
+    lda #$02
+    sta armsid_major_var    // firmware major 2 = original ARMSID
     jsr dispatch_armsid
     lda #RES_ARMSID
     jsr assert_eq
@@ -1010,10 +1022,71 @@ t43:
     ldy #>str_t43_pass
     jsr show_result
     inc pass_count
-    jmp test_done
+    jmp t44
 t43_fail:
     lda #<str_t43_fail
     ldy #>str_t43_fail
+    jsr show_result
+
+// ============================================================
+// S15: ULTISID FAMILY SPLIT  (T44-T46)
+// Mirrors the $20-$26 classification that quality_print_chiptype (Q page)
+// and ssp_skp16 (main screen stereo list) must BOTH apply.  They disagreed
+// before V1.5.06: the Q page treated only $20 as 8580 and lumped $21/$24-$26
+// in with the 6581 curves, so the same slot could read "ULTI85" on one screen
+// and "ULTI65" on the other.  6581 curves are $22/$23 ONLY.
+// ============================================================
+
+t44:
+    // T44: $20 (8580 curve, lowest code) → 8580 family
+    lda #$20
+    jsr dispatch_ulti_family
+    lda #RES_ULTI_8580
+    jsr assert_eq
+    bne t44_fail
+    lda #<str_t44_pass
+    ldy #>str_t44_pass
+    jsr show_result
+    inc pass_count
+    jmp t45
+t44_fail:
+    lda #<str_t44_fail
+    ldy #>str_t44_fail
+    jsr show_result
+
+t45:
+    // T45: $22 (first 6581 curve) → 6581 family
+    lda #$22
+    jsr dispatch_ulti_family
+    lda #RES_ULTI_6581
+    jsr assert_eq
+    bne t45_fail
+    lda #<str_t45_pass
+    ldy #>str_t45_pass
+    jsr show_result
+    inc pass_count
+    jmp t46
+t45_fail:
+    lda #<str_t45_fail
+    ldy #>str_t45_fail
+    jsr show_result
+
+t46:
+    // T46: $24 (U2 curve, above the 6581 pair) → 8580 family.
+    // This is the case the old Q-page logic got wrong.
+    lda #$24
+    jsr dispatch_ulti_family
+    lda #RES_ULTI_8580
+    jsr assert_eq
+    bne t46_fail
+    lda #<str_t46_pass
+    ldy #>str_t46_pass
+    jsr show_result
+    inc pass_count
+    jmp test_done
+t46_fail:
+    lda #<str_t46_fail
+    ldy #>str_t46_fail
     jsr show_result
 
 // ============================================================
@@ -1024,7 +1097,7 @@ test_done:
     ldy #>str_divider
     jsr show_result
     lda pass_count
-    cmp #43
+    cmp #TEST_TOTAL
     bne td_fail
     lda #<str_all_pass
     ldy #>str_all_pass
@@ -1035,10 +1108,14 @@ td_fail:
     ldy #>str_some_fail
     jsr show_result
 td_done:
-    // Write pass_count to $07E8 (off-screen scratch RAM, not in visible screen area)
-    // BEFORE the spin loop so the value is stable when VICE breakpoint fires.
+    // Write pass_count to $07E8 and the suite's own test total to $07E9
+    // (off-screen scratch RAM, past the visible 40x25 = $07E7).  Both are
+    // written BEFORE the spin loop so they are stable when the VICE
+    // breakpoint fires.  CI compares the pair rather than a literal.
     lda pass_count
     sta $07E8
+    lda #TEST_TOTAL
+    sta $07E9
 td_spin:
     jmp td_spin             // spin; VICE monitor breaks here: mem $07E8
 
@@ -1115,11 +1192,19 @@ dsfx_no:
     rts
 
 // ---- dispatch_armsid -----------------------------------------
-// Source: armsid:/armsidlo: (lines ~264-300 in siddetector.asm)
-// data1=$04              → RES_SWINSID_U
-// data1=$05+d2=$4F+d3=$53 → RES_ARM2SID
-// data1=$05+d2=$4F+d3≠$53 → RES_ARMSID
-// else                   → RES_NONE
+// Source: step2_after_armsid / armsid: / armsidlo: in siddetector.asm.
+//
+// data1=$04                          → RES_SWINSID_U
+// data1=$05 + d2=$4F + major=$03     → RES_ARM2SID
+// data1=$05 + d2=$4F + major≠$03     → RES_ARMSID
+// else                               → RES_NONE
+//
+// NOTE: this used to split ARM2SID from ARMSID on data3=='R'.  Production
+// stopped doing that — after the 'N'/'O' echo confirms the ARMSID family it
+// calls armsid_get_version and branches on armsid_major ($03 = ARM2SID).  The
+// old copy therefore tested a rule the program no longer had, which is worse
+// than no test: it reported green over a path that had moved.  (The old
+// comment also called $53 'R'; $53 is 'S'.)
 dispatch_armsid:
     lda #RES_NONE
     sta dispatch_result
@@ -1135,8 +1220,8 @@ darm_check05:
     ldx data2
     cpx #$4f                // 'O' in D41C required for both ARMSID variants
     bne darm_exit
-    ldx data3
-    cpx #$53                // 'R' in D41D → ARM2SID; else → plain ARMSID
+    lda armsid_major_var    // firmware version query decides the variant
+    cmp #$03                // major 3 → ARM2SID; anything else → plain ARMSID
     bne darm_plain
     lda #RES_ARM2SID
     sta dispatch_result
@@ -1430,6 +1515,32 @@ dsi_unkn:
 tb_sid_code_to_slot:
     .byte 0, 1, 2, 3, 4, 5, 6, 7, 3, 8, 9, 10, 11, 12, 13, 0, 14
 
+// ---- dispatch_ulti_family ------------------------------------
+// Source: the $20-$26 branch shared by quality_print_chiptype (Q page) and
+// ssp_skp16 (main screen).  Both use the same sec/sbc #$22 / cmp #$02 test:
+// codes $22 and $23 are the 6581 filter curves, everything else in range is
+// an 8580 curve.  Entry: A = sid_list_t code.  Exit: dispatch_result.
+dispatch_ulti_family:
+    cmp #$20
+    bcc duf_notulti
+    cmp #$27
+    bcs duf_notulti
+    sec
+    sbc #$22                // $22/$23 → 0/1; others wrap below or land ≥2
+    cmp #$02
+    bcc duf_6581            // C=0 → 6581 curve
+    lda #RES_ULTI_8580
+    sta dispatch_result
+    rts
+duf_6581:
+    lda #RES_ULTI_6581
+    sta dispatch_result
+    rts
+duf_notulti:
+    lda #RES_NONE
+    sta dispatch_result
+    rts
+
 // ============================================================
 // calcMean — embedded copy of ArithmeticMean from siddetector.asm
 // Reads: zpArrayPtr ($A2), numInts, arr1/arr2
@@ -1487,6 +1598,11 @@ cmean_done:
 dispatch_result: .byte 0
 pass_count:      .byte 0
 row_ctr:         .byte 0
+// Chip-config inputs owned by this suite (see note near the top of the file).
+armsid_major_var:   .byte 0   // ARMSID firmware major: 2=ARMSID, 3=ARM2SID
+armsid_emul_mode:   .byte 0   // bits[1:0]: 0=SID, 1=SFX, 2=SFX+SID
+skpico_fm_var:      .byte 0   // SKpico config[8]: >=4 and <6 → FM at $DF00
+fmyam_detected_var: .byte 0   // 1 = OPL2 found at $DF40/$DF50/$DF60
 numInts:         .byte 0
 calcResult:      .byte 0
 tmp16:           .byte 0, 0
@@ -1523,13 +1639,13 @@ str_t06_pass: .text "T06 PASS: D1=$04 -> SWINSID ULTIMATE"
               .byte 0
 str_t06_fail: .text "T06 FAIL: D1=$04 -> SWINSID ULTIMATE"
               .byte 0
-str_t07_pass: .text "T07 PASS: $05/$4F/$53 -> ARM2SID"
+str_t07_pass: .text "T07 PASS: $05/$4F MAJ3 -> ARM2SID"
               .byte 0
-str_t07_fail: .text "T07 FAIL: $05/$4F/$53 -> ARM2SID"
+str_t07_fail: .text "T07 FAIL: $05/$4F MAJ3 -> ARM2SID"
               .byte 0
-str_t08_pass: .text "T08 PASS: $05/$4F/$00 -> ARMSID"
+str_t08_pass: .text "T08 PASS: $05/$4F MAJ2 -> ARMSID"
               .byte 0
-str_t08_fail: .text "T08 FAIL: $05/$4F/$00 -> ARMSID"
+str_t08_fail: .text "T08 FAIL: $05/$4F MAJ2 -> ARMSID"
               .byte 0
 str_t09_pass: .text "T09 PASS: D1=$05 D2=$00 -> NO MATCH"
               .byte 0
@@ -1671,9 +1787,21 @@ str_t43_pass: .text "T43 PASS: $0F -> SLOT 0 (UNKWN)"
               .byte 0
 str_t43_fail: .text "T43 FAIL: $0F -> SLOT 0 (UNKWN)"
               .byte 0
+str_t44_pass: .text "T44 PASS: $20 -> ULTISID 8580"
+              .byte 0
+str_t44_fail: .text "T44 FAIL: $20 -> ULTISID 8580"
+              .byte 0
+str_t45_pass: .text "T45 PASS: $22 -> ULTISID 6581"
+              .byte 0
+str_t45_fail: .text "T45 FAIL: $22 -> ULTISID 6581"
+              .byte 0
+str_t46_pass: .text "T46 PASS: $24 -> ULTISID 8580"
+              .byte 0
+str_t46_fail: .text "T46 FAIL: $24 -> ULTISID 8580"
+              .byte 0
 str_divider:  .text "--------------------------------------"
               .byte 0
-str_all_pass: .text "ALL 43 TESTS PASSED"
+str_all_pass: .text "ALL TESTS PASSED"
               .byte 0
 str_some_fail:.text "SOME TESTS FAILED - CHECK ABOVE"
               .byte 0

@@ -7,11 +7,19 @@ Scans MEMORYMAP.md for table rows of the form:
 For each row, looks up `symname` in siddetector.sym (.label form) and
 flags any mismatch. Used as a doc-drift guard.
 
-  python scripts/check_memorymap.py        # verify, exit 1 on drift
-  python scripts/check_memorymap.py --fix  # rewrite drifted addresses
+  python scripts/check_memorymap.py           # verify, exit 1 on drift
+  python scripts/check_memorymap.py --fix     # rewrite drifted addresses
+  python scripts/check_memorymap.py --strict  # also fail on dead symbols
 
 Exit code 0 if all addresses match (or --fix succeeded), 1 if drift
 found in verify mode.
+
+--strict additionally fails when a documented non-zero-page symbol no longer
+exists in siddetector.sym at all. Without it, renaming or deleting a symbol
+leaves MEMORYMAP.md pointing at a label that is gone while the guard still
+reports success — the doc rots in exactly the way this script exists to catch.
+Zero-page equates are always exempt: they are .const values that KickAssembler
+never emits to the .sym file, so they are expected to be unresolvable.
 """
 import re
 import sys
@@ -46,6 +54,7 @@ def doc_rows() -> list[tuple[int, str, int]]:
 
 def main() -> int:
     fix = "--fix" in sys.argv[1:]
+    strict = "--strict" in sys.argv[1:]
     syms = load_symbols()
     rows = doc_rows()
     misses, drifts, ok = [], [], 0
@@ -66,19 +75,20 @@ def main() -> int:
                 f"  line {line_no:>4}: `{name}` doc=${doc_addr:04X} "
                 f"actual=${actual:04X}"
             )
-    if misses:
-        # Symbols not in .sym are usually expected (constants, ZP equates not exported,
-        # documentation-only references). Print them at lower priority.
-        unresolved = [m for m in misses if not _is_zp_addr(m[2])]
-        if unresolved:
-            print(f"Symbols not found in {SYM_PATH.name} (non-ZP):")
-            for line_no, name, doc_addr in unresolved:
-                print(f"  line {line_no:>4}: `{name}` doc=${doc_addr:04X}")
+
+    # Zero-page rows are .const equates KickAssembler never writes to the .sym
+    # file, so "unresolved" is normal for them. A non-ZP row that resolves to
+    # nothing is a real dead reference — the doc names a label that is gone.
+    unresolved = [m for m in misses if not _is_zp_addr(m[2])]
+    if unresolved:
+        print(f"Symbols not found in {SYM_PATH.name} (non-ZP):")
+        for line_no, name, doc_addr in unresolved:
+            print(f"  line {line_no:>4}: `{name}` doc=${doc_addr:04X}")
 
     total = len(rows)
     print(
         f"\n{ok}/{total} matched, {len(drifts)} drift, "
-        f"{len(misses)} unresolved"
+        f"{len(misses)} unresolved ({len(unresolved)} non-ZP)"
     )
 
     if fix and drifts:
@@ -99,7 +109,15 @@ def main() -> int:
         print(f"Rewrote {len(drifts)} address(es).")
         return 0
 
-    return 1 if drifts else 0
+    if drifts:
+        return 1
+    if strict and unresolved:
+        print(
+            f"\nFAIL (--strict): {len(unresolved)} documented non-ZP symbol(s) "
+            f"no longer exist in {SYM_PATH.name}."
+        )
+        return 1
+    return 0
 
 
 def _is_zp_addr(addr: int) -> bool:

@@ -19,7 +19,7 @@ TEST_DISP_PRG   = tests/test_dispatch.prg
 TEST_SUITE_SRC  = tests/test_suite.asm
 TEST_SUITE_PRG  = tests/test_suite.prg
 
-.PHONY: all run remote readresult screendump debug test test_dispatch test_suite ci ci-full hw_test release clean \
+.PHONY: all run remote readresult screendump debug test test_dispatch test_suite ci ci-full python_tests hw_test release clean \
 	sfx run-none stereo-off \
 	run-armsid run-arm2sid run-swinu run-swinnano \
 	run-fpgasid8580 run-fpgasid6581 run-pdsid run-kungfusid \
@@ -114,20 +114,32 @@ test-variants: $(PRG)
 remote: $(PRG)
 	$(U64REMOTE) $(U64IP) run $(PRG)
 
-# Read detection result from real hardware after make remote.
-# data1=$A4 (chip code), backsid_d41f=$244D (echo byte), num_sids=$2900, sid_list_t=$2918
-# backsid_d41f address auto-detected from siddetector.vs (changes with code size)
+# Read detection result from real hardware after `make remote`.
+#
+# Every non-zero-page address is resolved from siddetector.vs at run time.
+# They shift whenever code size changes, so nothing here may be hard-coded —
+# the old $2900 / $2918 / $244D literals had been stale for many releases.
+#
+# .vs line format is:   al C:59ea .backsid_d41f
+# so the address lives in field 2 (field 1 is the "al" record type). Reading
+# field 1 — as this target used to — yields the literal string "al".
+vssym = $$(grep ' \.$(1)$$' siddetector.vs | awk '{print $$2}' | sed 's/C://')
+
 readresult:
-	@echo "=== data1 (chip code, $A4) ==="
+	@echo '=== data1 (chip code, $$A4) ==='
 	$(U64C64) machine read-mem 00a4
-	@echo "=== data2 ($A5) ==="
+	@echo '=== data2 ($$A5) ==='
 	$(U64C64) machine read-mem 00a5
-	@addr=$$(grep ' \.backsid_d41f' siddetector.vs | awk '{print $$1}' | sed 's/C://'); \
-	echo "=== backsid_d41f ($$addr) ==="; \
-	$(U64C64) machine read-mem $$addr
-	@echo "=== num_sids ($2900) + sid_list_t ($2918) ==="
-	$(U64C64) machine read-mem 2900
-	$(U64C64) machine read-mem 2918
+	@echo '=== sidnum_zp (SID count, $$F7) ==='
+	$(U64C64) machine read-mem 00f7
+	@a=$(call vssym,backsid_d41f); echo "=== backsid_d41f ($$a) ==="; \
+	  $(U64C64) machine read-mem $$a
+	@a=$(call vssym,sid_list_h);   echo "=== sid_list_h ($$a), 9 slots ==="; \
+	  $(U64C64) machine read-mem $$a --length 9
+	@a=$(call vssym,sid_list_l);   echo "=== sid_list_l ($$a), 9 slots ==="; \
+	  $(U64C64) machine read-mem $$a --length 9
+	@a=$(call vssym,sid_list_t);   echo "=== sid_list_t ($$a), 9 slots ==="; \
+	  $(U64C64) machine read-mem $$a --length 9
 
 # Dump screen RAM ($0400-$07E7, 1000 bytes) from real hardware, decode C64 screen codes,
 # print to terminal and save to screen_dump.txt.
@@ -158,25 +170,33 @@ test_dispatch: $(TEST_DISP_PRG)
 $(TEST_DISP_PRG): $(TEST_DISP_SRC)
 	$(KICKASS) $(TEST_DISP_SRC) -o $(TEST_DISP_PRG)
 
-# Build and run the full test suite in VICE (35 tests across all detection stages + Q-page band lookup).
-# In the VICE monitor (Alt+M): type  mem $07E8  to read pass count ($23=35=all pass).
+# Build and run the full test suite in VICE (43 tests across all detection
+# stages, Q-page band lookup and the sid_type_index code->slot resolver).
+# In the VICE monitor (Alt+M): type  mem $07E8  to read pass count ($2B=43=all pass).
 test_suite: $(TEST_SUITE_PRG)
 	$(VICE) -autostart $(TEST_SUITE_PRG) -moncommands tests/test_suite.mon
 
 $(TEST_SUITE_PRG): $(TEST_SUITE_SRC)
 	$(KICKASS) $(TEST_SUITE_SRC) -o $(TEST_SUITE_PRG)
 
-# Run tests headlessly in VICE and gate on pass count (all 23 must pass).
-# VICE opens briefly, runs tests/test_suite.prg with tests/ci.mon, saves
-# tests/ci_result.bin (1-byte PRG containing pass_count), then quits.
-ci:
+# Run tests headlessly in VICE and gate on pass count (all 43 must pass).
+# VICE opens briefly with -remotemonitor on a dynamically chosen free port;
+# scripts/vice_monitor.py connects, breakpoints td_spin, saves $07E8
+# (pass_count) to tests/ci_result.bin, then quits.  tests/ci.mon is NOT used.
+ci: python_tests
 	bash scripts/ci_test.sh
 	@echo ""
 	@echo "=== MEMORYMAP.md address-drift check ==="
-	@python scripts/check_memorymap.py
+	@python scripts/check_memorymap.py --strict
+
+# Host-side Python unit tests (no emulator needed, <1 s).
+python_tests:
+	@echo "=== Python host tests ==="
+	@python tests/test_hw_snapshot.py
 
 # Full regression: unit tests + variant golden diff.  Use this as the pre-PR
-# / pre-release gate.  ~4 min total (30 s unit tests + 14 variant launches).
+# / pre-release gate.  scripts/variant_smoke.py runs 30 cases; budget ~10-16
+# min depending on how many need a retry (plus ~40 s for ci).
 ci-full: ci
 	@echo ""
 	@echo "=== SidVariant golden-diff sweep ==="

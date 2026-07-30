@@ -7,17 +7,18 @@
 #   (or: make ci)
 #
 # Exit codes:
-#   0 — all 43 tests passed
-#   1 — build failed, VICE did not exit cleanly, or pass count is wrong
+#   0 — every test in the suite passed
+#   1 — build failed, VICE did not exit cleanly, or a test failed
 #
 # How it works:
 #   VICE is launched with -remotemonitor on a dynamically chosen free port so
 #   scripts/vice_monitor.py can connect, set a breakpoint at td_spin, wait for
-#   it to fire, then save $07E8 (pass_count in off-screen RAM) to
-#   tests/ci_result.bin.  A dynamic port avoids TCP TIME_WAIT collisions
-#   between back-to-back runs.
-#   This script reads byte 2 of that PRG file (past the 2-byte load-address
-#   header) and compares it to the expected pass count.
+#   it to fire, then save $07E8-$07E9 (pass_count and the suite's own
+#   TEST_TOTAL, both in off-screen RAM) to tests/ci_result.bin.  A dynamic port
+#   avoids TCP TIME_WAIT collisions between back-to-back runs.
+#   This script reads bytes 2 and 3 of that PRG file (past the 2-byte
+#   load-address header) and requires them to be equal, so the expected count
+#   lives in exactly one place: TEST_TOTAL in tests/test_suite.asm.
 # =============================================================================
 set -euo pipefail
 
@@ -28,14 +29,32 @@ cd "$ROOT"
 KICKASS="java -jar C:/debugger/kickasm/KickAss.jar"
 VICE="C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
 PYTHON="python"
-EXPECTED_PASS=43   # $2B hex — T33-T35 band lookup + T36-T43 sid_type_index
+# No EXPECTED_PASS constant here any more: the suite reports its own total at
+# $07E9 alongside the pass count at $07E8, and we compare the two. Adding a
+# test used to require editing this number, the `cmp` in test_suite.asm and the
+# summary string; missing one produced a confusing mismatch.
 
 # ---- Build ----------------------------------------------------------------
 echo "=== CI: build test_suite.prg ==="
 $KICKASS tests/test_suite.asm -o tests/test_suite.prg
 
-# ---- Kill any stale VICE processes ----------------------------------------
-cmd //c "taskkill /F /IM x64sc.exe" 2>/dev/null || true
+# ---- Helper: stop only the VICE this script started ------------------------
+# This script used to run `taskkill /F /IM x64sc.exe`, which kills EVERY x64sc
+# on the machine — including an interactive `make run-*` session the user has
+# open in another window.  A free monitor port is chosen below, so a stale VICE
+# cannot interfere with this run and there is no reason to reap other people's
+# processes.  $! is the Git Bash pid; /proc/<pid>/winpid maps it to the Windows
+# pid that taskkill understands.
+kill_our_vice() {
+    [ -n "${VICE_PID:-}" ] || return 0
+    local winpid
+    winpid=$(cat "/proc/${VICE_PID}/winpid" 2>/dev/null || true)
+    if [ -n "$winpid" ]; then
+        cmd //c "taskkill /F /PID $winpid" >/dev/null 2>&1 || true
+    else
+        kill "$VICE_PID" 2>/dev/null || true
+    fi
+}
 
 # ---- Pick a free TCP port for the remote monitor --------------------------
 MONITOR_PORT=$("$PYTHON" -c "import socket; s=socket.socket(); s.bind(('',0)); print(s.getsockname()[1]); s.close()")
@@ -56,21 +75,19 @@ VICE_PID=$!
 TD_SPIN=$(grep ' \.td_spin$' tests/test_suite.vs | awk '{print $2}' | sed 's/C://')
 if [ -z "$TD_SPIN" ]; then
     echo "ERROR: could not find td_spin in tests/test_suite.vs" >&2
-    kill "$VICE_PID" 2>/dev/null || true
-    cmd //c "taskkill /F /IM x64sc.exe" 2>/dev/null || true
+    kill_our_vice
     exit 1
 fi
 
 if ! "$PYTHON" scripts/vice_monitor.py "$TD_SPIN" "tests/ci_result.bin" "$MONITOR_PORT"; then
     echo "ERROR: vice_monitor.py failed" >&2
-    kill "$VICE_PID" 2>/dev/null || true
-    cmd //c "taskkill /F /IM x64sc.exe" 2>/dev/null || true
+    kill_our_vice
     exit 1
 fi
 
 # Give VICE a moment to process quit, then force-kill it
 sleep 3
-cmd //c "taskkill /F /IM x64sc.exe" 2>/dev/null || true
+kill_our_vice
 wait "$VICE_PID" 2>/dev/null || true
 
 # ---- Check output file ----------------------------------------------------
@@ -79,23 +96,32 @@ if [ ! -f tests/ci_result.bin ]; then
     exit 1
 fi
 
-# PRG file layout: byte 0-1 = load address ($07E8), byte 2 = pass_count value
+# PRG file layout: bytes 0-1 = load address ($07E8),
+#                  byte 2   = pass_count  ($07E8)
+#                  byte 3   = TEST_TOTAL  ($07E9)
 PASS_HEX=$(od -An -tx1 -j2 -N1 tests/ci_result.bin | tr -d ' \n')
+TOTAL_HEX=$(od -An -tx1 -j3 -N1 tests/ci_result.bin | tr -d ' \n')
 
-if [ -z "$PASS_HEX" ]; then
-    echo "ERROR: could not read pass count from tests/ci_result.bin" >&2
+if [ -z "$PASS_HEX" ] || [ -z "$TOTAL_HEX" ]; then
+    echo "ERROR: could not read pass/total bytes from tests/ci_result.bin" >&2
     exit 1
 fi
 
 PASS_DEC=$((16#$PASS_HEX))
+TOTAL_DEC=$((16#$TOTAL_HEX))
 
 # ---- Gate -----------------------------------------------------------------
-echo "=== CI: pass count = $PASS_DEC / $EXPECTED_PASS ==="
+echo "=== CI: pass count = $PASS_DEC / $TOTAL_DEC ==="
 
-if [ "$PASS_DEC" -ne "$EXPECTED_PASS" ]; then
-    echo "FAIL: expected $EXPECTED_PASS tests to pass, got $PASS_DEC" >&2
+if [ "$TOTAL_DEC" -eq 0 ]; then
+    echo "FAIL: suite reported a total of 0 tests — it did not reach the end." >&2
+    exit 1
+fi
+
+if [ "$PASS_DEC" -ne "$TOTAL_DEC" ]; then
+    echo "FAIL: $((TOTAL_DEC - PASS_DEC)) of $TOTAL_DEC tests failed (passed $PASS_DEC)." >&2
     echo "      Run 'make test_suite' and inspect the screen for which tests failed." >&2
     exit 1
 fi
 
-echo "PASS: all $EXPECTED_PASS tests passed."
+echo "PASS: all $TOTAL_DEC tests passed."

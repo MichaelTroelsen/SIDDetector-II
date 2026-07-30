@@ -108,8 +108,11 @@ def main():
                   file=sys.stderr)
             sys.exit(1)
 
-        # Save pass_count copy from off-screen scratch RAM ($07E8)
-        save_cmd = f'save "{output_file}" 0 07e8 07e8'
+        # Save the two result bytes from off-screen scratch RAM:
+        #   $07E8 = pass_count, $07E9 = the suite's own TEST_TOTAL.
+        # Saving both lets CI compare them instead of hard-coding an expected
+        # count that has to be kept in sync by hand.
+        save_cmd = f'save "{output_file}" 0 07e8 07e9'
         send(sock, save_cmd)
         recv_until_prompt(sock, timeout=5)
 

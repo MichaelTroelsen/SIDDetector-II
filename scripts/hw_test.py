@@ -44,8 +44,6 @@ U64REMOTE   = str(ROOT / 'bin' / 'u64remote.exe')
 VS_FILE     = ROOT / 'siddetector.vs'
 PRG_FILE    = ROOT / 'siddetector.prg'
 
-KBDLOOP_ORIG = 'A97F8D'   # lda #$7F; sta $DC00 -- first 3 bytes of every kbdloop
-
 # Chip type code names (for readable output)
 CHIP_NAMES = {
     0x01: '6581',           0x02: '8580',
@@ -169,17 +167,24 @@ def jmp_to(patch_addr, target_addr, settle_secs=0.3, orig_bytes=None):
 # Detection snapshot  (slot = {addr, type})
 # ---------------------------------------------------------------------------
 
+# NSLOTS is 9, not 8: sid_list_* have 9 entries and slots 1..8 are all
+# usable — the U64 "Tuneful Eight" fills every one of them. Iterating range(8)
+# stopped at index 7 and made the 8th detected SID invisible to the baseline
+# and to every stability comparison below.
+NSLOTS = 9
+
+
 def read_snapshot(sid_list_l, sid_list_h, sid_list_t):
     """
-    Return list of 8 dicts: {addr: int (16-bit), type: int (8-bit)}.
-    Slot 0 is unused by siddetector; slots 1-7 hold detected SIDs.
+    Return list of NSLOTS dicts: {addr: int (16-bit), type: int (8-bit)}.
+    Slot 0 is unused by siddetector; slots 1-8 hold detected SIDs.
     """
     return [
         {
             'addr': (read_mem_byte(sid_list_h + i) << 8) | read_mem_byte(sid_list_l + i),
             'type': read_mem_byte(sid_list_t + i),
         }
-        for i in range(8)
+        for i in range(NSLOTS)
     ]
 
 def fmt_slot(s):
@@ -195,7 +200,7 @@ def fmt_snapshot(snap):
 
 def snapshots_equal(a, b):
     return all(a[i]['addr'] == b[i]['addr'] and a[i]['type'] == b[i]['type']
-               for i in range(8))
+               for i in range(NSLOTS))
 
 # ---------------------------------------------------------------------------
 # Scenario loading
@@ -337,7 +342,7 @@ def main():
         ok = snapshots_equal(snap, baseline)
         if not ok:
             diff = [f"slot{i}: expected {fmt_slot(baseline[i])} got {fmt_slot(snap[i])}"
-                    for i in range(8)
+                    for i in range(NSLOTS)
                     if baseline[i]['addr'] != snap[i]['addr'] or
                        baseline[i]['type'] != snap[i]['type']]
             record(label + ' (stable)', False, '; '.join(diff))
