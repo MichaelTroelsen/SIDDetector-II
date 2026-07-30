@@ -190,6 +190,48 @@ exists specifically to model MixSID's CS1/CS2 window behaviour on real hardware
 detections that comment was written to prevent, and the emulator cannot tell me
 whether a candidate fix is faithful. This one genuinely wants the MixSID rig.
 
+**Attempted fix, measured, and reverted — read this before trying again.**
+The fix is *known* and it *works*; it is the side effect that stops it.
+
+Both mirror tests compare the candidate's OSC3 against **zero** when the question
+they need to answer is "does this SID's oscillator appear here". Those differ
+whenever the candidate holds residue. Replacing the zero-comparison with a
+baseline-then-look-for-change (the technique `u64_fingerprint_scan` already uses)
+in both `s_s_arm_chk` and `s_s_arm_mir_test` produces exactly the wanted result:
+
+```
+stereo-D500-armsid   D500 8580 FOUND  ->  D500 ARMSID FOUND
+stereo-D500-swinu    D500 8580 FOUND  ->  D500 SWINSID ULTIMATE FOUND
+tri-D420-armsid+D500-armsid  r18      ->  D500 ARMSID FOUND   (also correct)
+```
+
+The blocker: it destabilises the **$D4xx** window scan. In single-SID configs
+every $D4xx address mirrors $D400, and which mirror the scan reports turns out to
+be timing-sensitive. Measured across five full sweeps:
+
+| Sweep | Version | `D460 8580 FOUND` seen |
+|---|---|---|
+| v3, v4, v5 | before the change | 0, 0, 0 |
+| v6 | baseline-compare everywhere | 1 (`fpgasid6581`) |
+| v7 | baseline-compare only outside $D4xx | 1 (`pdsid`) |
+
+A different case each time, so it is a wander rather than a deterministic break —
+and it appeared only after the change. Note the v7 carve-out kept $D4xx
+*semantically* identical (baseline forced to 0, so `cmp` behaves exactly like the
+old `bne`) and it still happened: the extra ~20 cycles of the baseline read are
+enough to shift which mirror wins. So "only change the $D5xx+ path" is not a
+sufficient safeguard; the timing has to be preserved too.
+
+Why that matters on real hardware: a real FPGASID genuinely has SID2 at **$D420**.
+Reporting $D460 instead would be wrong on hardware, not merely cosmetic — which is
+exactly the class of regression the emulator cannot adjudicate.
+
+If you pick this up with the MixSID/FPGASID rig: implement the baseline compare
+without changing instruction counts on the $D4xx path (e.g. baseline
+unconditionally *before* the silence write, so the same instructions execute
+either way), then confirm on hardware that FPGASID still reports its SID2 at
+$D420 and that a stereo ARMSID at $D500 is named.
+
 **Also learned, and worth writing down: VICE monitor reads of SID registers do
 not agree with CPU reads.** At the same breakpoint the monitor reported
 `$D51B = $00` while the CPU had just read `$D8`. The monitor peeks I/O without
@@ -787,7 +829,7 @@ hand-expanding the recipes in a shell.
 | P0-2 | Goldens regenerated over P0-1 | **fixed** - re-captured once, 30/30 written, 8-file / 11-line diff reviewed line by line |
 | P0-3 | 2 variant cases missing `-sid2address` | **fixed** - both now place the chip at $D420, and both pass |
 | P0-4 | Retry star made goldens nondeterministic | **fixed** - `*` decodes as `*`, `strip_retry_star()` normalises it out of the golden; 8 new tests |
-| P0-5 | D5xx ARMSID / SwinSID U not named | **root-caused, not fixed** - `s_s_arm_chk`'s cross-read rejects the slot on residual OSC3 before the DIS probe runs; the proxy itself answers correctly. Heuristic change, wants MixSID hardware |
+| P0-5 | D5xx ARMSID / SwinSID U not named | **root-caused; fix known and proven to work, but REVERTED** - baseline-vs-change in both mirror tests names them correctly, yet destabilises which $D4xx mirror is reported (0 occurrences in 3 sweeps before, 1 in each of 2 after). Needs the FPGASID/MixSID rig |
 | P1-1 | IRQ vector installed without SEI | fixed - `sei` + CIA mask/ack before the vector swap |
 | P1-2 | `readresult` awk field + stale addresses | fixed - resolves every symbol from `.vs` at run time |
 | P1-3 | hw_test blind to sid_list slot 8 | fixed - `NSLOTS = 9`; new `tests/test_hw_snapshot.py` |
