@@ -1,8 +1,8 @@
 # SID Detector — Test Status
 
-**Last updated:** 2026-05-28  
-**Build:** `$2400–$5A99` (code) `$6000–$911A` (data) `$C300–$C81E` (Q-page)  
-**Version:** V1.5.05  
+**Last updated:** 2026-07-30  
+**Build:** `$2400–$596A` (code) `$6000–$911C` (data) `$C300–$C821` (Q-page)  
+**Version:** V1.5.06  
 Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 
 ---

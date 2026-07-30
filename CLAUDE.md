@@ -12,15 +12,39 @@ SID Detector is a Commodore 64 diagnostic utility written in 6502 assembly that 
 make             # assemble siddetector.asm → siddetector.prg using KickAssembler
 make run         # launch detector in the patched WinVICE 3.9
 make run-armsid  # launch with ARMSID personality at D400  (see Makefile for full list)
-make ci          # unit tests (43 cases) + MEMORYMAP.md drift check
-make ci-full     # unit tests + golden-diff sweep across all 30 variant cases
+make ci          # host tests + unit tests (46 cases) + MEMORYMAP.md drift check
+make ci-full     # the above + golden-diff sweep across all 30 variant cases
+make python_tests # host-side Python tests only (no emulator, <1 s)
 make clean       # remove siddetector.prg
 ```
 
 **Tools:**
 - **KickAssembler** (`C:/debugger/kickasm/KickAss.jar`, requires Java).
 - **Patched WinVICE 3.9** with the `-sidvariant` personality layer at `C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe`. Source, build recipe and usage: `docs/VICE_PROXY_BUILD.md`, `docs/VICE_PROXY_USAGE.md`, `docs/ARMSID_PROXY_PLAN.md`. **All VICE-based tests must use this binary** — the stock VICE doesn't know `-sidvariant`.
-- Paths are set at the top of the `Makefile`.
+- **Tool paths live in ONE place: `toolpaths.env`.** The Makefile `include`s it,
+  `scripts/ci_test.sh` sources it, and `scripts/toolpaths.py` parses it for the
+  Python harnesses. Do not re-hard-code a path in a script — they were previously
+  copy-pasted into 17 files and drifted. A wrong path fails with one clear message
+  naming that file.
+
+**Shared harness modules** (all in `scripts/`, import them rather than
+re-implementing):
+- `toolpaths.py` — tool locations; `vice()` / `kickass_jar()` validate at point of use.
+- `c64screen.py` — C64 screen-code decoding. Note `$20-$3F` are byte-identical to
+  ASCII, so only `$01-$1A` (letters) need shifting.
+- `viceproc.py` — `terminate(proc)` stops only the VICE this script started.
+  **Never** use `taskkill /F /IM x64sc.exe`; it kills the user's interactive session.
+
+**Host tests** (`make python_tests`, no emulator needed): `tests/test_hw_snapshot.py`,
+`tests/test_variant_render.py`, `tests/test_c64screen.py`.
+
+**Gotchas that cost real debugging time** (see `CODE-REVIEW.md`):
+- VICE **monitor** reads of SID registers disagree with CPU reads — the monitor
+  peeks I/O without clocking ResID. Debug SID reads with a `tests/probe_*.asm`
+  program that records them, never with monitor `m`.
+- A screen dump pauses the machine and perturbs detection; `variant_smoke.py`'s
+  `MIN_WAIT` must stay past the end of the chain (22 s).
+- OSC3 keeps residue after a voice is silenced — "non-zero" does not mean "mirror".
 
 **Source syntax:** The `.asm` file uses KickAssembler syntax (converted from the original ACME source in `siddetector.asm.acme.bak`). Key differences from ACME: `.byte`/`.word`/`.text` directives, `//` comments, `.const` for symbol equates, lowercase mnemonics only, labels require `:`, and `#'x'` for char literals.
 
@@ -50,6 +74,17 @@ Emulator detection (VICE ResID/FastSID, HOXS64, Frodo, YACE64, EMU64) runs as a 
 ### Key Techniques
 
 - **`calcandloop` / `ArithMean`** — Measures the $D418 (volume) register decay characteristic over multiple samples; the decay rate distinguishes chip types
+- **Provisional typing, refined in place (V1.5.06)** — `u64_fingerprint_scan`
+  runs before the family sweeps (their writes would clobber the per-slot OSC3
+  fingerprints it needs) but it can only prove "an independent SID lives here",
+  not which one. It therefore records the type its own `checkrealsid` measured
+  plus a per-slot `sid_prov` flag; `s_s_dup_lp` and `fll_dup_lp` (via
+  `fll_refine`) then overwrite that type **in place** instead of skipping the
+  address as a duplicate. On a U64, `ufs_chk_u64` converts the provisional
+  entries to the ULTISID curve codes, because there nothing downstream can refine
+  them. **Both mirror checks must skip a list entry at the candidate's own
+  address** — otherwise a provisionally-typed slot tests itself and always looks
+  like a mirror.
 - **Self-modifying code** — SID register addresses (e.g., `cas_d418`, `cas_d41D`–`cas_d41F`) are patched at runtime to handle D400/D500 mirroring in FPGA implementations
 - **`checkpalntsc`** — PAL vs NTSC detection affects timing loops throughout
 - **`check128`** — Detects C64 vs C128 to adjust behavior
