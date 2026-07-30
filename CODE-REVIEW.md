@@ -138,107 +138,67 @@ scans refine it" could not work as-is: **every** add path deduped by address and
 | U64 Tuneful Eight | ULTISID curves | unchanged (converted at `ufs_chk_u64`) |
 
 ### P0-5 · ARMSID / SwinSID U at $D5xx-$D7xx are still not identified by name
-**File:** `siddetector.asm` — `s_s_try_dis` → `sfx_probe_dis_echo`
+**File:** `siddetector.asm` — `s_s_arm_chk`'s oscillator cross-read
+**Status: root-caused, NOT fixed. The fix needs real MixSID hardware.**
 
-With P0-1 fixed, an ARMSID at **D420** is now correctly named (the D4xx path
-calls `Checkarmsid` directly). An ARMSID or SwinSID Ultimate at **D500** still
-reports as `8580 FOUND`: that path relies on `sfx_probe_dis_echo` reading the
-DIS echo from `candidate+$1B`, and the echo is not coming back in the VICE
-proxy. This is pre-existing — the stored goldens show these cases have never
-been identified — and it is *not* a regression: the result went from actively
-wrong (`8580 INT`, claiming a U64 UltiSID) to honest (`8580 FOUND`, which is
-exactly what an ARMSID in 8580 mode emulates, and matches the documented
-WONTFIX for the SIDFX+ARMSID@D420 case).
+An ARMSID at **D420** is named correctly (that path calls `Checkarmsid` direct).
+One at **D500** reports `8580 FOUND`. Investigated properly rather than assumed:
 
-I did not chase it further because it is a chip-protocol question: either the
-patched VICE's `-sidvariant2` personality does not implement DIS at a secondary
-base, or the probe needs a different sequence there. Deciding that needs the
-real ARMSID hardware, not the emulator. The `CASES` row checks still demand
-`ARMSID FOUND` / `SWINSID ULTIMATE`, so the sweep keeps flagging it — leave
-them as the record of intent.
-
-### P0-2 · The variant goldens were regenerated *over* P0-1, so the golden diff is green on wrong output
-**Files:** `tests/variant_goldens/*.txt` vs the `expected` column in `scripts/variant_smoke.py:CASES`
-
-The stored goldens record `D500 8580 INT` etc. — i.e. they were captured with
-`--update` after the P0-1 behaviour appeared. The per-row substring checks in
-`CASES` still demand `ARMSID FOUND`. The two halves of the harness therefore
-contradict each other and the sweep **cannot** go green: 8 of 30 cases fail
-this way in every run, and they have been failing for some time (verified
-identical on pristine `63659cd`).
-
-Worse, two cases *pass* while showing the P0-1 symptom, because their expected
-substring is a prefix that matches anyway (`"D500 8580"` matches
-`"D500 8580 INT"`). The substring check is the only assertion still objecting
-to P0-1, and it only objects by accident.
-
-**FIXED.** With P0-1 settled the goldens were re-captured once (`--update`,
-30/30 written, no SKIPs) and every change reviewed by eye. The whole diff is 8
-files / 11 lines, and every line is an improvement:
+**1. The emulator is not the problem.** `tests/probe_dis_d500.asm` replicates
+`sfx_probe_dis_echo` against $D500 byte for byte. The ARMSID personality answers:
 
 ```
-stereo-D500-armsid        r17: D500 8580 INT  ->  D500 8580 FOUND
-stereo-D500-fpgasid8580   r17: D500 8580 INT  ->  D500 8580 FOUND
-stereo-D500-swinu         r17: D500 8580 INT  ->  D500 8580 FOUND
-tri-D420-armsid+D500-8580 r17: D420 8580 INT  ->  D420 ARMSID FOUND
-                          r18: D500 8580 INT  ->  D500 8580 FOUND
-tri-D420-armsid+D500-armsid   (same two rows)
-tri-D420-armsid+D500-fpgasid  (same two rows)
-tri-D420-armsid+DE00-8580 r17: D420 8580 INT  ->  D420 ARMSID FOUND
-tri-D500+DE00-plain-8580  r17: D500 8580 INT  ->  D500 8580 FOUND
-armsid-d420 / arm2sid-d420 r17: DE00 8580 FOUND -> D420 ARMSID FOUND  (P0-3)
+$D51B after DIS = $4E ('N')      <- exactly what s_s_try_dis_arm looks for
+$D51C after DIS = $4F ('O')
+$D51D after DIS = $52 ('R')      <- plain-ARMSID marker per the proxy source
 ```
 
-The other 22 goldens are byte-identical, which is the evidence that the change
-is confined to the mislabelling it was meant to fix.
+`../vice-sidvariant/src/sid/sid-variant-armsid.c` confirms it: `reg` is a
+slot-local offset and the state is per-slot, so DIS works at any base. So the
+`ARMSID FOUND` expectation **is** achievable — the row check is not aspirational.
 
-### P0-4 · The goldens capture the `checkrealsid` retry star, so they are nondeterministic under host load
-**Files:** `siddetector.asm` (`print_retry_star`) vs `scripts/variant_smoke.py` (`decode`, `render_golden`)
-
-On the third full sweep the `sidfx` case failed with this diff:
+**2. siddetector never reaches the probe.** Breakpointing the three mutually
+exclusive outcomes and restarting detection shows the D500 candidate is rejected
+by the **oscillator cross-read in `s_s_arm_chk`**, long before `s_s_try_dis`:
 
 ```
--golden  r06: 8580 SID...: 8580 FOUND
-+actual  r06: 8580 SID...: 8580 FOUND.
+$D460  cross-read says MIRROR      <- correct, genuinely mirrors slot 0
+$D4A0  cross-read says MIRROR      <- correct
+$D4E0  cross-read says MIRROR      <- correct
+$D500  cross-read says MIRROR      <- WRONG, this is the independent ARMSID
 ```
 
-The extra character is the `*` that `print_retry_star` appends when
-`retry_zp > 0` — i.e. when `checkrealsid` needed a second or third attempt
-because VIC bad-line DMA stole cycles on the first. That is expected program
-behaviour and is *deliberately* surfaced to the user, but it depends on raster
-timing and host load, so it is not stable enough to belong in a byte-exact
-golden. It appeared on run 3 and not on runs 1-2 of the same binary.
+**3. It is not ResID write latency.** At the rejection the registers read
+`A=$AA X=$18` on one run and `A=$D8 X=$18` on another — `X` still `$18` means
+the *first* read, and the value varies, so it is residual OSC3, not the `$4E`
+protocol byte. Adding the ~1280-cycle settle that `s_s_arm_mir_wait` uses for
+ResID's write batching **does not fix it** (tried, measured, reverted). The
+candidate's OSC3 genuinely still holds residue from earlier oscillator activity
+on that slot — `u64_fingerprint_scan` drives every $D5xx candidate, and unmapped
+$D5xx addresses mirror onto the slot-1 registers.
 
-It also shows the P2-10 decoder gap from the other side: `*` ($2A) is not in
-`decode`'s table, so it renders as `.` and the diff is needlessly cryptic.
+So the loop's premise — *an independent chip that we just silenced reads 0* — is
+false for any slot that was recently driven.
 
-**Fix:** in `render_golden`, strip (or normalise to a fixed marker) the retry
-star before comparing — e.g. drop a trailing `*` from the `6581 FOUND` /
-`8580 FOUND` rows. Add `*` to the decoder at the same time so any future
-occurrence reads as `*` rather than `.`. Do not simply re-`--update` the
-golden: whichever variant you capture will fail on the next run with the
-opposite timing.
+**Why I stopped here.** Fixing it means changing the mirror-detection heuristic:
+require several *consecutive* non-zero reads, or capture a baseline OSC3 before
+driving the primary and look for a *change*, or TEST-reset the candidate's
+oscillator and wait for OSC3 to reach 0 before the cross-read. Any of those
+alters mirror detection for **every** stereo ARMSID path, and the cross-read
+exists specifically to model MixSID's CS1/CS2 window behaviour on real hardware
+(see the long comment above it). Getting it wrong reintroduces the ghost
+detections that comment was written to prevent, and the emulator cannot tell me
+whether a candidate fix is faithful. This one genuinely wants the MixSID rig.
 
-### P0-3 · Two variant cases never place the chip where their name says
-**File:** `scripts/variant_smoke.py:70-71`
+**Also learned, and worth writing down: VICE monitor reads of SID registers do
+not agree with CPU reads.** At the same breakpoint the monitor reported
+`$D51B = $00` while the CPU had just read `$D8`. The monitor peeks I/O without
+clocking ResID. Debug SID reads by having the 6502 record them (as the
+`tests/probe_*.asm` programs do), never with monitor `m`.
 
-```python
-("armsid-d420",  ["-sidextra", "1", "-sidvariant2", "armsid"],  17, "ARMSID FOUND"),
-("arm2sid-d420", ["-sidextra", "1", "-sidvariant2", "arm2sid"], 17, "ARMSID FOUND"),
-```
-
-Neither passes `-sid2address`, so VICE puts SID #2 at its **default** address,
-not $D420 — the captured screens say `DE00 8580 FOUND`. Every other stereo
-case passes an explicit `-sid2address`. These two used to work by accident, on
-a stale `Sid2AddressStart=$D420` leaking in from the user's `vice.ini`; adding
-`-default` (to fix a *different* leak, per the comment in `_launch_and_capture`)
-removed that crutch and exposed them.
-
-**FIXED** as part of the P0-1 change: both cases now pass
-`"-sid2address", "54304"` and their goldens read `D420 ARMSID FOUND`, so they
-finally test what their names claim. (Fixing this in isolation would have been
-pointless — before P0-1 they would merely have reported `D420 8580 INT`
-instead.)
+Evidence kept as `tests/probe_dis_d500.asm` (protocol works at D500) and
+`tests/probe_dis_d500b.asm` (the cross-read reads all-zero in isolation, which
+is what pins the cause on leftover state rather than on the read itself).
 
 ---
 
@@ -827,7 +787,7 @@ hand-expanding the recipes in a shell.
 | P0-2 | Goldens regenerated over P0-1 | **fixed** - re-captured once, 30/30 written, 8-file / 11-line diff reviewed line by line |
 | P0-3 | 2 variant cases missing `-sid2address` | **fixed** - both now place the chip at $D420, and both pass |
 | P0-4 | Retry star made goldens nondeterministic | **fixed** - `*` decodes as `*`, `strip_retry_star()` normalises it out of the golden; 8 new tests |
-| P0-5 | D5xx ARMSID / SwinSID U not named | **OPEN** - chip-protocol question, needs the real hardware |
+| P0-5 | D5xx ARMSID / SwinSID U not named | **root-caused, not fixed** - `s_s_arm_chk`'s cross-read rejects the slot on residual OSC3 before the DIS probe runs; the proxy itself answers correctly. Heuristic change, wants MixSID hardware |
 | P1-1 | IRQ vector installed without SEI | fixed - `sei` + CIA mask/ack before the vector swap |
 | P1-2 | `readresult` awk field + stale addresses | fixed - resolves every symbol from `.vs` at run time |
 | P1-3 | hw_test blind to sid_list slot 8 | fixed - `NSLOTS = 9`; new `tests/test_hw_snapshot.py` |

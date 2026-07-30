@@ -5154,6 +5154,20 @@ s_s_arm_chk:
        sta $D40F           // primary D400 voice 3 freq hi = max (fast ramp)
        lda #$21            // sawtooth + gate on primary D400 voice 3
        sta $D412
+       // NOTE (CODE-REVIEW.md P0-5): this loop rejects a genuine ARMSID at
+       // $D500 on its very first read, which is why the DIS probe that would
+       // name it is never reached.  Measured with a breakpoint here: A=$AA on
+       // one run and A=$D8 on another, X still $18 — a varying residual OSC3
+       // value, not a protocol byte.  Adding the ~1280-cycle settle that
+       // s_s_arm_mir_wait uses (for ResID's write batching) does NOT fix it, so
+       // this is not write latency: the candidate's OSC3 genuinely still holds
+       // residue from earlier oscillator activity on that slot, and the loop's
+       // premise — "an independent, silenced chip reads 0" — does not hold.
+       // Fixing it means making the test robust to residue (require several
+       // consecutive non-zero reads, or baseline OSC3 before driving the
+       // primary, or TEST-reset the candidate and wait for 0), which changes
+       // mirror detection for every stereo ARMSID path and so wants real
+       // MixSID hardware to validate.  Do not "fix" it from the emulator alone.
        ldy #$1B
        ldx #$18            // 24 read attempts (~2 accumulator wraps at freq=$FF00)
 s_s_arm_mlp:
