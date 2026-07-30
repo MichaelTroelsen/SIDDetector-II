@@ -6,22 +6,44 @@
 // registers, measuring timing behaviour, and checking identifying byte
 // sequences left in read-back registers.
 //
-// Detection chain (executed once at startup):
-//   1. DETECTSIDFX    - SIDFX cartridge (SCI serial protocol handshake)
-//   2. Checkarmsid    - ARMSID / ARM2SID  (register echo "DIS" + "WOR" / "NOR")
-//   3. checkfpgasid   - FPGASID           (magic-cookie config + $F51D readback)
-//   4. checkrealsid   - real 6581 / 8580  (sawtooth waveform + $D41B readback)
-//   5. checksecondsid - additional SID at D500/D600/D700/DE00/DF00
-//   6. calcandloop    - $D418 decay timing fingerprint (identifies emulators)
+// Detection chain (executed once at startup, in this order):
+//   0.1  Ultimate64 probe   - UCI status register at $DF1F (guarded by $DF00)
+//   0.25 checkrealsid       - early real-SID pre-check (no $D41F writes)
+//   0.5  checkswinsidnano   - MUST precede any $D41F write (disturbs the AVR)
+//   1.   DETECTSIDFX        - SIDFX cartridge (SCI serial protocol handshake)
+//   2.   Checkarmsid        - ARMSID / ARM2SID via CS2-DIS window echo
+//   3.   checkpdsid         - PDsid  ('P'/'D' -> 'S' echo on D41D/D41E)
+//   3b.  checkbacksid       - BackSID unlock + polled D41F echo
+//   3c.  checkskpico        - SIDKick-pico VERSION_STR "SK" in config mode
+//   4.   checkfpgasid       - FPGASID (magic cookie $81/$65 + $F51D readback)
+//   5.   checkusid64        - uSID64 ($D41F config-register readback)
+//   6.   checkrealsid       - real 6581 / 8580 (sawtooth + $D41B readback)
+//   7.   checksecondsid     - additional SID at D500/D600/D700/DE00/DF00
+//   8.   checkkungfusid     - KungFuSID ($A5 -> $5A ACK on D41D)
+//   9.   checkfmyam         - Yamaha OPL2 FM expansion at $DF40/$DF50/$DF60
+//  10.   checkmidi          - MIDI cartridges (6850 ACIA reset signature)
+//  11.   tlr_sweep          - family-agnostic baseline scan (only when data4=$00)
+//  12.   calcandloop        - $D418 decay fingerprint (only when data4=$F0)
 //
-// Result codes stored in data1 ($A4):
-//   $01=6581  $02=8580  $04=SwinsidU  $05=ARMSID  $06=FPGA8580
-//   $07=FPGA6581  $10=secondSID  $30=SIDFX  $F0=unknown/none
+// Chip-type codes (data1 / data4 / sid_list_t). sid_type_index is the single
+// source of truth mapping these to display names — update it when adding one.
+//   $01=6581        $02=8580        $04=SwinsidU     $05=ARMSID/ARM2SID
+//   $06=FPGA8580    $07=FPGA6581    $08=SwinsidNano  $09=PDsid
+//   $0A=BackSID     $0B=SKpico8580  $0C=KungFuSID    $0D=uSID64
+//   $0E=SKpico6581  $10=secondSID   $11=TLR-generic (renders as UNKNOWN)
+//   $20-$26=ULTISID (U64 filter curves; $22/$23 are the 6581 curves)
+//   $30=SIDFX       $F0=unknown/none
 //
-// Memory layout:
-//   $0801  BASIC stub (SYS 2061)
-//   $080D  Main program and all subroutines
-//   $1D00  Result tables: num_sids, sid_list_l/h/t, sid_map
+// Memory layout (see docs/MEMORYMAP.md for the authoritative, checked table):
+//   $0801  BASIC stub (SYS 9216 -> $2400)
+//   $0A00  Embedded TLR sid-detect2 (copied to $0801 on the L key)
+//   $1800  Triangle Intro tune
+//   $2400  Main program + all detection routines
+//   $5B00  tlr_sweep / tls_sid_print / dedupe_sid_list
+//   $6000  Result tables (num_sids, sid_list_l/h/t, sid_map) + screen/strings
+//   $9200  SID Tracker View
+//   $A000  Delirious 9 tune (under BASIC ROM; bank out with $01=$36 to reach)
+//   $C000  Tracker shadow SID   $C020 tune selector   $C300 Quality page
 // =============================================================================
 
 * = $0801
@@ -58,48 +80,12 @@
 tlr_data:
     .fill tlrFile.getSize() - 2, tlrFile.get(i + 2)    // skip 2-byte PRG load-address header
 
-// V1.20
-// ARM2SID detection - done
-// TC64 detection
-// SFX Sound expander - half done
-// MISTer C64
-//
-// V1.00
-// problem:
-// FPGA D400 og D500// you cannot poke FPGAsid for second(sid). Need to test with 2 physical sids. 
-//------------------------------------------------------------------------------------------------------------
-// todo:
-// check for FCiii, and skip like 128 check!!
-// unknown sid at D400, should also write in sid_list_h,low,type
-// check SwinsidNano by eliminating others. Check if D400 and D500 is mirrored. NoSID will not mirror!!! 
-// Turbo Chameleon also has sid emultaion and is detectable
-// ARMSID2 detection
-// show sterosid of sidfx
-// show sterosid of FPGASID
-// SWINSID NANO (NOPAD) detection - howto
-// ULTISID (U64) - asked
-// uSID64 detection - done ($D41F config register readback, $0D)
-//
-// ----------------------------------------------------------------------------------------------------------
-// test case
-// D400: 6581 D500:Swindsid     - error
-// D400: Swindsid D500:6581     - error
-// D400: Swindsid DE00:6851     - error
-// D400: 8580 D500:armsid       - 
-// D400: armsid D500:8580       - error
-// D400: armsid DE00:8580       - error 
-// D400: armsid D500:armsid     -  
-// D400: Swindsid D500:Swindsid - 
-// D400: armsid D500:Swindsid   - OK
-// D400: armsid D420:Swindsid   - OK
-// D400: 8580 DE00:6581         - OK 
-// D400: fpgasid                - 
-// D400: swinnano               - 
-// D400: ultisid                - 
- 
+// NOTE: the V1.00/V1.20 scratch TODO list and stereo test-case matrix that
+// used to sit here were a fossil — most entries were marked "error" but had
+// long since been fixed (see TODO.md "Stereo config error cases" for the
+// current, maintained status of every combination, and TODO.md as a whole
+// for the live backlog). Keeping two divergent TODO lists was the problem.
 
-
-    
 // =============================================================================
 // Zero-page and constant equates
 // =============================================================================
@@ -116,7 +102,8 @@ tlr_data:
 .const data2       = $A5   // secondary result byte (echo char or sub-type)
 .const data3       = $A6   // tertiary result byte (ARM2SID 'R' discriminator)
 .const za7         = $A7   // machine type: $FF=C64, $FC=C128, other=TC64
-.const za8         = $A8   // 16-bit pointer used by checkanothersid (lo)
+.const za8         = $A8   // 16-bit scratch pointer; fiktivloop parks the
+                            //   scan root here across type identification (lo)
                             //   za8+1 = high byte
 .const sidtype     = $A9   // current chip family being scanned in sidstereostart
                             //   $05=ARMSID/SwinsidU, $06=FPGAsid8580, $07=FPGAsid6581, $01=real
@@ -156,7 +143,7 @@ tlr_data:
 .const qc_pt_ptr      = $C1   // lo  (qc_pt_ptr+1 = $C2 = hi)
 
 // Detection state ($F6-$FF)
-.const cnt2_zp  = $F6   // inner mirror-scan step counter (fiktivloop / checkanothersid)
+.const cnt2_zp  = $F6   // inner mirror-scan step counter (fiktivloop)
 .const sidnum_zp= $F7   // number of SID chips found so far (0-8)
 .const cnt1_zp  = $F8   // tab1/tab2 index during multi-SID scan
 
@@ -166,7 +153,7 @@ tlr_data:
 .const sptr_zp  = $F9   // SID address low byte  (always $00 in current use)
 .const sptr_zp1 = $FA   // SID address high byte (D4/D5/D6/D7/DE/DF)
 
-// Mirror-scan pointer — used in checksecondsid / fiktivloop / checkanothersid
+// Mirror-scan pointer — used in checksecondsid / fiktivloop
 // mptr_zp:mptr_zp+1 walks through $D4xx..$DFxx in $20 steps
 .const scnt_zp  = $FB   // mirror-scan step counter (0-$30 = 48 steps × $20)
 .const mptr_zp  = $FC   // mirror-scan address low byte  (00,20,40..E0)
@@ -210,6 +197,7 @@ init_sid_list:                          // zero the 9-slot SID result tables (A=
                 sta sid_list_h,x        // SID address high byte ($D4/$D5 ...)
                 sta sid_list_l,x        // SID address low byte  ($00/$20 ...)
                 sta sid_list_t,x        // chip type code for this slot
+                sta sid_prov,x          // 0 = type is final, not provisional
                 inx
                 cpx #$09               // 9 slots; slot 0 unused, slots 1-8 active (U64 8-SID)
                 bne init_sid_list
@@ -816,8 +804,8 @@ checkphysical2:
                 jsr $AB1E
                 jmp end
 swinmicro:
-                // checkswinmicro disabled: causes false positives on boards with no SID.
-                //jsr checkswinmicro
+                // (checkswinmicro used to be called here; it caused false
+                //  positives on boards with no SID and has now been removed.)
                 // --- Step 5b: KungFuSID (all other hardware checks exhausted) ---
                 // Old firmware: D41D echoes last write ($A5 → $A5).
                 // New firmware: D41D returns $5A (FW_UPDATE_START_ACK).
@@ -1164,6 +1152,16 @@ midi_disp_skip:
 // Install a raster IRQ at line 0 for the colour-wash animation and
 // spacebar detection.  The IRQ fires once per frame (~50/60 Hz).
 readkey2:
+           // The detection chain leaves IRQs enabled (palntsc and checkrealsid
+           // both end in cli) and the KERNAL's CIA1 timer IRQ is still live at
+           // this point.  Installing the handler vector is a two-byte write, so
+           // an IRQ arriving between them would dispatch through a half-updated
+           // vector (<IRQ / $EA) and jump into hyperspace.  Mask first, silence
+           // the CIA, ack anything already pending, and only then swap vectors.
+           sei
+           lda #$7F
+           sta $DC0D               // CIA1: disable timer IRQs (VIC raster only)
+           lda $DC0D               // ack any CIA IRQ already latched
            // Reset stack pointer to $FF before enabling the IRQ.
            // calcandloop uses txs/tsx to preserve X across jsr calls, which
            // leaves SP at the loop-counter value (~6).  With SP that low the
@@ -1174,11 +1172,9 @@ readkey2:
            ldx #<IRQ
            ldy #>IRQ
            lda #$00
-           stx $0314               // CIA1 IRQ vector low byte  -> our IRQ handler
-           sty $0315               // CIA1 IRQ vector high byte
+           stx $0314               // KERNAL IRQ vector low byte  -> our handler
+           sty $0315               // KERNAL IRQ vector high byte
            sta $D012               // trigger raster IRQ at line 0
-           lda #$7F
-           sta $DC0D               // CIA1: disable timer IRQs (VIC raster only)
            lda #$1B
            sta $D011               // VIC ctrl: enable display, select raster IRQ source
            lda #$01
@@ -2401,7 +2397,7 @@ dbg_sidfx_skip:
            lda #>dbg_s_backsid
            sta $FF
            jsr dbg_str
-           lda backsid_d41f       // D41F readback from checkbacksid ($42 = BackSID present)
+           lda backsid_d41f       // last D41F readback from checkbacksid ($01 = BackSID echo)
            jsr print_hex
            lda #$0D
            jsr $FFD2
@@ -3795,7 +3791,13 @@ get_emu_page:
            bne gep_check_swinano   // data3!=$02 -> continue checks
            jmp gep_unknown         // data3=$02 -> unknown
 gep_check_swinano:
-           // Swinsid Nano: data1=$01-02, data2=$00
+           // data1=$01-02, data2=$00.  Historically read as "SwinSID Nano",
+           // but a genuine Nano is now caught at Step 0.5 (checkswinsidnano)
+           // and reaches info_entry via data4=$08 without ever getting here.
+           // Arriving here means Nano detection did NOT fire, and this decay
+           // signature is known to be shared with NOSID+U2+ (docs/FINDINGS.md).
+           // checktypeandprint prints "UNKNOWNSID" for exactly this signature,
+           // so return the matching page instead of contradicting the screen.
            lda data1
            cmp #$01
            bcc gep_ulti
@@ -3803,7 +3805,7 @@ gep_check_swinano:
            bcs gep_ulti
            lda data2
            bne gep_ulti
-           lda #5                  // IP_SWINANO
+           lda #16                 // IP_UNKNOWN (matches checktypeandprint)
            rts
 gep_ulti:
            // ULTIsid: data1=$DA-F1, data2=$00
@@ -4012,6 +4014,7 @@ Checkarmsid:
                 sta     cas_d41D_4+2      // timing issue requieres runtime mod of upcodes.
                 sta     cas_d41D_5+2      // timing issue requieres runtime mod of upcodes.
                 sta     cas_d41D_6+2      // timing issue requieres runtime mod of upcodes.
+                sta     cas_d41d7+2     // ARM2SID data3 read — was left hard-wired to $D41D
                 sta     cas_d41B+2      // timing issue requieres runtime mod of upcodes.
                 sta     cas_d41C+2      // timing issue requieres runtime mod of upcodes.
                 sta     cas_d41E+2      // timing issue requieres runtime mod of upcodes.
@@ -4042,6 +4045,7 @@ Checkarmsid:
                 sta     cas_d41D_4+1      // timing issue requieres runtime mod of upcodes.
                 sta     cas_d41D_5+1      // timing issue requieres runtime mod of upcodes.
                 sta     cas_d41D_6+1      // timing issue requieres runtime mod of upcodes.
+                sta     cas_d41d7+1     // ARM2SID data3 read — was left hard-wired to $D41D
                 lda     sptr_zp
                 clc
                 adc     #$1b            // Voice 3 control at D418
@@ -4290,6 +4294,7 @@ cskp_done:
 // KungFuSID responds with $5A (FW_UPDATE_START_ACK). Real SIDs do not.
 //-------------------------------------------------------------------------
 // checkusid64: detect uSID64 by $D41F config register readback.
+// PRIMARY SID ONLY — $D41F / $D418 are hard-wired, no sptr_zp indirection.
 // Write unlock sequence $F0,$10,$63,$00,$FF to $D41F, then read twice.
 // uSID64 holds a stable value in $E0-$FC on both reads (chip drives the bus).
 // NOSID floating bus decays from the written $FF: reads drift downward, so
@@ -4327,7 +4332,11 @@ cusid_notfound: lda #$F0
 cusid_end:      sta data1
                 rts
 
-// Uses (sptr_zp),Y indirect so stereo scan can call it at any SID slot.
+// PRIMARY SID ONLY — hard-wired to $D41D; there is no sptr_zp indirection
+// here despite what this header used to claim. Do not call it for a stereo
+// slot: it would probe D400 and report the wrong chip. The SIDFX secondary
+// path needs a slot-relative version and open-codes one with (sptr_zp),y in
+// sidfx_populate_sid_list (see sfx_pop_try_kfs).
 // data1=$0C = KungFuSID, data1=$F0 = not found.  Trashes A and Y.
 //-------------------------------------------------------------------------
 checkkungfusid:
@@ -5191,7 +5200,9 @@ s_s_arm_skip_armsid_chk:
        // Mirror check: if any already-found real SID (type $01 or $02) drives noise
        // and candidate+$1B reads non-zero, the candidate is a mirror → skip.
        lda sidnum_zp
-       beq s_s_arm_call_real  // no found SIDs yet → skip mirror check
+       bne s_s_arm_mir_start
+       jmp s_s_arm_call_real  // no found SIDs yet → skip mirror check
+s_s_arm_mir_start:            // (long jump: block now exceeds branch range)
        tax
 s_s_arm_mir_lp:
        lda sid_list_t,x
@@ -5200,6 +5211,18 @@ s_s_arm_mir_lp:
        cmp #$02
        bne s_s_arm_mir_nx
 s_s_arm_mir_test:
+       // Never test the candidate against ITSELF.  u64_fingerprint_scan may
+       // already have listed this exact address (provisionally typed $01/$02),
+       // and driving its own voice 3 then reading its own OSC3 always yields
+       // non-zero — the slot would reject itself as a mirror and could never be
+       // refined.  Skip any list entry whose address is the candidate's.
+       lda sid_list_h,x
+       cmp sptr_zp+1
+       bne s_s_arm_mir_go
+       lda sid_list_l,x
+       cmp sptr_zp
+       beq s_s_arm_mir_nx      // same address → not a meaningful comparison
+s_s_arm_mir_go:
        // Sawtooth at max freq on found_sid[x] voice3; read candidate+$1B 3×.
        // Sawtooth is reliable: with freq=$FF00 the OSC3 accumulator ramps to non-zero
        // in ~2 clock cycles. Noise fails when the 8580 LFSR was reset to 0 by the
@@ -5257,7 +5280,8 @@ s_s_arm_mir_fhz2: sta $D40F  // self-mod → found_sid[x]+$0F (clear freq)
        jmp s_s_arm_mir_skip
 s_s_arm_mir_nx:
        dex
-       bne s_s_arm_mir_lp
+       beq s_s_arm_call_real   // list exhausted → candidate is independent
+       jmp s_s_arm_mir_lp      // long jump: the loop body exceeds branch range
 s_s_arm_call_real:
        // Try DIS echo before checkrealsid to detect SwinSID U / ARMSID at D5xx–D7xx.
        // Safe for real SID primary ($01/$02): no snooping issues.
@@ -5373,7 +5397,19 @@ s_s_dup_lp:
        lda sid_list_l,x
        cmp sptr_zp
        bne s_s_dup_nx2
-       jmp s_s_next            // already in list — skip
+       // Address already listed.  If u64_fingerprint_scan put it there as a
+       // provisional entry, it only proved "a SID lives here" — this family
+       // scan has just identified WHICH one, so refine the type in place.
+       // Refining in place (rather than appending a second entry for
+       // dedupe_sid_list to collapse) means an 8-SID list still fits.
+       lda sid_prov,x
+       beq s_s_dup_keep
+       lda #$00
+       sta sid_prov,x          // claimed — later sweeps must not re-refine
+       lda data1               // family type just detected (< $10, see s_s_ff)
+       sta sid_list_t,x
+s_s_dup_keep:
+       jmp s_s_next            // nothing to append either way
 s_s_dup_nx2:
 s_s_dup_nx:
        dex
@@ -5466,22 +5502,23 @@ s_s_add:
        // ARMSID/SwinsidU mirrors at D5xx-D7xx would cause false positives anyway
        // (see TODO: end_skip_armsid_scan), so early exit is the correct behaviour.
        jmp s_s_l3
+// NOTE on the control flow below.  `s_s_l3` is a bare RTS, so the `jsr s_s_l3`
+// that used to sit after each fiktivloop call was a 12-cycle no-op that read
+// as "return here" while actually falling through to the next compare.  That
+// misreading is what produced the bug root-caused in the s_s_add comment
+// above, so the no-ops are gone and each path now states where it goes.
 s_s_lfpgasid:
        lda sidtype
        cmp #$06       //FPGAsid
        bne s_s_lfpgasid_2
-//       jsr checkanothersid
        jsr fiktivloop // find second sid max DFFF
-//       jsr checksecondFPGA
-       jsr s_s_l3
+       jmp s_s_next   // FPGASID 8580: keep walking the outer slot scan
 s_s_lfpgasid_2:
        lda sidtype
        cmp #$07       //FPGAsid
        bne s_s_l6581
-//       jsr checkanothersid
        jsr fiktivloop // find second sid max DFFF
-//       jsr checksecondFPGA
-       jsr s_s_l3
+       jmp s_s_next   // FPGASID 6581: keep walking the outer slot scan
 s_s_l6581:
        // brug kun fiktivloop hvis D400 er 8580, 6581
        lda sidtype
@@ -5489,9 +5526,8 @@ s_s_l6581:
        bne s_s_next
        // set values
        jsr fiktivloop // find second sid max DFFF
-       jsr s_s_l3
-
-
+       // Deliberate fall-through into s_s_E000 — it is the real-SID path's
+       // terminator, not a separate scan stage.  Nothing jumps to it.
 s_s_E000:
        // sæt DE00
        // check for FCIII
@@ -5640,6 +5676,17 @@ fll_checks:
        beq fll_mirr_done   // no found SIDs yet; skip
        tax                 // x = current entry count (1-based)
 fll_mlp:
+       // Never compare the candidate with ITSELF.  u64_fingerprint_scan may
+       // already have listed this exact address provisionally; enabling noise
+       // on it and then reading its own OSC3 always reads non-zero, so the slot
+       // would reject itself as a mirror and never reach identification.
+       lda sid_list_h,x
+       cmp mptr_zp+1
+       bne fll_mlp_go
+       lda sid_list_l,x
+       cmp mptr_zp
+       beq fll_mlp_nx      // same address → skip this entry
+fll_mlp_go:
        lda sid_list_l,x
        clc
        adc #$12            // found SID[x] + $12 = voice 3 control
@@ -5660,6 +5707,7 @@ fll_mread:  lda $D41B      // self-mod → mptr+$1B
        bne fll_mrd
        lda #$00
 fll_mclra:  sta $D412      // disable noise on SID[x]
+fll_mlp_nx:
        dex
        bne fll_mlp         // check next found SID
        jmp fll_mirr_done   // not a mirror of any found SID
@@ -5749,7 +5797,18 @@ fll_dup_lp:
        lda sid_list_l,x
        cmp mptr_zp
        bne fll_dup_nx
-       jmp f_l_next            // address already in list → skip
+       // Provisional entry from u64_fingerprint_scan?  Then this is not a real
+       // duplicate — that scan found the slot but could not name the chip.
+       // Fall into the identification path below with X already pointing at
+       // the existing slot, so the type is overwritten instead of skipped and
+       // no second slot is consumed.
+       lda sid_prov,x
+       beq fll_dup_skip
+       lda #$00
+       sta sid_prov,x          // claimed — later sweeps must not re-refine
+       jmp fll_refine
+fll_dup_skip:
+       jmp f_l_next            // genuine duplicate → skip
 fll_dup_nx:
        dex
        bne fll_dup_lp
@@ -5759,6 +5818,7 @@ fll_no_dup:
        ldx sidnum_zp //
        inx
        stx sidnum_zp
+fll_refine:                    // entry point with X = slot to (re)populate
        // Save original sptr_zp (scan root) before identification overwrites it.
        // Restored after fll_sid_typed so the next checksecondsid call still
        // uses the correct primary chip for its noise write. Without this,
@@ -5934,238 +5994,18 @@ f_l_l2:
        jmp f_l_l1     // continue (bcc range exceeded by confirmation code above)
 f_l_done:
        rts
-//--------------------------------------------------------------------------------------------------                
-checkanothersid:
-// FPGAsid and ARMsid/Swinsid Ultimate
-// the idea is to set $d41b to generate random numbers, and check which of the other mirrored regs 
-//(add $20) is getting only 0 by peeking it a couple of times: that's the address of an additional sid.
-// https://csdb.dk/forums/?roomid=11&topicid=114511
-
-
-                stx     x_zp            // $ad 
-                sty     y_zp            // $ae
-                pha                     // 
-                
-                lda #$f0
-                sta data1
-                
-ccas_begin:                
-//                lda     mptr_zp+1
-//                lda     mptr_zp
-                
-//                adc     #$1b            // Voice 3 control at D41B
-//                sta     ccas_d41b+1      // timing issue requieres runtime mod of upcodes.
-//                lda     mptr_zp
-                
-// -- hack --
-ccas_hack1:
-                lda #$81        // activate noise waveform
-                sta $d412
-                lda #$FF        // 
-                sta $d40f
-                ldx #$d4        // set x = $D400
-                stx za8+1
-                ldx #$00
-                stx za8         // set x = $D400 
-                
-ccas_d41b:        //lda $d41b
-                ldy #$1b
-                lda (za8),y  // lda D41B 
-                cmp #$00        // Hvis 0, så er sid fundet.
-                bne ccas_loop
-                inx
-                cpx #10 // if random gets 0 for some times it means it's not a mirror of d41b
-                bne ccas_d41b
-                jmp ccasfound
-                
-ccas_loop:       lda za8
-                clc
-                adc #$20
-                sta za8       // zfb+$20
-                bne ccas_noinczfc  // forskellige fra 0
-                inc za8+1
-                lda za8+1
-                cmp #$d8      // 
-                bcs ccasstopsrealsid  // hvis >= $D800 så finished
-ccas_noinczfc:
-                jmp ccas_d41b // en tur til
-                
-ccasfound:      
-                lda #$10
-                sta data1
-                lda     za8
-                sta     sptr_zp         // store lowbyte 00 (Sidhome)
-                lda     za8+1            // load highbyte D4  (Sidhome)
-                sta     sptr_zp+1       // store highbyte D4 (Sidhome)
-                jsr Checkarmsid     
-                lda data1
-                cmp #04 // S
-                bne ccas_armsid
-                // swinddectect
-                jmp ccas_writesidl 
-ccas_armsid:
-                lda data1
-                cmp #05 // N
-                bne ccas_fpgasid
-                jmp ccas_writesidl 
-                // armsid 
-ccas_fpgasid:
-                lda #$10
-                sta data1
-                lda     za8
-                sta     sptr_zp         // store lowbyte 00 (Sidhome)
-                lda     za8+1            // load highbyte D4  (Sidhome)
-                sta     sptr_zp+1       // store highbyte D4 (Sidhome)
-//debug
-                //lda     za8+1            // load highbyte D4  (Sidhome)
-                //jsr PRBYTE
-                //lda     za8
-                //jsr PRBYTE
-                //
-                jsr checkfpgasid
-// debug
-//                lda data1
-//                jsr PRBYTE
-                
-                lda data1
-                cmp #06 // N
-                bne ccas_fpgasid2
-                jmp ccas_writesidl 
-ccas_fpgasid2:
-                lda data1
-                cmp #07 // N
-                bne ccasstopsrealsid
-//-----                
-ccas_writesidl:
-                // Bounds guard (same layout issue as s_s_add): sidnum must stay ≤ 7
-                lda sidnum_zp
-                cmp #$07
-                bcs ccasstopsrealsid
-                ldx sidnum_zp //
-                inx
-                stx sidnum_zp
-                lda data1
-                sta sid_list_t,x
-                lda sptr_zp
-                sta sid_list_l,x
-                lda sptr_zp+1
-                sta sid_list_h,x
-                // load sid_list
-
-//debug
-       //lda sptr_zp+1
-       //jsr PRBYTE
-       //lda sptr_zp
-       //jsr PRBYTE
-       //lda data1
-       //jsr PRBYTE
-
-
-                
-ccasstopsrealsid:            
-
-                ldx     x_zp            // $ad 
-                ldy     y_zp            // $ae
-                pla                     // 
-                rts 
-
-
-//--------------------------------------------------------------------------------------------------                
-checksecondFPGA:
-//* Scan for and mark mirrors
-// The problem is that the SID mirrors the values of registers (00..1F) on the highbyte.
-// D500, D520, D540, D560..D7F0 will show the same value even though the chip select address is D500.
-// the idea is to set $d41b to generate random numbers, and check which of the other mirrored regs 
-//(add $20) is getting only 0 by peeking it a couple of times: that's the address of an additional sid.
-// https://csdb.dk/forums/?roomid=11&topicid=114511
-// DE00 and DF00 also mirror values
-
-// set values
-// D400
-       lda #$D4
-       lda sptr_zp+1
-       sta mptr_zp+1
-       lda #$00
-       lda sptr_zp
-       sta mptr_zp
-csfp_l_l1:
-       jsr checkfpgasid
-       lda data1
-       cmp $07
-       bne csfp_l_l_fpga1
-       jmp csfp_l_l_found
-csfp_l_l_fpga1:
-       lda data1
-       cmp $06
-       bne csfp_l_l_sec
-       jmp csfp_l_l_found
-csfp_l_l_sec:
-//       jsr checksecondsid
-//       lda data1
-//       cmp #$10
-//       bne csfp_l_next
-        jmp csfp_l_next
-
-csfp_l_l_found:
-       //hvis fundet
-       // sanity check
-       lda sidnum_zp
-       cmp #$08               // bound is sidnum <= 7 (post-inc ≤ 8); 8 SIDs max for U64
-       bcs csfp_l_next        // skip if sidnum >= 8 (would overflow slot 8)
-       // sanity check
-       ////// found sid //////
-       ldx sidnum_zp // 
-       inx 
-       stx sidnum_zp
-       lda mptr_zp+1
-       sta sptr_zp+1
-       lda mptr_zp
-       sta sptr_zp
-       // load sid_list
-       lda data1 
-       sta sid_list_t,x
-       lda sptr_zp
-       sta sid_list_l,x
-       lda sptr_zp+1
-       sta sid_list_h,x
-       // load sid_list
-       // choose next sid found as base
-       lda sptr_zp+1
-       lda sptr_zp
-       
-       
-csfp_l_next:       
-       lda mptr_zp
-       cmp #$E0 // hvis E0, y++
-       bne csfp_l_l2
-       // get D4 from tab1
-       ldy cnt1_zp 
-       // if c128 then lda tab2,y
-       lda za7
-       cmp #$FF 
-       bne csfp_l_l3
-       lda tab1,y
-       jmp csfp_l_l4
-csfp_l_l3:       
-       lda tab2,y // c128
-csfp_l_l4:       
-       sta mptr_zp+1
-       iny
-       sty cnt1_zp 
-csfp_l_l2:       
-       // add #$20 
-       lda mptr_zp
-       clc // clear cary
-       adc #$20
-       sta mptr_zp
-       ldy mptr_zp+1
-       ldx cnt2_zp
-       inx
-       stx cnt2_zp
-       cpx #$30       // ikke $30
-       bcc csfp_l_l1        
-       rts
-                
+//--------------------------------------------------------------------------------------------------
+// REMOVED: checkanothersid + checksecondFPGA.
+// Both were dead — every call site had been commented out for several
+// releases (see the s_s_lfpgasid / s_s_l6581 blocks in sidstereostart) — and
+// both had latent defects waiting for anyone who re-enabled them:
+//   * checksecondFPGA compared with `cmp $07` / `cmp $06`, i.e. against
+//     ZERO PAGE $06/$07 rather than the immediates #$07/#$06 it meant, so
+//     its FPGASID dispatch depended on unrelated KERNAL scratch bytes.
+//   * checkanothersid wrote $D4 to za8+1, which aliases sidtype ($A9) and
+//     silently terminated the caller's scan (root-caused in the s_s_add
+//     comment above), and bounded sid_list at 7 where live code uses 8.
+// fiktivloop is the maintained replacement for both.
 //--------------------------------------------------------------------------------------------------                
 sidstereo_print:
 
@@ -7843,39 +7683,10 @@ check128_c64:
 check128_end:
       rts
 //--------------------------------
-// new swinsidMicrocheck ; 8580=01, 6581=01, ARM=0, SwinsidNano=99 NOSID=99
+// REMOVED: checkswinmicro. Disabled long ago for causing false positives on
+// boards with no SID at all (see the commented-out call in swinmicro:), and
+// dead code ever since. It also left voice 3 driven on the not-found path.
 //--------------------------------
-checkswinmicro:
-    ldx #$1F //00
-    lda #$00
-checkswinloop1:
-    sta $D400,X
-    dex
-    bne checkswinloop1
-    lda #$00
-    sta $D413 // AD
-    lda #$F0
-    sta $D414 // SR
-    lda #$41  // gate bit set, noise set
-    sta $D412 // control register
-    sta $D40e // Voice 3 Frequency Control (low byte)
-    sta $D40f // Voice 3 Frequency Control (high byte)
-    lda $D41c //
-    cmp #$01
-    beq checkswinloop2
-    // found micro sid
-    stx $d412
-    lda #$08
-    sta data1
-    sta data2
-    jmp checkswinend
-checkswinloop2:
-    lda #$f0
-    sta data1
-    sta data2
-checkswinend:
-    rts
-
 
 //======================
 //COLOUR WASHING ROUTINE
@@ -7914,8 +7725,9 @@ calcand_calcloop:
     inx 
     cpx #4
     bne calcand_calcloop
-    jmp funny_print
-    rts  
+    jmp funny_print         // tail-call: never returns to our caller, which is
+                            // what makes the txs/tsx trick above safe here.
+                            // (An unreachable rts used to follow this line.)
 
 //----------------
 // start test
@@ -8262,8 +8074,8 @@ l8580f:         .text "8580 FOUND" // data1=$02 data2=$02
                 .byte 0               
 swinsidnanof:   .text "SWINSID NANO FOUND" // data1=$08 data2=$08
                 .byte 0        
-unknownsid:      .text "UNKNOWN SID FOUND" // data1=$09 data2=$09
-                .byte 0        
+unknownsid:      .text "UNKNOWN SID FOUND" // rendered for type $F0 and $11
+                .byte 0
 secondsid:      .text "ANOTHER SID FOUND" // data1=$10 data2=$10
                 .byte 0        
 // UltiSID filter curve strings: indexed by UCI type byte 0-6 ($20-$26 in sid_list_t)
@@ -8315,8 +8127,6 @@ usid64f:        .text "USID64 FOUND"  // data1=$0D
                 .byte 0
 sidFXf:         .text "SIDFX FOUND"   // data1=$30
                 .byte 0
-swinsidmicrof:  .text "SWINSID MICRO FOUND"
-                .byte 0
 nosidf:         .text "NO SID"        // slot 16 long name (debug page)
                 .byte 0
 
@@ -8346,10 +8156,6 @@ sidname_long_hi:
 
 
 
-data1_old:           .byte 10
-                .byte 0
-data2_old:           .byte 10
-                .byte 0
 armsid_major:        .byte 0     // firmware major version (2=ARMSID, 3=ARM2SID, 0=unknown)
 armsid_minor:        .byte 0     // firmware minor version (0-99 raw)
 armsid_cfgtest:      .byte 0     // D41B read right after config open (should be $4E='N' if working)
@@ -8374,7 +8180,7 @@ arm2sid_mapnames:    .text "----SIDLSIDRSFX-SID3"  // 5 × 4 chars, indexed by m
 arm2sid_slot_d2:     .byte $34,$34,$35,$35,$45,$45,$46,$46  // 2nd hex digit: '4','4','5','5','E','E','F','F'
 arm2sid_shortf:      .text "ARM2SID "
                      .byte 0                         // prefix for stereo SID entries
-backsid_d41f:        .byte 0     // D41F readback from checkbacksid ($42 = BackSID present)
+backsid_d41f:        .byte 0     // last D41F readback from checkbacksid ($01 = BackSID echo)
 skpico_fm:           .byte 0     // config[8] from checkskpico Phase 3: >=4 and <6 → FM at $DF00
 fmyam_detected:      .byte 0     // 1 = CBM SFX / FM-YAM detected at $DF40/$DF50/$DF60
 sfx_oct_offset:      .byte 0     // octave shift added to $B0 value (0/4/8 = V1/V2/V3)
@@ -9176,8 +8982,6 @@ sp_plot:
            tay
            lda #$51                     // round ball screencode (filled circle) — looks like dot
            sta (trk_ptr_lo),y
-           // Also paint a cyan colour under the dot.
-           lda scope_col_lo,x           // trk's not strictly needed; skip for now.
            inx
            cpx #40
            bne sp_plot
@@ -9205,7 +9009,8 @@ vu_colour_tbl:   .byte $01,$01,$01,$01, $0F,$0F,$0F,$0F, $07,$07,$07,$07
 // Scope row base addresses (row 15 at top, row 22 at bottom).
 scope_row_lo:    .byte <($0400+22*40), <($0400+21*40), <($0400+20*40), <($0400+19*40), <($0400+18*40), <($0400+17*40), <($0400+16*40), <($0400+15*40)
 scope_row_hi:    .byte >($0400+22*40), >($0400+21*40), >($0400+20*40), >($0400+19*40), >($0400+18*40), >($0400+17*40), >($0400+16*40), >($0400+15*40)
-scope_col_lo:    .fill 40, 0           // unused placeholder
+// (scope_col_lo removed — a 40-byte all-zero placeholder whose only reader
+//  was a dead `lda scope_col_lo,x` in scope_plot marked "skip for now".)
 
 // 40-byte scope sample buffer.
 scope_buf:       .fill 40, 0
@@ -11299,15 +11104,20 @@ ufs_unique:
        stx x_zp                 // save slot index (checkrealsid trashes X)
        jsr checkrealsid         // sets data1 = $01 (6581) / $02 (8580) / $F0
        ldx x_zp
-       lda data1
-       cmp #$01
-       beq ufs_t_6581           // data1=$01 → 6581
-       lda #$20                 // $02 (8580) or $F0 (unknown) → ULTISID 8580
-       jmp ufs_t_store
-ufs_t_6581:
-       lda #$22                 // ULTISID 6581
-ufs_t_store:
+       // Store what the oscillator test actually measured, and flag the slot
+       // PROVISIONAL.  All this scan has established is "an independent SID
+       // lives here" — not which model.  It used to stamp the ULTISID curve
+       // codes ($20/$22) unconditionally, which mislabelled every stereo
+       // cartridge in $D4xx-$D7xx on plain C64s as a U64 UltiSID, and because
+       // this scan runs BEFORE the family sweeps their address dedup then
+       // locked the wrong answer in.  Now the family scans are allowed to
+       // overwrite the type in place while sid_prov is set (see s_s_dup_lp and
+       // fll_dup_lp); on a U64, ufs_done converts these to the curve codes
+       // instead, because there nothing downstream can refine them.
+       lda data1                // honest: $01 / $02 / $F0 — never ULTISID here
        sta sid_list_t,x
+       lda #$01
+       sta sid_prov,x           // 1 = type is provisional, refinable in place
        // checkrealsid leaves candidate voice 3 silenced; nothing more to do.
        jmp ufs_next
 ufs_silence_cand:
@@ -11341,9 +11151,37 @@ ufs_done:
        // guards (e.g. FM-YAM skip in checkfmyam) behave correctly.
        lda sidnum_zp
        cmp #$04
-       bcc ufs_done_rts
+       bcc ufs_chk_u64
        lda #$01
        sta is_u64
+ufs_chk_u64:
+       // On a U64 THIS scan is the authority: fiktivloop's noise-mirror checks
+       // reject UltiSID slots outright — that is the whole reason this routine
+       // exists — so no later scan would ever refine them.  Convert the
+       // provisional entries to their ULTISID curve codes and clear the
+       // refinable flag so the family sweeps leave them alone.  On a plain
+       // machine we fall straight through and the entries stay refinable.
+       lda is_u64               // set by the $DF1F probe or the count heuristic
+       beq ufs_done_rts
+       ldx sidnum_zp
+       beq ufs_done_rts
+ufs_conv_lp:
+       lda sid_prov,x
+       beq ufs_conv_nx          // not ours / already refined → leave alone
+       lda #$00
+       sta sid_prov,x
+       lda sid_list_t,x
+       cmp #$01
+       beq ufs_conv_6581
+       lda #$20                 // $02 (8580) or $F0 (unknown) → ULTISID 8580
+       jmp ufs_conv_store
+ufs_conv_6581:
+       lda #$22                 // ULTISID 6581
+ufs_conv_store:
+       sta sid_list_t,x
+ufs_conv_nx:
+       dex
+       bne ufs_conv_lp
 ufs_done_rts:
        rts
 u64_prim_osc3:  .byte $00
@@ -11351,6 +11189,11 @@ u64_prim_osc3:  .byte $00
 // the OSC3 readback of an already-found slot, captured per-candidate before
 // activation, then re-checked for write coupling.
 ufs_save_slots: .fill 9, 0
+// Per-slot "type is provisional" flags, indexed by slot 1..8 (slot 0 unused).
+// Set by u64_fingerprint_scan for the slots it discovers; cleared the moment a
+// family-specific scan refines that slot's type, or by the U64 conversion
+// above.  Zeroed for every slot in init_sid_list at start:.
+sid_prov:       .fill 9, 0
 
 // ============================================================================
 // TLR SWEEP ($5B00 block) — V1.5.01
@@ -11383,10 +11226,13 @@ ufs_save_slots: .fill 9, 0
 //   $1F      = slot was pre-existing in sid_list when tlr_sweep started
 //              (i.e. data4-driven D400 pre-population at end_pre_d400)
 //
-// Gate (set by caller, see end_skip_u64fp): only runs for data4 ∈
-// {$00,$01,$02} — i.e. real-SID primaries or unknown. All other chip
-// families (ARMSID/FPGA/SwinSID/SKpico/SIDFX/etc) have their own dedicated
-// stereo scans and are sensitive to bus-state disturbance.
+// Gate (set by caller, see end_skip_tlr): runs ONLY for data4 = $00 — i.e.
+// no primary chip identified at all. Real-SID primaries ($01/$02) are
+// deliberately excluded too: fiktivloop_d400's noise-mirror chain already
+// handles their stereo case, and running tlr_sweep on top would add D420/
+// D440/... mirrors of D400 as separate SIDs. Every other chip family
+// (ARMSID/FPGA/SwinSID/SKpico/SIDFX/...) has its own dedicated stereo scan
+// and is sensitive to bus-state disturbance.
 //-------------------------------------------------------------------------
 tlr_sweep:
                 stx     x_zp
@@ -11607,6 +11453,12 @@ tls_sp_fail:
 //                 address and t[j] != $11, set t[i] = $00 (kill).
 // Phase 2 (compact): copy surviving entries (t != $00) to low slots, then
 //                    update sidnum_zp.
+//
+// NOTE: the parallel sid_prov[] flags are deliberately NOT compacted here.
+// Nothing reads them after this point — they are consumed only by the family
+// sweeps, which have all finished — and start: re-zeroes the whole array on
+// every run. If you ever add a sid_prov reader downstream of this routine,
+// compact it alongside l/h/t or the flags will refer to the wrong slots.
 //-------------------------------------------------------------------------
 dedupe_sid_list:
                 stx     x_zp
@@ -11850,11 +11702,15 @@ quality_print_chiptype:
            bcc qpc_simple
            cmp #$27
            bcs qpc_simple              // not $20-$26 → simple path
-           // ULTISID range: $20 = 8580 (per uci_type_for_addr), rest = 6581
-           // family.  The debug page shows the precise filter-curve name;
-           // the 6-char Q page only distinguishes family.
-           cmp #$20
-           bne qpc_ulti6
+           // ULTISID range: $22/$23 are the 6581 curves, every other code in
+           // $20-$26 is an 8580 curve.  This split MUST match the main screen
+           // (ssp_skp16) — same sbc #$22 / cmp #$02 test — or a slot reads
+           // 8580 on one page and 6581 on the other.  The debug page shows the
+           // precise filter-curve name; the 6-char Q page only shows family.
+           sec
+           sbc #$22                    // $22/$23 → 0/1; others wrap or ≥2
+           cmp #$02
+           bcc qpc_ulti6               // C=0 → 6581 family
            lda #<qct_ulti8
            ldy #>qct_ulti8
            jmp $AB1E
@@ -12290,8 +12146,8 @@ qct_skp65: .text "SKPI65"; .byte 0   // SIDKick-pico 6581 (type $0E)
 qct_kung:  .text "KUNGFU"; .byte 0
 qct_u64:   .text "USID64"; .byte 0   // type $0D (currently unused but reserved)
 qct_2nd:   .text "2NDSID"; .byte 0   // secondsid family (type $10)
-qct_ulti8: .text "ULTI85"; .byte 0   // ULTISID 8580 (type $20)
-qct_ulti6: .text "ULTI65"; .byte 0   // ULTISID 6581 (types $21, $22)
+qct_ulti8: .text "ULTI85"; .byte 0   // ULTISID 8580 (types $20,$21,$24-$26)
+qct_ulti6: .text "ULTI65"; .byte 0   // ULTISID 6581 (types $22,$23)
 qct_sidfx: .text "SIDFX "; .byte 0
 qct_nosid: .text "NO SID"; .byte 0
 

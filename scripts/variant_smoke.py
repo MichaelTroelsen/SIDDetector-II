@@ -27,11 +27,41 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 VICE = r"C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe"
 PRG  = os.path.join(ROOT, "siddetector.prg")
-PORT = 6502
-# 20 s wait — tri-SID configs (3× ResID) load slower than single-SID; 14 s
-# used to be enough but triple-SID autostart can straddle that boundary.
-WAIT = 30.0
+
+# Readiness is polled rather than slept through.  The old code slept a flat
+# WAIT = 30 s per case before its first screen dump; across 30 cases that is
+# 15 minutes of pure waiting even when every case settles in ~12 s, and any
+# case that needed longer than 30 s burned two full retries instead.
+#
+# Dumping the screen is cheap and safe to repeat: the monitor pauses the whole
+# emulated machine (CPU, VIC and CIA together, only between instructions), so
+# relative timing inside the detector's busy-wait windows is preserved across a
+# pause/resume; only wall-clock moves, which the detector never observes.
+# MIN_WAIT must stay past the END of the detection chain, not merely past
+# autostart.  A screen dump pauses the emulated machine, and pausing *inside*
+# detection perturbs the probes that read open bus: with MIN_WAIT=12 the
+# fpgasid8580 case reproducibly grew a phantom "DF40 SFX/FM FOUND" row,
+# because checkfmyam's $DF60 reads pick up the VIC-II fetch byte and a
+# pause/resume changes which byte that is.  22 s clears the chain (the old
+# flat sleep was 30 s and the comment noted 14 s was already marginal), and
+# polling from there still saves ~8 s per case plus every retry it avoids.
+MIN_WAIT  = 22.0   # first dump only after detection has finished
+POLL_EVERY = 3.0   # gap between readiness dumps
+MAX_WAIT  = 70.0   # hard ceiling per attempt (tri-SID + slow-host headroom)
 GOLDENS = os.path.join(ROOT, "tests", "variant_goldens")
+
+
+def _free_port():
+    """Grab an ephemeral port for this launch.
+
+    The port used to be hard-coded to 6502, which collides with anything else
+    already bound there — including a second smoke run, or the same run's
+    previous VICE still lingering in TCP TIME_WAIT.  scripts/ci_test.sh has
+    always picked a free port for exactly this reason.
+    """
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 # Rows included in the golden.  r00 (version banner) and r15 ($D418 decay
 # animation) are intentionally excluded because they're dynamic / time-based.
@@ -45,8 +75,16 @@ GOLDEN_ROWS = list(range(1, 15)) + list(range(16, 24))
 # r14 USID64, r16+ STEREO SID list.
 CASES = [
     ("none",          ["-sidextra", "0"],                              6,  "8580 FOUND"),
-    ("armsid-d420",   ["-sidextra", "1", "-sidvariant2", "armsid"],   17,  "ARMSID FOUND"),
-    ("arm2sid-d420",  ["-sidextra", "1", "-sidvariant2", "arm2sid"],  17,  "ARMSID FOUND"),
+    # These two are named "-d420" and must therefore SAY so: without an explicit
+    # -sid2address, VICE puts SID #2 at its own default (which lands in $DExx)
+    # and the case silently tested something else entirely. They used to appear
+    # to work only because a stale Sid2AddressStart=$D420 leaked in from the
+    # user's vice.ini; adding `-default` (for an unrelated leak) removed that
+    # crutch. $D420 = 54304.
+    ("armsid-d420",   ["-sidextra", "1", "-sid2address", "54304",
+                       "-sidvariant2", "armsid"],                     17,  "ARMSID FOUND"),
+    ("arm2sid-d420",  ["-sidextra", "1", "-sid2address", "54304",
+                       "-sidvariant2", "arm2sid"],                    17,  "ARMSID FOUND"),
     ("swinu",         ["-sidextra", "0", "-sidvariant",  "swinu"],     3,  "SWINSID ULTIMATE"),
     ("swinnano",      ["-sidextra", "0", "-sidvariant",  "swinnano"],  3,  "SWINSID NANO"),
     ("fpgasid8580",   ["-sidextra", "0", "-sidvariant",  "fpgasid8580"], 4, "FPGASID 8580"),
@@ -196,12 +234,12 @@ CASES = [
 ]
 
 
-def mon_connect(timeout=30):
+def mon_connect(port, timeout=30):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             s = socket.socket()
-            s.connect(("127.0.0.1", PORT))
+            s.connect(("127.0.0.1", port))
             return s
         except OSError:
             time.sleep(0.3)
@@ -225,14 +263,16 @@ def recv_prompt(s, t=3):
     return buf
 
 
-def dump_screen(path):
-    s = mon_connect()
-    recv_prompt(s)
-    s.sendall(f'save "{path}" 0 0400 07e7\n'.encode())
-    recv_prompt(s)
-    s.sendall(b"x\n")
-    recv_prompt(s, t=2)
-    s.close()
+def dump_screen(path, port):
+    s = mon_connect(port)
+    try:
+        recv_prompt(s)
+        s.sendall(f'save "{path}" 0 0400 07e7\n'.encode())
+        recv_prompt(s)
+        s.sendall(b"x\n")          # leave the monitor -> emulation resumes
+        recv_prompt(s, t=2)
+    finally:
+        s.close()
     with open(path, "rb") as f:
         return f.read()[2:]
 
@@ -308,10 +348,29 @@ def compare_golden(name, current):
     return False, "\n".join(out)
 
 
+def _terminate(proc):
+    """Stop only the VICE we started.
+
+    This used to be `taskkill /F /IM x64sc.exe`, which killed EVERY x64sc on
+    the machine — including an interactive `make run-armsid` session the user
+    had open in another window.  A smoke run has no business touching
+    processes it did not spawn.
+    """
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+
+
 def _launch_and_capture(name, args):
-    subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(0.6)
+    port = _free_port()
     # `-default` resets every VICE resource to its default *before* per-test
     # flags are applied.  Without it, persistent settings written by
     # interactive `make stereo-*` / `make sfx` runs (Sid{2..8}AddressStart,
@@ -322,15 +381,27 @@ def _launch_and_capture(name, args):
     # `+sfxse` is kept as a belt-and-braces guard for SFX specifically.
     proc = subprocess.Popen(
         [VICE, "-default", "-autostart", PRG, "+sfxse",
-         "-remotemonitor", "-remotemonitoraddress", f"127.0.0.1:{PORT}"] + args,
+         "-remotemonitor", "-remotemonitoraddress", f"127.0.0.1:{port}"] + args,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    path = os.path.join(os.environ.get("TMP", "/tmp"), f"variant_{name}.bin")
+    raw = None
     try:
-        time.sleep(WAIT)
-        path = os.path.join(os.environ.get("TMP", "/tmp"), f"variant_{name}.bin")
-        raw = dump_screen(path)
+        time.sleep(MIN_WAIT)
+        deadline = time.time() + (MAX_WAIT - MIN_WAIT)
+        while True:
+            try:
+                raw = dump_screen(path, port)
+            except (OSError, RuntimeError):
+                raw = None                     # monitor not up yet
+            if raw is not None and not _is_basic_loading_screen(raw):
+                break                          # result screen is painted
+            if time.time() >= deadline:
+                break                          # give up; caller retries
+            time.sleep(POLL_EVERY)
     finally:
-        subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _terminate(proc)
+    if raw is None:
+        raw = bytes([0x20]) * 1000             # blank screen -> visible failure
     return raw
 
 
@@ -342,7 +413,7 @@ def run_case(name, args, row, expected, update):
     golden_ok_first, _ = (True, "") if update else compare_golden(name, golden_text_first)
     basic_screen = _is_basic_loading_screen(raw)
     # Up to 2 retries on timing flake — host-CPU variance or heavy tri-SID
-    # load occasionally straddles the WAIT budget; also absorbs intermittent
+    # load occasionally straddles the MAX_WAIT budget; also absorbs intermittent
     # VICE open-bus reads on $DF60 that look like SFX/FM to checkfmyam.
     # In --update mode, only retry when we caught the BASIC loading screen
     # (autostart not yet complete) — otherwise the new golden is whatever
@@ -365,7 +436,7 @@ def run_case(name, args, row, expected, update):
         if basic_screen:
             # Refuse to write a BASIC-loading-screen capture — bogus golden.
             status = "SKIP"
-            detail = "  (BASIC loading screen captured; raise WAIT or rerun)"
+            detail = "  (BASIC loading screen captured; raise MAX_WAIT or rerun)"
         else:
             os.makedirs(GOLDENS, exist_ok=True)
             with open(os.path.join(GOLDENS, f"{name}.txt"), "w", encoding="utf-8") as f:
