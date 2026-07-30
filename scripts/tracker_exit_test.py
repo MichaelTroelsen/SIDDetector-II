@@ -28,9 +28,9 @@ def recv(s,t=3):
 
 TMP = os.environ["TMP"]
 
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").sweep_stale()
 time.sleep(0.5)
-subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
+_vice_proc = subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
                  stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 time.sleep(14)
 
@@ -54,7 +54,7 @@ s.sendall(f'save "{TMP}\\p3_r0.bin" 0 $0400 $0427\n'.encode()); recv(s)
 # Check sid_music_flag should be 0 again, trk_patched also 0
 s.sendall(f'save "{TMP}\\p3_zp.bin" 0 $b0 $bf\n'.encode()); recv(s)
 s.sendall(b"x\n"); recv(s,1); s.close()
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").terminate(_vice_proc)
 
 def load(p):
     try:

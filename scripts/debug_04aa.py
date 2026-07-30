@@ -82,7 +82,7 @@ def main():
     printscreen = labels.get("printscreen", 0)
     print(f"Symbol addresses: readkey2=${readkey2:04x}  printscreen=${printscreen:04x}")
 
-    os.system("taskkill /F /IM x64sc.exe >NUL 2>&1")
+    __import__("viceproc").sweep_stale()
     time.sleep(0.8)
 
     print(f"\nLaunching VICE (remote monitor port {port})...")

@@ -941,14 +941,19 @@ is a deliberate non-goal:
 3. **P3-4** (`sid_list_append`) - skipped on a risk/benefit judgement, see the
    section above.
 
-Also worth knowing for whoever picks this up: **16 ad-hoc scripts in `scripts/`
-still call `taskkill /F /IM x64sc.exe`**, the same "kills every VICE on the
-machine" problem fixed in `ci_test.sh` and `variant_smoke.py` under P2-1. They
-are one-off debug tools, so the blast radius is limited to whoever runs them
-while an interactive session is open, but the list is:
-`debug_04aa.py eight_sid_smoke.py main_screen_dump.py midi_debug.py
-pdsid_probe.py q_page_smoke.py tracker_exit_test.py tracker_smoke.py
-tracker_switch_smoke.py tracker_timelapse.py u64_tuneful_eight_test.py
-vice_banner_direct.py vice_banner_snap.py vice_coldboot_test.py
-vice_diag_space.py vice_restart_test.py`. Each needs its `Popen` handle
-threaded to the kill, which is why it was not done mechanically here.
+The wider P2-1 problem is now closed too. **15 ad-hoc scripts in `scripts/`**
+were still running `taskkill /F /IM x64sc.exe`, which kills every VICE on the
+machine including an interactive `make run-*` session. None of them kept the
+handle `subprocess.Popen` returned, so they had nothing more precise to aim at.
+
+`scripts/viceproc.py` now provides two deliberately-named entry points:
+`terminate(proc)` for the normal case (stop only what this script started) and
+`sweep_stale()` for the pre-launch slot, where by definition no handle exists
+yet - it keeps the global kill, because these scripts bind a fixed monitor port
+and a leftover VICE would block it, but it announces itself on stderr instead of
+doing it silently. Anything written from scratch should take an ephemeral port
+(see `variant_smoke._free_port`) and need neither.
+
+Verified end to end, not just by inspection: start a decoy VICE, run the
+terminate path, confirm our own process exited (`poll()` non-None) and the decoy
+was still alive afterwards.

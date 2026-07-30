@@ -80,8 +80,7 @@ def main():
     if os.path.exists(dump_path):
         os.remove(dump_path)
 
-    subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                   shell=False, capture_output=True)
+    __import__("viceproc").sweep_stale()
 
     cmd = [VICE,
            "-autostart", PRG,
@@ -171,8 +170,7 @@ def main():
         for r in range(25):
             print(f"r{r:02d}: {decode(raw[r*40:(r+1)*40])}")
     finally:
-        subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                       shell=False, capture_output=True)
+        __import__("viceproc").terminate(proc)
         try: proc.wait(timeout=2)
         except Exception: pass
 

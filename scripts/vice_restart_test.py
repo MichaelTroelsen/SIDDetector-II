@@ -151,8 +151,7 @@ def send_space(hwnd):
 
 def launch_vice(extra_args=None):
     # Kill any stragglers first
-    subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    __import__("viceproc").sweep_stale()
     time.sleep(0.5)
     args = [VICE, "-autostart", PRG,
             "-remotemonitor", "-remotemonitoraddress", f"127.0.0.1:{PORT}"]
@@ -232,8 +231,7 @@ def main():
               f"SFX false-positives {sfx_hits}/{total}")
 
     finally:
-        subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        __import__("viceproc").terminate(p)
 
     print("\nScreenshots:", ", ".join(shots))
     return 0

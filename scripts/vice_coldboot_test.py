@@ -110,8 +110,7 @@ def read_dbg():
 
 
 def run_once():
-    subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    __import__("viceproc").sweep_stale()
     time.sleep(0.6)
     p = subprocess.Popen(
         [VICE, "-autostart", PRG,
@@ -154,8 +153,7 @@ def main():
                     if ln and any(k in ln for k in ("FOUND","STEREO","D400","D420","SFX")):
                         print(f"    r{r:02d}: {ln}")
     finally:
-        subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        __import__("viceproc").terminate(p)
 
 
 if __name__ == "__main__":

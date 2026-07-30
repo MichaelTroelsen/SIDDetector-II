@@ -27,9 +27,9 @@ def recv(s,t=3):
     return b
 
 TMP = os.environ["TMP"]
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").sweep_stale()
 time.sleep(0.5)
-subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
+_vice_proc = subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
                  stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 time.sleep(14)
 
@@ -49,7 +49,7 @@ for i in range(8):
     s.sendall(f'save "{TMP}\\zp_{i}.bin" 0 $b3 $b6\n'.encode()); recv(s)
     s.sendall(b"x\n"); recv(s,1); s.close()
 
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").terminate(_vice_proc)
 print("  i  V1_CTRL V2_CTRL V3_CTRL  V1env V2env V1prev V2prev")
 for i in range(8):
     try:

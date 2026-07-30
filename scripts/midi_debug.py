@@ -59,8 +59,7 @@ def dec_row(b):
 
 def main():
     flags = sys.argv[1:] or ["-midi", "-miditype", "0"]
-    subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    __import__("viceproc").sweep_stale()
     time.sleep(0.6)
     proc = subprocess.Popen(
         [VICE, "-autostart", PRG, "+sfxse", "-sidextra", "0",
@@ -77,8 +76,7 @@ def main():
             except Exception as e:
                 print(f"  (dump failed: {e})")
     finally:
-        subprocess.run(["taskkill", "/F", "/IM", "x64sc.exe"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        __import__("viceproc").terminate(proc)
 
 
 if __name__ == "__main__":

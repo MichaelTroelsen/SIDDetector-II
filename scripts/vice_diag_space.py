@@ -32,9 +32,9 @@ def read_byte(addr):
     s.sendall(b"x\n");recv(s,1);s.close()
     with open(p,"rb") as f:return f.read()[2]
 
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").sweep_stale()
 time.sleep(0.5)
-subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
+_vice_proc = subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
                  stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 time.sleep(14)
 
@@ -64,4 +64,4 @@ for tag, wait in [("t=0.5", 0.5), ("t=1.0", 0.5), ("t=1.5", 0.5), ("t=2.5", 1.0)
 b1=read_byte(0x07FF)
 print(f"after all: $07FF = ${b1:02X}")
 
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").terminate(_vice_proc)

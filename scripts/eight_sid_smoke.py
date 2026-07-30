@@ -60,9 +60,9 @@ def recv(s, t=3):
             continue
     return b
 
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").sweep_stale()
 time.sleep(0.5)
-subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
+_vice_proc = subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
                  stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 time.sleep(14)
 
@@ -116,4 +116,4 @@ for r in range(25):
     print(f"|{line}|{marker} {r:2d}")
 print("+" + "-"*40 + "+")
 
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").terminate(_vice_proc)

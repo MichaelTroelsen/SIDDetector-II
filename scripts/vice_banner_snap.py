@@ -29,9 +29,9 @@ def shot(p):
     s.sendall(f'screenshot "{p}" 2\n'.encode());recv(s)
     s.sendall(b"x\n");recv(s,1);s.close()
 
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").sweep_stale()
 time.sleep(0.5)
-subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
+_vice_proc = subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
                  stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 time.sleep(14)  # let detection finish
 # find VICE window and press SPACE
@@ -49,4 +49,4 @@ pyautogui.keyDown("space");time.sleep(0.25);pyautogui.keyUp("space")
 time.sleep(3.0)   # clearly inside the 10-s diag delay
 shot(os.path.join(SHOT,"restart_t30.png"))
 print("saved t3.0 shot")
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").terminate(_vice_proc)

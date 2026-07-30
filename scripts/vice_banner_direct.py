@@ -25,9 +25,9 @@ def recv(s,t=3):
         except socket.timeout:continue
     return b
 
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").sweep_stale()
 time.sleep(0.5)
-subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
+_vice_proc = subprocess.Popen([VICE,"-autostart",PRG,"-remotemonitor","-remotemonitoraddress",f"127.0.0.1:{PORT}"],
                  stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 time.sleep(14)
 
@@ -47,4 +47,4 @@ s.sendall(b"x\n");recv(s,1);s.close()
 with open(row24,"rb") as f:raw=f.read()[2:]
 print(f"row 24 bytes: {' '.join(f'{b:02X}' for b in raw[:40])}")
 print(f"$07FF DIAG byte: ${raw[-1]:02X}")
-subprocess.run(["taskkill","/F","/IM","x64sc.exe"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+__import__("viceproc").terminate(_vice_proc)
