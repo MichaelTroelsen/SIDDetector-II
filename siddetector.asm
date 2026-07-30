@@ -6433,6 +6433,12 @@ arm2sid_populate_sid_list:
 // Reads armsid_map_l/l2/h/h2; each byte is nibble-packed (lo=even slot, hi=odd slot).
 // Slots: 0=D4/00, 1=D4/20, 2=D5/00, 3=D5/20, 4=DE/00, 5=DE/20, 6=DF/00, 7=DF/20.
 // Unrolled: no loop, no index table — each slot tested explicitly. Trashes A,X. Preserves Y.
+// Every slot is bounds-guarded against sidnum_zp >= 8, matching s_s_add /
+// fll_found_ok / uca_found / tls_no_append.  The arithmetic happens to fit today
+// (1 pre-populated D400 + 7 map slots = 8 exactly), but this was the only list
+// writer with no guard: one more pre-populate (the SIDFX path already adds two)
+// or a firmware returning unexpected map nibbles would have run off the end of
+// sid_list_* into the arrays that follow it.
                 // Slot 1 (D420): armsid_map_l high nibble
                 lda armsid_map_l
                 lsr                     // shift high nibble to low
@@ -6440,6 +6446,9 @@ arm2sid_populate_sid_list:
                 lsr
                 lsr
                 beq a2spl_s1            // 0 = NONE
+                lda sidnum_zp
+                cmp #$08
+                bcs a2spl_s1      // list full (slots 1-8) -> skip
                 ldx sidnum_zp
                 inx
                 stx sidnum_zp
@@ -6453,6 +6462,9 @@ a2spl_s1:       // Slot 2 (D500): armsid_map_l2 low nibble
                 lda armsid_map_l2
                 and #$0F
                 beq a2spl_s2
+                lda sidnum_zp
+                cmp #$08
+                bcs a2spl_s2      // list full (slots 1-8) -> skip
                 ldx sidnum_zp
                 inx
                 stx sidnum_zp
@@ -6469,6 +6481,9 @@ a2spl_s2:       // Slot 3 (D520): armsid_map_l2 high nibble
                 lsr
                 lsr
                 beq a2spl_s3
+                lda sidnum_zp
+                cmp #$08
+                bcs a2spl_s3      // list full (slots 1-8) -> skip
                 ldx sidnum_zp
                 inx
                 stx sidnum_zp
@@ -6482,6 +6497,9 @@ a2spl_s3:       // Slot 4 (DE00): armsid_map_h low nibble
                 lda armsid_map_h
                 and #$0F
                 beq a2spl_s4
+                lda sidnum_zp
+                cmp #$08
+                bcs a2spl_s4      // list full (slots 1-8) -> skip
                 ldx sidnum_zp
                 inx
                 stx sidnum_zp
@@ -6498,6 +6516,9 @@ a2spl_s4:       // Slot 5 (DE20): armsid_map_h high nibble
                 lsr
                 lsr
                 beq a2spl_s5
+                lda sidnum_zp
+                cmp #$08
+                bcs a2spl_s5      // list full (slots 1-8) -> skip
                 ldx sidnum_zp
                 inx
                 stx sidnum_zp
@@ -6511,6 +6532,9 @@ a2spl_s5:       // Slot 6 (DF00): armsid_map_h2 low nibble
                 lda armsid_map_h2
                 and #$0F
                 beq a2spl_s6
+                lda sidnum_zp
+                cmp #$08
+                bcs a2spl_s6      // list full (slots 1-8) -> skip
                 ldx sidnum_zp
                 inx
                 stx sidnum_zp
@@ -6527,6 +6551,9 @@ a2spl_s6:       // Slot 7 (DF20): armsid_map_h2 high nibble
                 lsr
                 lsr
                 beq a2spl_done
+                lda sidnum_zp
+                cmp #$08
+                bcs a2spl_done      // list full (slots 1-8) -> skip
                 ldx sidnum_zp
                 inx
                 stx sidnum_zp

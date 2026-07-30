@@ -287,15 +287,35 @@ def decode(row_bytes):
         if c == 0x2F: return "/"
         if c == 0x2B: return "+"
         if c == 0x2D: return "-"
+        if c == 0x2A: return "*"   # print_retry_star; see strip_retry_star()
         return "."
     return "".join(dec(b) for b in row_bytes).rstrip()
+
+
+def strip_retry_star(line):
+    """Drop the trailing '*' that print_retry_star appends.
+
+    siddetector prints '*' after "6581 FOUND" / "8580 FOUND" when checkrealsid
+    needed a second or third attempt because VIC bad-line DMA stole cycles on
+    the first.  That is real, deliberately-surfaced program behaviour, but it
+    depends on raster timing and host load, so it must not sit in a byte-exact
+    golden: the sidfx case failed a full sweep with
+
+        -golden  r06: 8580 SID...: 8580 FOUND
+        +actual  r06: 8580 SID...: 8580 FOUND.
+
+    (rendered '.' back then because '*' was not in the decode table above).
+    Normalising it away makes the golden deterministic while leaving the star
+    visible in the per-row text that gets printed to the console.
+    """
+    return line.rstrip("*")
 
 
 def render_golden(raw):
     """Select + decode the stable subset of rows for the golden file."""
     lines = []
     for r in GOLDEN_ROWS:
-        lines.append(f"r{r:02d}: " + decode(raw[r*40:(r+1)*40]))
+        lines.append(f"r{r:02d}: " + strip_retry_star(decode(raw[r*40:(r+1)*40])))
     return "\n".join(lines) + "\n"
 
 

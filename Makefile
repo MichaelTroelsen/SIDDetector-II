@@ -193,6 +193,7 @@ ci: python_tests
 python_tests:
 	@echo "=== Python host tests ==="
 	@python tests/test_hw_snapshot.py
+	@python tests/test_variant_render.py
 
 # Full regression: unit tests + variant golden diff.  Use this as the pre-PR
 # / pre-release gate.  scripts/variant_smoke.py runs 30 cases; budget ~10-16

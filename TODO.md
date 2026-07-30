@@ -162,6 +162,7 @@
 
 ### Host-side Python tests (`make python_tests`, no emulator)
 - [x] `tests/test_hw_snapshot.py` — guards `hw_test.py`'s sid_list snapshot against the slot-8 blind spot (sid_list_* have 9 entries and the U64 Tuneful Eight fills slots 1–8; the reader used to stop at index 7 and silently drop the last SID from every stability comparison).
+- [x] `tests/test_variant_render.py` — guards the variant golden renderer. `print_retry_star` appends `*` after "6581/8580 FOUND" when `checkrealsid` needed a bad-line retry, which depends on host load, so a byte-exact golden containing it failed at random (seen once as `8580 FOUND` vs `8580 FOUND.`). `strip_retry_star()` normalises it out; `*` also decodes as `*` now instead of falling through to the `.` catch-all.
 
 ### Not yet testable in VICE (require real hardware)
 - [x] `Checkarmsid` hardware probe — user-confirmed 2026-04-19 / V1.4.27; see P01 in docs/teststatus.md

@@ -34,7 +34,8 @@ semantics and needs a decision plus U64 hardware validation.
 
 **P0-1 is now FIXED using option 2, as chosen by the user.** The section below
 is kept as the rationale; the implementation is described in
-`### P0-1 implementation` immediately after it. P0-4 and P0-5 remain open.
+`### P0-1 implementation` immediately after it. P0-4 is fixed too; only P0-5
+remains open, because it needs real hardware.
 
 ### P0-1 · `u64_fingerprint_scan` mislabels every $D4xx–$D7xx secondary SID as ULTISID
 **File:** `siddetector.asm` — call site in `end:` (`lda data4 / cmp #$01 / beq end_run_u64fp`), routine `u64_fingerprint_scan`, store at `ufs_t_store`
@@ -809,11 +810,46 @@ parsers share offsets via `.const` definitions. ⚠ HW to fully verify
 
 ## Status — implementation pass, 2026-07-30
 
-Verification used on every change: `bash scripts/ci_test.sh` (**46/46** —
-three ULTISID-split tests added, see P1-7), `python
-scripts/check_memorymap.py --strict` (0 drift, 0 dead symbols), `python
-tests/test_hw_snapshot.py` (4/4, positive-control checked), and three full
-30-case variant sweeps.
+Verification used on every change: `bash scripts/ci_test.sh` (**46/46**),
+`python scripts/check_memorymap.py --strict` (0 drift, 0 dead symbols),
+`python tests/test_hw_snapshot.py` + `python tests/test_variant_render.py`
+(**12/12**, both positive-controlled), and four full 30-case variant sweeps.
+
+`make` is **not installed on this machine**, so the Makefile targets were
+exercised by running the scripts they wrap; the Makefile edits were verified by
+hand-expanding the recipes in a shell.
+
+### Per-item status
+
+| ID | Item | Status |
+|---|---|---|
+| P0-1 | `u64_fingerprint_scan` ULTISID mislabel | **fixed (option 2)** - provisional type + in-place refinement; 2 self-mirror bugs fixed en route. HW: re-confirm Tuneful Eight |
+| P0-2 | Goldens regenerated over P0-1 | **fixed** - re-captured once, 30/30 written, 8-file / 11-line diff reviewed line by line |
+| P0-3 | 2 variant cases missing `-sid2address` | **fixed** - both now place the chip at $D420, and both pass |
+| P0-4 | Retry star made goldens nondeterministic | **fixed** - `*` decodes as `*`, `strip_retry_star()` normalises it out of the golden; 8 new tests |
+| P0-5 | D5xx ARMSID / SwinSID U not named | **OPEN** - chip-protocol question, needs the real hardware |
+| P1-1 | IRQ vector installed without SEI | fixed - `sei` + CIA mask/ack before the vector swap |
+| P1-2 | `readresult` awk field + stale addresses | fixed - resolves every symbol from `.vs` at run time |
+| P1-3 | hw_test blind to sid_list slot 8 | fixed - `NSLOTS = 9`; new `tests/test_hw_snapshot.py` |
+| P1-4 | Dead routines with latent `cmp $07` bugs | fixed - 3 routines + dead data removed (273 lines, ~364 bytes) |
+| P1-5 | `jsr s_s_l3` no-ops hiding control flow | fixed - explicit `jmp s_s_next`; fall-through documented |
+| P1-6 | Decay classifier vs info page disagree | fixed - `get_emu_page` returns IP_UNKNOWN, matching `checktypeandprint` |
+| P1-7 | Q page vs main screen ULTISID split | fixed - same `sbc #$22 / cmp #$02` test; guarded by T44-T46 |
+| P1-8 | `cas_d41d7` not address-patched | fixed - added to the `Checkarmsid` patch list |
+| P2-1 | `taskkill /IM` killed the user's VICE | fixed in **both** scripts (ci_test.sh did it in 4 places) |
+| P2-2 | Fixed port 6502 + flat 30 s sleeps | fixed - ephemeral port + readiness polling from 22 s |
+| P2-3 | `release.sh` dirty guard never fired | fixed - whitelist of staged files; refuses when non-interactive |
+| P2-5 | Pass count hard-coded in 3 places | fixed - suite reports its own total at `$07E9`; caught 3 dead tests immediately |
+| P2-6 | Test suite modelled retired ARM2SID rule | fixed - T07/T08 drive `armsid_major`; fake `$55xx` constants replaced |
+| P2-8 | Headers promised slot-relative probing | fixed - corrected to "PRIMARY SID ONLY" |
+| P2-9 | Drift guard ignored dead symbols | fixed - `--strict`, wired into `make ci` |
+| P2-11 | `arm2sid_populate_sid_list` bounds guard | **fixed** - all 7 slot stores guard on `sidnum_zp >= 8` |
+| P3-1 | Dead code / stray artifacts | fixed - unreachable `rts`, `scope_col_lo`, `KBDLOOP_ORIG`, `monlog_out.txt` |
+| P4-1/2/3/4 | Doc + comment drift | fixed - counts corrected across 9 files; source header, BackSID protocol, `tlr_sweep` gate rewritten from the code |
+| P2-4 | Tool paths duplicated in 3 files | **not done** - wants a `paths.mk` / env decision |
+| P2-7 | `txs`/`tsx` register-save with IRQs on | **not done** - ~25 sites, timing-sensitive, no active bug |
+| P2-10 | Two divergent screen decoders | **not done** - would change golden text; only the `*` mapping was added (P0-4) |
+| P3-2..P3-6 | Comment noise, magic constants, helpers | **not done** - pure cleanup |
 
 **Variant sweep - before and after the P0-1 fix:**
 
@@ -829,9 +865,10 @@ of the eight are now fixed. The two that remain are the D5xx ARMSID / SwinSID U
 naming gap (P0-5) - a chip-protocol question that needs real hardware - and they
 now report an honest `8580 FOUND` instead of the wrong `8580 INT`.
 
-The two intermittent cases seen mid-pass (`sidfx` via the retry star, P0-4, and
-`stereo-DE00-swinu`) both passed in the final run. P0-4 is still worth fixing:
-it resurfaces whenever the host is loaded.
+Both intermittent cases seen mid-pass have been dealt with: `sidfx` was the
+retry star (P0-4, now normalised out of the golden and covered by tests) and
+`stereo-DE00-swinu` was the 12-second-poll perturbation (P0-4's sibling, fixed
+by raising MIN_WAIT to 22 s).
 
 ### Two things the test pass taught me (worth keeping in mind)
 
@@ -854,11 +891,14 @@ the concrete payoff of P2-5, and it is worth remembering when adding a test:
 
 ### Remaining order
 
-1. **P0-5** - D5xx ARMSID / SwinSID U naming (needs the real hardware).
-2. **P0-4** - stop the retry star making goldens nondeterministic.
-3. **`make hw_test` on the U64** to re-confirm Tuneful Eight still reports
-   8/8 after the P0-1 change. The conversion at `ufs_chk_u64` is designed to
-   keep it byte-identical, but only hardware can prove it.
-4. P2-11 + P3-4 together (bounds guard via a shared `sid_list_append`).
-5. P2-7 (`txs`/`tsx` sweep) as a single commit, gated on a full golden run.
-6. P2-4, P2-10, P3-2/3/5/6 cleanups.
+1. **`make hw_test` on the U64** - re-confirm Tuneful Eight still reports 8/8
+   after the P0-1 change. `ufs_chk_u64` is designed to keep it byte-identical,
+   but only hardware can prove it. This is the one item gating a release.
+2. **P0-5** - D5xx ARMSID / SwinSID U naming. Needs the real ARMSID: either the
+   proxy does not implement DIS at a secondary base, or the probe needs a
+   different sequence there. Not answerable from the emulator.
+3. P2-7 (`txs`/`tsx` sweep) as a single commit gated on a full golden run. ~25
+   sites in timing-sensitive code with no active bug behind it, so it is
+   deliberately last: the downside of getting it wrong exceeds the upside.
+4. P2-4 (one source for tool paths), P2-10 (one shared screen decoder),
+   P3-2/3/4/5/6 (comment noise, magic constants, `sid_list_append` helper).
