@@ -191,7 +191,25 @@ for the first time.
 
 ## 2. P0-5 — ARMSID / SwinSID U at `$D5xx-$D7xx` are not identified by name
 
-**Status: root-caused, fix known and proven to work, deliberately reverted.**
+**Status: FIXED in V1.5.08. Sweep is 30/30.** The rest of this section is the
+description from when it was still open — kept because it is what made the fix
+possible, and because the hardware confirmation it asks for is still outstanding.
+
+What shipped: the baseline-vs-change described below, with the baseline read
+placed **before** the reference oscillator is started, so the instruction
+sequence between that start and the first candidate read is byte-for-byte
+unchanged. That is the difference from v6/v7 — both of those put the baseline
+read *inside* the sample window, which is what moved the reported `$D4xx` mirror.
+Measured: `D500 ARMSID FOUND`, `D500 SWINSID ULTIMATE FOUND`,
+`tri-D420-armsid+D500-armsid` r18 corrected, other 27 goldens byte-identical, and
+no `D460` row in the full sweep or in 24 targeted runs of the six single-SID
+cases that reach this code.
+
+**Still to confirm on the rig:** a real FPGASID must still report SID2 at `$D420`
+(not `$D460`), and a stereo ARMSID at `$D500` should be named on hardware.
+
+Original write-up follows.
+
 Full write-up in CODE-REVIEW.md under `### P0-5`. Short version:
 
 - The VICE ARMSID personality **does** answer DIS at a secondary base — proven by
@@ -322,11 +340,15 @@ Fix pattern: invert the condition and use a `jmp`.
 
 ## Environment
 
-- **`make` is NOT installed on this machine** (neither `make`, `mingw32-make` nor
-  `gmake`, in Git Bash or PowerShell). All docs describe `make ci` etc. Run the
-  scripts the Makefile wraps instead — see the verification block above. Makefile
-  edits were verified by hand-expanding the recipes in a shell. *(Saved as a
-  memory: `no-make-on-windows-host`.)*
+- **`make` is available as of 2026-07-31.** It was previously missing entirely,
+  which is why the earlier session ran the scripts the Makefile wraps and
+  hand-expanded the recipes. Fixed by installing GNU Make 4.4.1 into the MSYS2
+  tree that was already on the machine for the VICE build
+  (`C:/msys64/usr/bin/pacman.exe -S --noconfirm --needed make`, no admin
+  required) and appending `C:\msys64\usr\bin` to the **user** `PATH`. Verified:
+  `make clean`, `make all`, `make ci` (46/46 + MEMORYMAP drift check). This also
+  unblocks `scripts/release.sh`, whose stages 2 and 5 call bare `make`.
+  *(A new shell must be opened for the PATH change to take effect.)*
 - Java and Python 3.14 are present. KickAssembler at
   `C:/debugger/kickasm/KickAss.jar`; patched VICE at
   `C:/Users/mit/claude/c64server/vice-sidvariant/GTK3VICE-3.9-win64/bin/x64sc.exe`.
@@ -400,7 +422,7 @@ Useful symbols (shift with code size — resolve from `siddetector.vs`, field 2)
 | P0-2 goldens | **Fixed** — regenerated once, diff reviewed |
 | P0-3 variant case addresses | **Fixed** |
 | P0-4 retry-star flake | **Fixed** + 8 tests |
-| P0-5 D5xx ARMSID naming | **Root-caused, fix known, REVERTED** — needs the rig |
+| P0-5 D5xx ARMSID naming | **Fixed in V1.5.08** — sweep 30/30. ⚠ wants FPGASID rig to confirm SID2 stays at `$D420` |
 | P1-1..P1-8 | **All fixed** |
 | P2-1,2,3,4,5,6,7,9,10,11 | **All fixed** |
 | P3-1,2,3,6 | **Fixed** |
@@ -427,9 +449,10 @@ Useful symbols (shift with code size — resolve from `siddetector.vs`, field 2)
 
 ## Sweep expectation for the next session
 
-`python -u scripts/variant_smoke.py` should report **28/30**, failing only
-`stereo-D500-armsid` and `stereo-D500-swinu` (both P0-5, both showing
-`D500 8580 FOUND`). Anything else failing is new and should be investigated
-before making changes. Two cases are known-flaky under host load: `sidfx` (the
-retry star — should now be normalised away) and `stereo-DE00-swinu`.
+`python -u scripts/variant_smoke.py` should report **30/30** as of V1.5.08.
+Anything failing is new and should be investigated before making changes. Two
+cases are known-flaky under host load: `sidfx` (the retry star — should now be
+normalised away) and `stereo-DE00-swinu`. A `D460 8580 FOUND` row in any
+single-SID case is the specific regression to watch for when touching either
+stereo mirror test — see CODE-REVIEW.md § P0-5.
 </current_state>

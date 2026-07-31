@@ -45,6 +45,14 @@ re-implementing):
 - A screen dump pauses the machine and perturbs detection; `variant_smoke.py`'s
   `MIN_WAIT` must stay past the end of the chain (22 s).
 - OSC3 keeps residue after a voice is silenced — "non-zero" does not mean "mirror".
+  Both stereo mirror tests therefore baseline the candidate while nothing drives
+  it and look for a *change* (V1.5.08, P0-5).
+- **Do not add or move instructions between "start the reference oscillator" and
+  "first read of the candidate"** in `s_s_arm_chk` / `s_s_arm_mir_test`. In a
+  single-SID config every `$D4xx` address mirrors `$D400` and ~20 extra cycles in
+  that window was measured to change *which* mirror the scan reports
+  (`$D420` → `$D460`) — wrong on a real FPGASID, whose SID2 genuinely is at
+  `$D420`. Two earlier attempts at the P0-5 fix were reverted for exactly this.
 
 **Source syntax:** The `.asm` file uses KickAssembler syntax (converted from the original ACME source in `siddetector.asm.acme.bak`). Key differences from ACME: `.byte`/`.word`/`.text` directives, `//` comments, `.const` for symbol equates, lowercase mnemonics only, labels require `:`, and `#'x'` for char literals.
 

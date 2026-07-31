@@ -34,8 +34,10 @@ semantics and needs a decision plus U64 hardware validation.
 
 **P0-1 is now FIXED using option 2, as chosen by the user.** The section below
 is kept as the rationale; the implementation is described in
-`### P0-1 implementation` immediately after it. P0-4 is fixed too; only P0-5
-remains open, because it needs real hardware.
+`### P0-1 implementation` immediately after it. P0-4 is fixed too. **P0-5 is
+fixed as of V1.5.08** — see the `FIXED IN V1.5.08` block at the end of its
+section; the analysis above it is kept because it is what made the fix possible.
+No P0 item remains open.
 
 ### P0-1 · `u64_fingerprint_scan` mislabels every $D4xx–$D7xx secondary SID as ULTISID
 **File:** `siddetector.asm` — call site in `end:` (`lda data4 / cmp #$01 / beq end_run_u64fp`), routine `u64_fingerprint_scan`, store at `ufs_t_store`
@@ -134,12 +136,16 @@ scans refine it" could not work as-is: **every** add path deduped by address and
 |---|---|---|
 | plain 8580 at D500 | `D500 8580 INT` | **`D500 8580 FOUND`** |
 | ARMSID at D420 | `D420 8580 INT` | **`D420 ARMSID FOUND`** |
-| ARMSID at D500 | `D500 8580 INT` | `D500 8580 FOUND` (see P0-5) |
+| ARMSID at D500 | `D500 8580 INT` | `D500 8580 FOUND`, then **`D500 ARMSID FOUND`** once P0-5 was fixed in V1.5.08 |
 | U64 Tuneful Eight | ULTISID curves | unchanged (converted at `ufs_chk_u64`) |
 
 ### P0-5 · ARMSID / SwinSID U at $D5xx-$D7xx are still not identified by name
 **File:** `siddetector.asm` — `s_s_arm_chk`'s oscillator cross-read
-**Status: root-caused, NOT fixed. The fix needs real MixSID hardware.**
+**Status: FIXED in V1.5.08.** The analysis below is the original write-up from
+when it was still open; it is kept because it is what identified the cause and
+what ruled out the two earlier attempts. The shipped fix, and why it does not
+reproduce the `$D420 → $D460` wander that reverted those attempts, is in the
+**FIXED IN V1.5.08** block at the end of this section.
 
 An ARMSID at **D420** is named correctly (that path calls `Checkarmsid` direct).
 One at **D500** reports `8580 FOUND`. Investigated properly rather than assumed:
@@ -241,6 +247,69 @@ clocking ResID. Debug SID reads by having the 6502 record them (as the
 Evidence kept as `tests/probe_dis_d500.asm` (protocol works at D500) and
 `tests/probe_dis_d500b.asm` (the cross-read reads all-zero in isolation, which
 is what pins the cause on leftover state rather than on the read itself).
+
+#### FIXED IN V1.5.08
+
+The fix is the baseline-vs-change described above — the same idea as v6/v7 — but
+placed so that **the timing-sensitive window is not touched**. That window is the
+instruction sequence between starting the reference oscillator and the first read
+of the candidate, because that is what decides which `$D4xx` mirror wins. Both
+earlier attempts inserted the baseline read *inside* it; V1.5.08 puts it *before*
+the reference oscillator is started, so that sequence is byte-for-byte unchanged
+and the extra ~20 cycles land where nothing is being sampled.
+
+| | v6 | v7 | V1.5.08 |
+|---|---|---|---|
+| Baseline read | everywhere | only outside `$D4xx` | everywhere |
+| Placed | inside the sample window | inside the sample window | **before the reference oscillator starts** |
+| `D500` named | yes | yes | **yes** |
+| `D460` wander | 1 sweep | 1 sweep | **0 in 1 full sweep + 24 targeted case-runs** |
+
+Two sites, both in `sidstereostart`:
+
+- **`s_s_arm_chk`** — baseline read moved to just after the candidate's voice-3
+  silence write and just before `sta $D40F`/`sta $D412` on the primary. The loop
+  now does `lda (sptr_zp),y / cmp osc_base / bne` instead of `lda / bne`. The
+  `ldy #$1B / ldx #$18` pair between `sta $D412` and the first read is untouched.
+- **`s_s_arm_mir_test`** — baseline read added before the first self-modified
+  store, so the `ldy #$FF / s_s_arm_mir_wait / ldy #$1B` sequence between
+  `sta found_sid[x]+$12` and the first candidate read is untouched. All three
+  read attempts now `cmp osc_base`.
+
+New byte `osc_base` (beside `plot_x_save`). Two branches went out of range and
+became `jmp`s, the usual consequence of inserting into this block. Main segment
+`$2400-$596a` → `$2400-$598b` (+33 bytes), still clear of `$5b00`.
+
+Why the new test is not weaker than the old one: the old code rejected a mirror
+if any of its reads was non-zero, and `0` is a legitimate value for a ramping
+sawtooth accumulator, so a mirror could survive by being sampled at the wrong
+moments. The new code rejects it if any read *differs from the value the
+candidate held while nothing was driving it*, which for a mirror is the
+pre-drive accumulator value — the reference oscillator at `freq=$FF00` moves
+OSC3 by roughly one step per clock, so 24 reads matching it exactly is far less
+likely than 24 reads all landing on zero.
+
+Measured (goldens compare the full screen, so a phantom row fails the diff):
+
+```
+stereo-D500-armsid           D500 8580 FOUND  ->  D500 ARMSID FOUND
+stereo-D500-swinu            D500 8580 FOUND  ->  D500 SWINSID ULTIMATE FOUND
+tri-D420-armsid+D500-armsid  r18 8580 FOUND   ->  r18 D500 ARMSID FOUND
+```
+
+The other 27 goldens are byte-identical. `D460 8580 FOUND` did not appear in the
+post-change sweep, nor in 4 extra rounds of the six single-SID cases that can
+reach this code (`none armsid-d420 fpgasid8580 fpgasid6581 pdsid skpico-8580`) —
+24 case-runs, all matching their goldens exactly. Note `sidtype` at these call
+sites is the *family being swept*, not the primary chip, so `s_s_arm_chk` runs on
+every machine during the `$05` sweep — including `pdsid` and `fpgasid6581`, the
+two cases that wandered before. They are therefore a real test of the change, not
+a bystander.
+
+**Still worth confirming on the rig when one is available:** that a real FPGASID
+still reports its SID2 at `$D420` (not `$D460`), and that a stereo ARMSID at
+`$D500` is named on hardware. The emulator evidence is strong but it is still the
+emulator.
 
 ---
 
@@ -817,9 +886,14 @@ Verification used on every change: `bash scripts/ci_test.sh` (**46/46**),
 `python tests/test_hw_snapshot.py` + `python tests/test_variant_render.py`
 (**12/12**, both positive-controlled), and four full 30-case variant sweeps.
 
-`make` is **not installed on this machine**, so the Makefile targets were
-exercised by running the scripts they wrap; the Makefile edits were verified by
-hand-expanding the recipes in a shell.
+`make` was **not installed on this machine** at the time of the review, so the
+Makefile targets were exercised by running the scripts they wrap and the Makefile
+edits were verified by hand-expanding the recipes in a shell. **Fixed on
+2026-07-31:** GNU Make 4.4.1 installed into the existing MSYS2 tree
+(`pacman -S make`, no admin needed) and `C:\msys64\usr\bin` appended to the user
+`PATH`. `make clean`, `make all` and `make ci` (46/46 + MEMORYMAP check) now run
+directly, so `scripts/release.sh` — which calls bare `make clean` / `make all` —
+is no longer blocked.
 
 ### Per-item status
 
@@ -829,7 +903,7 @@ hand-expanding the recipes in a shell.
 | P0-2 | Goldens regenerated over P0-1 | **fixed** - re-captured once, 30/30 written, 8-file / 11-line diff reviewed line by line |
 | P0-3 | 2 variant cases missing `-sid2address` | **fixed** - both now place the chip at $D420, and both pass |
 | P0-4 | Retry star made goldens nondeterministic | **fixed** - `*` decodes as `*`, `strip_retry_star()` normalises it out of the golden; 8 new tests |
-| P0-5 | D5xx ARMSID / SwinSID U not named | **root-caused; fix known and proven to work, but REVERTED** - baseline-vs-change in both mirror tests names them correctly, yet destabilises which $D4xx mirror is reported (0 occurrences in 3 sweeps before, 1 in each of 2 after). Needs the FPGASID/MixSID rig |
+| P0-5 | D5xx ARMSID / SwinSID U not named | **fixed (V1.5.08)** - baseline-vs-change in both mirror tests, with the baseline read placed *before* the reference oscillator starts so the timing-sensitive sample window is byte-identical. Names D500 ARMSID / SwinSID U; no `$D460` wander in 1 full sweep + 24 targeted case-runs. HW: re-confirm FPGASID SID2 at `$D420` |
 | P1-1 | IRQ vector installed without SEI | fixed - `sei` + CIA mask/ack before the vector swap |
 | P1-2 | `readresult` awk field + stale addresses | fixed - resolves every symbol from `.vs` at run time |
 | P1-3 | hw_test blind to sid_list slot 8 | fixed - `NSLOTS = 9`; new `tests/test_hw_snapshot.py` |
@@ -863,12 +937,13 @@ hand-expanding the recipes in a shell.
 | Pristine `63659cd` (baseline) | 21/30 | 8 systematic (P0-1 / P0-3) + 1 flake |
 | After the P1/P2 fixes, before P0-1 | 20-21/30 | same 8 systematic + flakes |
 | **After P0-1 option 2 + regenerated goldens** | **28/30** | only `stereo-D500-armsid` and `stereo-D500-swinu` (P0-5) |
+| **After the P0-5 fix (V1.5.08)** | **30/30** | none |
 
 The 8 systematic failures were confirmed pre-existing by stashing every change,
-rebuilding pristine `63659cd` and re-running: byte-identical failure text. Seven
-of the eight are now fixed. The two that remain are the D5xx ARMSID / SwinSID U
-naming gap (P0-5) - a chip-protocol question that needs real hardware - and they
-now report an honest `8580 FOUND` instead of the wrong `8580 INT`.
+rebuilding pristine `63659cd` and re-running: byte-identical failure text. All
+eight are now fixed - the last two were the D5xx ARMSID / SwinSID U naming gap
+(P0-5), which went `8580 INT` (wrong) → `8580 FOUND` (honest but unnamed) →
+`ARMSID FOUND` / `SWINSID ULTIMATE FOUND` (correct).
 
 Both intermittent cases seen mid-pass have been dealt with: `sidfx` was the
 retry star (P0-4, now normalised out of the golden and covered by tests) and
@@ -934,10 +1009,10 @@ is a deliberate non-goal:
    so this is a regression check on a feature already verified 3/3, not a hunt
    for something suspected broken. The user reports this rig takes days to set
    up, so it is a release gate rather than a blocker on the code.
-2. **P0-5** - D5xx ARMSID / SwinSID U naming. Now root-caused (see above): the
-   proxy answers DIS correctly and `s_s_arm_chk`'s cross-read rejects the slot
-   on residual OSC3 before the probe runs. The fix is a mirror-detection
-   heuristic change and wants the MixSID rig to validate.
+2. ~~**P0-5** - D5xx ARMSID / SwinSID U naming.~~ **Fixed in V1.5.08** (see the
+   `FIXED IN V1.5.08` block in its section). What is left for the rig is a
+   confirmation, not an investigation: a real FPGASID must still report SID2 at
+   `$D420` rather than `$D460`, and a stereo ARMSID at `$D500` should be named.
 3. **P3-4** (`sid_list_append`) - skipped on a risk/benefit judgement, see the
    section above.
 
