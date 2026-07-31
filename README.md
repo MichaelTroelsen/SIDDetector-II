@@ -1,4 +1,4 @@
-# SID Detector v1.5.08
+# SID Detector v1.5.09
 
 A Commodore 64 diagnostic utility that identifies 24+ variants of the SID (Sound Interface Device) chip — including real hardware, FPGA clones, microcontroller emulators, and PC emulators.
 
@@ -275,10 +275,10 @@ Result stored in `za7` (`$A7`).
 
 ---
 
-## Screen layout (v1.5.08)
+## Screen layout (v1.5.09)
 
 ```
-            siddetector v1.5.08
+            siddetector v1.5.09
 
 row  2: armsid.....:  [result]
 row  3: swinsid....:  [result]

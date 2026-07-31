@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-31  
 **Build:** `$2400–$598B` (code) `$6000–$911C` (data) `$C300–$C821` (Q-page)  
-**Version:** V1.5.08  
+**Version:** V1.5.09  
 Legend: 🟢 OK · 🔴 NO · ⚠️ fixed in the emulator, awaiting hardware re-test · ⬜ not tested
 
 **Emulator regression state at V1.5.08:** variant sweep **30/30**, unit suite

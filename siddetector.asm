@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.5.08  -  Commodore 64 SID chip identification utility
+// SID Detector v1.5.09  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -9069,7 +9069,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.5.08 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.5.09 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9424,7 +9424,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.5.08 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.5.09 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10230,7 +10230,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.5.08 README"
+    .text "SIDDETECTOR V1.5.09 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10393,6 +10393,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.5.09 TABLE-DRIVEN CLASSIFIERS"
+    .byte 13
+    .byte $9E
     .text "  V1.5.08 D5XX ARMSID NAMING FIX"
     .byte 13
     .byte $9E
@@ -10403,9 +10406,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.5.04 CHIP TABLE + DBG SWAP FIX"
-    .byte 13
-    .byte $9E
-    .text "  V1.5.03 Q PAGE STACK + ZP FIX"
     .byte 13
     .byte 13
     .byte 0                         // null terminator
