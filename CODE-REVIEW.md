@@ -928,7 +928,7 @@ is no longer blocked.
 | P3-2 | Copy-paste comment noise in patch blocks | **fixed** - 78 duplicated comments stripped, **21 actively wrong** register labels corrected (they all said "Voice 3 control at D418", including for $0F/$12/$1B-$1F); binary byte-identical |
 | P3-3 | Magic `#18` for the info-page count | **fixed** - `INFO_PAGE_MAX` + an `.errorif` that fails the build if it drifts from the pointer tables (positive-controlled) |
 | P3-6 | Dead `.mon` files in tests/ | **fixed** - 6 unreferenced recipes moved to `tests/attic/` with a README saying why; `tests/` now holds only the 4 live ones |
-| P3-4 | Extract a `sid_list_append` helper | **not done, deliberately** - see below |
+| P3-4 | Extract a `sid_list_append` helper | **done where the duplication actually is (V1.5.08+)** - `a2spl_add` replaces the seven identical append tails in `arm2sid_populate_sid_list`; 101 bytes. The other five sites are structurally different and were left alone - see below |
 
 **Variant sweep - before and after the P0-1 fix:**
 
@@ -988,16 +988,63 @@ compared 43 against 43 and passed — silently, with three tests dead. That is
 the concrete payoff of P2-5, and it is worth remembering when adding a test:
 **chain the previous test's success `jmp` to the new label.**
 
-### Why P3-4 (`sid_list_append`) was left alone
+### Why P3-4 (`sid_list_append`) was left alone — and what was done instead
 
-It would fold six near-identical "bounds-check, inx, store l/h/t" sequences into
-one helper and save perhaps 80 bytes. I skipped it on purpose: those six sites
-sit in the most delicate code in the program - `s_s_add`, the `fll_*` paths,
-`uca_found`, `tls_no_append`, `arm2sid_populate_sid_list` - and the bounds
-policy they share is already uniform since P2-11. So the remaining benefit is
-byte count and tidiness, against a real risk of disturbing list construction in
-a path the emulator exercises only partially. Not a good trade at this point;
-worth doing in a session that starts with it rather than ends with it.
+**Original reasoning (kept):** it would fold six near-identical "bounds-check,
+inx, store l/h/t" sequences into one helper and save perhaps 80 bytes. I skipped
+it on purpose: those six sites sit in the most delicate code in the program -
+`s_s_add`, the `fll_*` paths, `uca_found`, `tls_no_append`,
+`arm2sid_populate_sid_list` - and the bounds policy they share is already uniform
+since P2-11. So the remaining benefit is byte count and tidiness, against a real
+risk of disturbing list construction in a path the emulator exercises only
+partially.
+
+**Revisited and partly done.** The premise turned out to be wrong in a useful
+way: the six sites are *not* near-identical. Only `arm2sid_populate_sid_list`
+contains genuine duplication — seven byte-identical 27-byte tails. The others
+differ structurally and a shared helper would have to fight them:
+
+| Site | Why it does not fit one helper |
+|---|---|
+| `fll_no_dup` / `fll_refine` | Reserves the slot, *then* identifies the chip, *then* stores the type — across a `jsr` that trashes X (hence `x_zp`). Two separate store sites (`fll_fpga_done`, `fll_sid_typed`). |
+| `uca_found` | Address stored first; type only known after `uci_type_for_addr` returns. |
+| `s_s_add` | Address comes from `sptr_zp`, and it falls through into the fiktiv-loop setup rather than returning. |
+| `tls_no_append` | Its own overflow branch target and surrounding sweep state. |
+
+Folding those in means restructuring control flow in exactly the code the
+paragraph above warns about, for roughly 20 bytes. Not done, and now for a
+better-evidenced reason than "delicate".
+
+`a2spl_add` handles the seven that *are* identical: `A` = address low, `Y` =
+address high, type always `$05`, no-op when the list is full (what the inline
+copies did by branching over themselves). The routine saves and restores `Y`
+around the whole body to keep its documented "preserves Y" contract. The nibble
+tests stay unrolled — each reads a different byte and shift.
+
+The real win is not the bytes: the P2-11 bounds guard now exists in **one**
+place in this routine instead of seven copies. This was the list writer that had
+no guard at all until P2-11, so seven copies of it was the fragile part.
+
+**Measured:** main segment `$2400-$598B` → `$2400-$5926`, **101 bytes**
+(headroom before `$5B00`: 373 → 474). The `.prg` file size is unchanged at
+49187 bytes because the file's extent is set by the `$C300` segment, not by
+main-segment code size — do not use `.prg` size as the metric here.
+
+**Verified:** unit suite 46/46, MEMORYMAP 0 drift, variant sweep 30/30. Plus a
+targeted check on the failure mode that actually threatened this change — a
+mis-transcribed address across seven rewritten call sites: the slot→(lo,hi)
+mapping and the nibble-selection logic were both extracted from `git HEAD` and
+from the working tree and compared, and are identical in order and content.
+
+⚠ **Coverage caveat:** `arm2sid_populate_sid_list` only runs with an ARM2SID
+primary, which the emulator reaches through one variant case (`arm2sid-d420`);
+the multi-slot ARM2SID+U64 map path is hardware-only. The sweep shows the
+covered path is unbroken, not that the uncovered one is. A `make hw_test` on the
+ARM2SID/U64 rig is the confirmation. Note also that `tests/test_suite.asm` uses
+*embedded copies* of dispatch logic rather than calling production routines, so
+a unit test here would have exercised a transcription of `a2spl_add` rather than
+`a2spl_add` itself — which is why the before/after extraction above was done
+instead.
 
 ### Remaining order
 
@@ -1013,8 +1060,11 @@ is a deliberate non-goal:
    `FIXED IN V1.5.08` block in its section). What is left for the rig is a
    confirmation, not an investigation: a real FPGASID must still report SID2 at
    `$D420` rather than `$D460`, and a stereo ARMSID at `$D500` should be named.
-3. **P3-4** (`sid_list_append`) - skipped on a risk/benefit judgement, see the
-   section above.
+3. ~~**P3-4** (`sid_list_append`)~~ - **done for the seven duplicated appends in
+   `arm2sid_populate_sid_list`** (`a2spl_add`, 101 bytes). The five structurally
+   different sites stay inline, now with a documented reason rather than a
+   judgement call - see the section above. Wants the ARM2SID/U64 rig to confirm
+   the multi-slot map path, which no emulator case covers.
 
 The wider P2-1 problem is now closed too. **15 ad-hoc scripts in `scripts/`**
 were still running `taskkill /F /IM x64sc.exe`, which kills every VICE on the

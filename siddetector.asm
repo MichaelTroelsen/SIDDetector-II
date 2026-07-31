@@ -6516,41 +6516,29 @@ arm2sid_populate_sid_list:
 // writer with no guard: one more pre-populate (the SIDFX path already adds two)
 // or a firmware returning unexpected map nibbles would have run off the end of
 // sid_list_* into the arrays that follow it.
+// The append itself now lives in a2spl_add (P3-4) — the nibble tests stay
+// unrolled because each reads a different byte and shift, but the seven
+// identical "guard, inx, store l/h/t" tails are one routine.
                 // Slot 1 (D420): armsid_map_l high nibble
+                tya
+                pha                     // this routine promises to preserve Y,
+                                        // and a2spl_add takes the high byte in it
                 lda armsid_map_l
                 lsr                     // shift high nibble to low
                 lsr
                 lsr
                 lsr
                 beq a2spl_s1            // 0 = NONE
-                lda sidnum_zp
-                cmp #$08
-                bcs a2spl_s1      // list full (slots 1-8) -> skip
-                ldx sidnum_zp
-                inx
-                stx sidnum_zp
-                lda #$05
-                sta sid_list_t,x
+                ldy #$D4
                 lda #$20
-                sta sid_list_l,x
-                lda #$D4
-                sta sid_list_h,x
+                jsr a2spl_add
 a2spl_s1:       // Slot 2 (D500): armsid_map_l2 low nibble
                 lda armsid_map_l2
                 and #$0F
                 beq a2spl_s2
-                lda sidnum_zp
-                cmp #$08
-                bcs a2spl_s2      // list full (slots 1-8) -> skip
-                ldx sidnum_zp
-                inx
-                stx sidnum_zp
-                lda #$05
-                sta sid_list_t,x
+                ldy #$D5
                 lda #$00
-                sta sid_list_l,x
-                lda #$D5
-                sta sid_list_h,x
+                jsr a2spl_add
 a2spl_s2:       // Slot 3 (D520): armsid_map_l2 high nibble
                 lda armsid_map_l2
                 lsr
@@ -6558,34 +6546,16 @@ a2spl_s2:       // Slot 3 (D520): armsid_map_l2 high nibble
                 lsr
                 lsr
                 beq a2spl_s3
-                lda sidnum_zp
-                cmp #$08
-                bcs a2spl_s3      // list full (slots 1-8) -> skip
-                ldx sidnum_zp
-                inx
-                stx sidnum_zp
-                lda #$05
-                sta sid_list_t,x
+                ldy #$D5
                 lda #$20
-                sta sid_list_l,x
-                lda #$D5
-                sta sid_list_h,x
+                jsr a2spl_add
 a2spl_s3:       // Slot 4 (DE00): armsid_map_h low nibble
                 lda armsid_map_h
                 and #$0F
                 beq a2spl_s4
-                lda sidnum_zp
-                cmp #$08
-                bcs a2spl_s4      // list full (slots 1-8) -> skip
-                ldx sidnum_zp
-                inx
-                stx sidnum_zp
-                lda #$05
-                sta sid_list_t,x
+                ldy #$DE
                 lda #$00
-                sta sid_list_l,x
-                lda #$DE
-                sta sid_list_h,x
+                jsr a2spl_add
 a2spl_s4:       // Slot 5 (DE20): armsid_map_h high nibble
                 lda armsid_map_h
                 lsr
@@ -6593,34 +6563,16 @@ a2spl_s4:       // Slot 5 (DE20): armsid_map_h high nibble
                 lsr
                 lsr
                 beq a2spl_s5
-                lda sidnum_zp
-                cmp #$08
-                bcs a2spl_s5      // list full (slots 1-8) -> skip
-                ldx sidnum_zp
-                inx
-                stx sidnum_zp
-                lda #$05
-                sta sid_list_t,x
+                ldy #$DE
                 lda #$20
-                sta sid_list_l,x
-                lda #$DE
-                sta sid_list_h,x
+                jsr a2spl_add
 a2spl_s5:       // Slot 6 (DF00): armsid_map_h2 low nibble
                 lda armsid_map_h2
                 and #$0F
                 beq a2spl_s6
-                lda sidnum_zp
-                cmp #$08
-                bcs a2spl_s6      // list full (slots 1-8) -> skip
-                ldx sidnum_zp
-                inx
-                stx sidnum_zp
-                lda #$05
-                sta sid_list_t,x
+                ldy #$DF
                 lda #$00
-                sta sid_list_l,x
-                lda #$DF
-                sta sid_list_h,x
+                jsr a2spl_add
 a2spl_s6:       // Slot 7 (DF20): armsid_map_h2 high nibble
                 lda armsid_map_h2
                 lsr
@@ -6628,19 +6580,47 @@ a2spl_s6:       // Slot 7 (DF20): armsid_map_h2 high nibble
                 lsr
                 lsr
                 beq a2spl_done
+                ldy #$DF
+                lda #$20
+                jsr a2spl_add
+a2spl_done:     pla
+                tay                     // restore caller's Y
+                rts
+
+//--------------------------------------------------------------------------------------------------
+// a2spl_add — append one ARM2SID map slot to sid_list.  (P3-4)
+//
+// In:  A = address low byte, Y = address high byte.  Type is always $05
+//      (ARMSID/SwinsidU family) — every slot this routine adds is one.
+// Out: nothing.  When the list is full the call is silently a no-op, which is
+//      what the seven inline copies did by branching over themselves.
+// Trashes A, X.  Leaves Y as the caller set it.
+//
+// This replaces seven byte-identical 27-byte sequences.  The bounds guard is
+// the one from P2-11: sid_list has 9 slots (0..8), slot 0 is the unused
+// sentinel, so usable slots are 1..8 and a past-end write would run into
+// sid_list_h / sid_list_t / uci_resp, which sit contiguously after it.
+// Having it in exactly one place is the point — before this, the guard was
+// copy-pasted seven times and had already been missing from the whole routine
+// once.
+//--------------------------------------------------------------------------------------------------
+a2spl_add:
+                pha                     // hold lo across the bounds check
                 lda sidnum_zp
                 cmp #$08
-                bcs a2spl_done      // list full (slots 1-8) -> skip
+                bcs a2spl_add_full      // list full (slots 1-8) -> skip
                 ldx sidnum_zp
                 inx
                 stx sidnum_zp
                 lda #$05
                 sta sid_list_t,x
-                lda #$20
+                pla
                 sta sid_list_l,x
-                lda #$DF
+                tya
                 sta sid_list_h,x
-a2spl_done:     rts
+                rts
+a2spl_add_full: pla                     // balance the stack; add nothing
+                rts
 
 //--------------------------------------------------------------------------------------------------
 // sidfx_populate_sid_list: populate sid_list from saved SIDFX D41D/D41E registers.
