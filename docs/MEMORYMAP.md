@@ -1,8 +1,8 @@
 # SID Detector — Memory Map
 
-**Version:** V1.4.44  
+**Version:** V1.5.09  
 **Assembler:** KickAssembler  
-**Build output:** code $2400–$594F, data $6000–$911E, tracker $9200–$9FC9, Delirious 9 tune $A000–$B399, tune-mgmt $C020–$C21F  
+**Build output:** BASIC stub $0801–$080A, TLR sid-detect2 $0A00–$0BEA, Triangle Intro tune $1800–$2387, code $2400–$5826, tlr_sweep $5B00–$5CB4, data $6000–$9120, tracker $9200–$9F9E, Delirious 9 tune $A000–$B399, tune-mgmt $C020–$C25A, Q page $C300–$C821  
 **Maintained by:** `python scripts/check_memorymap.py [--fix]` — verify symbol addresses match `siddetector.sym`, or auto-rewrite drifted ones.
 
 ---
@@ -315,9 +315,9 @@ Null-terminated ASCII labels used by the debug screen printer. Starting at `$55A
 
 | Address | Label | Description |
 |---------|-------|-------------|
-| $8F42 | `uci_type_for_addr` | Determine UltiSID 6581/8580 via UCI GET_HWINFO + checkrealsid fallback |
-| $9003 | `dbg_print_frame` | Print "Fn:$xxyy T=xx INT/EXT [curve]\n" for debug page 2 |
-| $90A7 | `dbg_uci_query` | Issue UCI GET_HWINFO, fill `uci_resp[0..22]`, drain FIFO |
+| $8F45 | `uci_type_for_addr` | Determine UltiSID 6581/8580 via UCI GET_HWINFO + checkrealsid fallback |
+| $9006 | `dbg_print_frame` | Print "Fn:$xxyy T=xx INT/EXT [curve]\n" for debug page 2 |
+| $90AA | `dbg_uci_query` | Issue UCI GET_HWINFO, fill `uci_resp[0..22]`, drain FIFO |
 | ~$7EA7 | *(end)* | Last byte of assembled binary |
 
 ---
