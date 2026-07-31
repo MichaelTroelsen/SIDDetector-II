@@ -61,7 +61,7 @@ fi
 RELEASE_PATHS=(
     siddetector.asm siddetector.prg siddetector.dbg siddetector.sym siddetector.vs
     Makefile README.md TODO.md
-    CLAUDE.md CODE-REVIEW.md whats-next.md
+    CLAUDE.md CODE-REVIEW.md DOC-AUDIT.md whats-next.md
     docs/CHIPS.md docs/debug.md docs/teststatus.md docs/MEMORYMAP.md
     tests/test_suite.prg tests/test_suite.dbg tests/test_suite.sym tests/test_suite.vs
     tests/variant_goldens/
@@ -138,6 +138,7 @@ git add \
     TODO.md \
     CLAUDE.md \
     CODE-REVIEW.md \
+    DOC-AUDIT.md \
     docs/CHIPS.md \
     docs/debug.md \
     docs/teststatus.md \
