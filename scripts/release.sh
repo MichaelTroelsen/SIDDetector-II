@@ -61,6 +61,7 @@ fi
 RELEASE_PATHS=(
     siddetector.asm siddetector.prg siddetector.dbg siddetector.sym siddetector.vs
     Makefile README.md TODO.md
+    CLAUDE.md CODE-REVIEW.md whats-next.md
     docs/CHIPS.md docs/debug.md docs/teststatus.md docs/MEMORYMAP.md
     tests/test_suite.prg tests/test_suite.dbg tests/test_suite.sym tests/test_suite.vs
     tests/variant_goldens/
@@ -135,6 +136,8 @@ git add \
     Makefile \
     README.md \
     TODO.md \
+    CLAUDE.md \
+    CODE-REVIEW.md \
     docs/CHIPS.md \
     docs/debug.md \
     docs/teststatus.md \
@@ -148,6 +151,10 @@ git add \
 # Stage test outputs if they changed
 git add tests/test_suite.prg tests/test_suite.dbg \
         tests/test_suite.sym tests/test_suite.vs 2>/dev/null || true
+
+# whats-next.md is a per-session handoff, not a permanent project file — it may
+# legitimately not exist at release time, so staging it must not abort the run.
+git add whats-next.md 2>/dev/null || true
 
 git commit -m "$(cat <<EOF
 release: ${NEW_VER}
