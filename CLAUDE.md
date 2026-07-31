@@ -36,7 +36,10 @@ re-implementing):
   **Never** use `taskkill /F /IM x64sc.exe`; it kills the user's interactive session.
 
 **Host tests** (`make python_tests`, no emulator needed): `tests/test_hw_snapshot.py`,
-`tests/test_variant_render.py`, `tests/test_c64screen.py`.
+`tests/test_variant_render.py`, `tests/test_c64screen.py`,
+`tests/test_emu_classifier.py` (parses `emu_class_tab` out of the asm and proves
+it still reproduces the two decision trees it replaced, over the whole input
+space — edit that table and this is what catches you).
 
 **Gotchas that cost real debugging time** (see `CODE-REVIEW.md`):
 - VICE **monitor** reads of SID registers disagree with CPU reads — the monitor

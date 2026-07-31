@@ -109,6 +109,24 @@ tlr_data:
 .const data1       = $A4   // primary result byte (chip type code)
 .const data2       = $A5   // secondary result byte (echo char or sub-type)
 .const data3       = $A6   // tertiary result byte (ARM2SID 'R' discriminator)
+
+// ---- Emulator decay classifier (P3-5) -------------------------------------
+// emu_class_tab and emu_class_match live down beside checktypeandprint, but
+// get_emu_page uses these constants ~4000 lines earlier and KickAssembler
+// cannot forward-reference a .const — so they are declared here, with the
+// rest of the equates, and the table carries an .errorif positive control.
+.const EMUTAB_STRIDE = 6
+.const EMUTAB_ROWS   = 11
+.const EMUTAB_D1     = $00   // selector: data1 in range, data2 must be zero
+.const EMUTAB_D2     = $01   // selector: data2 in range, data3 must be zero
+
+// Info page numbers — these were bare magic numbers in both decision trees.
+.const IP_SWINU      = 4
+.const IP_FPGA8580   = 6
+.const IP_ULTI       = 9
+.const IP_VICE       = 10
+.const IP_HOXS       = 11
+.const IP_UNKNOWN    = 16
 .const za7         = $A7   // machine type: $FF=C64, $FC=C128, other=TC64
 .const za8         = $A8   // 16-bit scratch pointer; fiktivloop parks the
                             //   scan root here across type identification (lo)
@@ -3798,132 +3816,25 @@ cr_nc:
            rts
 
 // ============================================================
-// get_emu_page: look at decay measurement (data1/data2/data3)
-// and return the matching info page number in A.
-// Same matching logic as checktypeandprint.
+// get_emu_page: look at the decay measurement (data1/data2/data3) and return
+// the matching info page number in A.
+//
+// Shares emu_class_tab with checktypeandprint (P3-5) — the two used to be
+// separate hand-written decision trees over the same signatures and had
+// drifted apart (P1-6).  The table and matcher live next to
+// checktypeandprint; see the block comment there for the row layout and why
+// row order matters.
 // ============================================================
 get_emu_page:
            lda data3
            cmp #$02
-           bne gep_check_swinano   // data3!=$02 -> continue checks
-           jmp gep_unknown         // data3=$02 -> unknown
-gep_check_swinano:
-           // data1=$01-02, data2=$00.  Historically read as "SwinSID Nano",
-           // but a genuine Nano is now caught at Step 0.5 (checkswinsidnano)
-           // and reaches info_entry via data4=$08 without ever getting here.
-           // Arriving here means Nano detection did NOT fire, and this decay
-           // signature is known to be shared with NOSID+U2+ (docs/FINDINGS.md).
-           // checktypeandprint prints "UNKNOWNSID" for exactly this signature,
-           // so return the matching page instead of contradicting the screen.
-           lda data1
-           cmp #$01
-           bcc gep_ulti
-           cmp #$03
-           bcs gep_ulti
-           lda data2
-           bne gep_ulti
-           lda #16                 // IP_UNKNOWN (matches checktypeandprint)
-           rts
-gep_ulti:
-           // ULTIsid: data1=$DA-F1, data2=$00
-           lda data1
-           cmp #$DA
-           bcc gep_hoxs
-           cmp #$F2
-           bcs gep_hoxs
-           lda data2
-           bne gep_hoxs
-           lda #9                  // IP_ULTI
-           rts
-gep_hoxs:
-           // HOXS64: data2=$19, data3=$00
-           lda data2
-           cmp #$19
-           bne gep_rfp6581d
-           lda data3
-           bne gep_rfp6581d
-           lda #11                 // IP_HOXS
-           rts
-gep_rfp6581d:
-           // C64DBG ResIDFP: data2=$07, data3=$00
-           lda data2
-           cmp #$07
-           bne gep_fast6581d
-           lda data3
-           bne gep_fast6581d
-           lda #10                 // IP_VICE
-           rts
-gep_fast6581d:
-           // C64DBG FastSID: data1=$05, data2=$00
-           lda data1
-           cmp #$05
-           bne gep_resid6581d
-           lda data2
-           bne gep_resid6581d
-           lda #10                 // IP_VICE
-           rts
-gep_resid6581d:
-           // C64DBG ResID: data2=$03, data3=$00
-           lda data2
-           cmp #$03
-           bne gep_swinsidu_d
-           lda data3
-           bne gep_swinsidu_d
-           lda #10                 // IP_VICE
-           rts
-gep_swinsidu_d:
-           // SwinsidU decay: data2=$16-18, data3=$00
-           lda data2
-           cmp #$16
-           bcc gep_fpgasid_d
-           cmp #$19
-           bcs gep_fpgasid_d
-           lda data3
-           bne gep_fpgasid_d
-           lda #4                  // IP_SWINU
-           rts
-gep_fpgasid_d:
-           // FPGAsid decay: data2=$05-06, data3=$00
-           lda data2
-           cmp #$05
-           bcc gep_resid8580
-           cmp #$07
-           bcs gep_resid8580
-           lda data3
-           bne gep_resid8580
-           lda #6                  // IP_FPGA8580
-           rts
-gep_resid8580:
-           // VICE ResID 8580: data2=$98, data3=$00
-           lda data2
-           cmp #$98
-           bne gep_resid6581
-           lda data3
-           bne gep_resid6581
-           lda #10                 // IP_VICE
-           rts
-gep_resid6581:
-           // VICE ResID 6581: data2=$01, data3=$00
-           lda data2
-           cmp #$01
-           bne gep_fastsid
-           lda data3
-           bne gep_fastsid
-           lda #10                 // IP_VICE
-           rts
-gep_fastsid:
-           // VICE FastSID: data1=$02-04, data2=$00
-           lda data1
-           cmp #$02
-           bcc gep_unknown
-           cmp #$05
-           bcs gep_unknown
-           lda data2
-           bne gep_unknown
-           lda #10                 // IP_VICE
+           beq gep_unknown         // data3=$02 -> unknown
+           jsr emu_class_match
+           bcc gep_unknown         // nothing matched
+           lda emu_class_tab+3,x   // info page number for the matched row
            rts
 gep_unknown:
-           lda #16                 // IP_UNKNOWN
+           lda #IP_UNKNOWN
            rts
 
 // Called only by the VIC raster IRQ (CIA1 timer IRQs are disabled).
@@ -7876,166 +7787,132 @@ calc_check:
 //  the V1.5.01 main code body already runs from $2400 to ~$5E50 and any
 //  more code at this offset would collide with the $5B00 tlr_sweep block.)
 
+// ============================================================
+// Emulator decay classifier — ONE table, TWO consumers.  (P3-5)
+//
+// checktypeandprint (main screen row) and get_emu_page (info page number)
+// used to be two hand-written decision trees over the same
+// (data1, data2, data3) decay measurement, walked in the same order with the
+// same thresholds.  Keeping them in step was manual, and they had already
+// drifted: P1-6 was precisely this bug — the same signature printed
+// "UNKNOWNSID" on the main screen while the info page confidently showed a
+// SwinSID Nano page.  Deriving both from one table removes the drift class
+// rather than re-synchronising two copies.
+//
+// Every rule in both trees has the same shape: one field within an inclusive
+// range, AND the NEXT field zero.  data1-rules require data2=0; data2-rules
+// require data3=0.  That invariant holds for all 11 rules, so a row does not
+// need to name its second field — the selector implies it.
+//
+// Row layout (EMUTAB_STRIDE = 6 bytes):
+//   +0  field selector: $00 = (data1 in range, data2 must be 0)
+//                       $01 = (data2 in range, data3 must be 0)
+//   +1  low bound  (inclusive)
+//   +2  high bound (inclusive)
+//   +3  info page number  — get_emu_page
+//   +4  string pointer lo — checktypeandprint
+//   +5  string pointer hi
+//
+// ROW ORDER IS SIGNIFICANT and must not be sorted or "tidied": the ranges
+// overlap (VICE FastSID is data1 $02-$04, the UNKNOWNSID row is data1
+// $01-$02), so first-match-wins reproduces the old fall-through chain exactly.
+// $02 with data2=0 must keep reaching UNKNOWNSID, not FastSID.
+// ============================================================
+emu_class_tab:
+    // 01-02 00 | was "Swinsid Nano"; a real Nano is caught at Step 0.5 and
+    //            never reaches here, and this signature is shared with
+    //            NOSID+U2+ (docs/FINDINGS.md) — so UNKNOWNSID (P1-6).
+    .byte EMUTAB_D1, $01, $02, IP_UNKNOWN
+    .word sunknown
+    // DA-F1 00 | ULTIsid
+    .byte EMUTAB_D1, $DA, $F1, IP_ULTI
+    .word sULTIsid
+    // 00 19 00 | HOXS64
+    .byte EMUTAB_D2, $19, $19, IP_HOXS
+    .word shoxs
+    // 00 07 00 | C64 Debugger VICE 3.1 RESID-FP 6581
+    .byte EMUTAB_D2, $07, $07, IP_VICE
+    .word sResidfp6581d
+    // 05-05 00 | C64 Debugger VICE 3.1 FastSID 6581
+    .byte EMUTAB_D1, $05, $05, IP_VICE
+    .word sFast6581d
+    // 00 03 00 | C64 Debugger VICE 3.1 RESID 6581
+    .byte EMUTAB_D2, $03, $03, IP_VICE
+    .word sResid6581d
+    // 00 16-18 00 | Swinsid Ultimate
+    .byte EMUTAB_D2, $16, $18, IP_SWINU
+    .word sSwinsidU
+    // 00 05-06 00 | FPGAsid
+    .byte EMUTAB_D2, $05, $06, IP_FPGA8580
+    .word sFPGAsid
+    // 00 98 00 | VICE 3.3 RESID 8580
+    .byte EMUTAB_D2, $98, $98, IP_VICE
+    .word sResid8580
+    // 00 01 00 | VICE 3.3 RESID 6581
+    .byte EMUTAB_D2, $01, $01, IP_VICE
+    .word sResid6581
+    // 02-04 00 | VICE 3.3 FastSID
+    .byte EMUTAB_D1, $02, $04, IP_VICE
+    .word sFastSid
+emu_class_tab_end:
+// Positive control: the matcher walks a fixed stride, so a hand-edited row
+// that loses or gains a byte would silently shift every later row.
+.errorif (emu_class_tab_end - emu_class_tab) != EMUTAB_ROWS * EMUTAB_STRIDE, "emu_class_tab: row size does not match EMUTAB_STRIDE"
+
+// emu_class_match — first matching row for the current data1/data2/data3.
+// Out: carry SET   -> X = byte offset of the matching row within emu_class_tab
+//      carry CLEAR -> nothing matched
+// Trashes A, X, and ecm_pri / ecm_zro.  Preserves Y.
+emu_class_match:
+    ldx #$00
+ecm_row:
+    lda emu_class_tab,x         // selector
+    bne ecm_use_d2
+    lda data1                   // $00 -> range field = data1, zero field = data2
+    sta ecm_pri
+    lda data2
+    jmp ecm_have_fields
+ecm_use_d2:
+    lda data2                   // $01 -> range field = data2, zero field = data3
+    sta ecm_pri
+    lda data3
+ecm_have_fields:
+    sta ecm_zro
+    bne ecm_next                // second field must be zero
+    lda ecm_pri
+    cmp emu_class_tab+1,x       // pri < lo ?
+    bcc ecm_next
+    lda emu_class_tab+2,x       // hi < pri ?
+    cmp ecm_pri
+    bcc ecm_next
+    sec                         // matched; X already points at the row
+    rts
+ecm_next:
+    txa
+    clc
+    adc #EMUTAB_STRIDE
+    tax
+    cpx #EMUTAB_ROWS * EMUTAB_STRIDE
+    bcc ecm_row
+    clc                         // walked the whole table, no match
+    rts
+
 //---------------------------------------------------------------------
 // new check
 //---------------------------------------------------------------------
 checktypeandprint:
-
-//    lda #<slabel 
-//    ldy #>slabel 
-//    jsr $AB1E
-        
-    lda data3 // 
-    cmp #$02  // hvis 2
-    bne nc_Swinsidn
-    jmp nc_unknown
-    
-// 01-02 00 00| Swinsid Nano                   | done
-nc_Swinsidn:
-    lda data1
-    cmp #$01
-    bcc nc_ULTIsid     // hvis data1 < cmp gå til nc_FastSid
-    cmp #$03
-    bcs nc_ULTIsid     // hvis data1 >= cmp gå til nc_FastSid
-    lda data2
-    bne nc_ULTIsid
-    // found         
-    lda #<sunknown 
-    ldy #>sunknown 
+    lda data3
+    cmp #$02                    // data3=$02 -> UNKNOWNSID + raw byte dump
+    beq nc_unknown
+    jsr emu_class_match
+    bcc nc_nextsid              // no rule matched -> print nothing (unchanged)
+    lda emu_class_tab+5,x       // string pointer hi
+    tay
+    lda emu_class_tab+4,x       // string pointer lo
     jsr $AB1E
     jmp exit
-// DA-F1 00 00| ULTIsid                        |    
-nc_ULTIsid:    
-    lda data1
-    cmp #$DA
-    bcc nc_hoxs     // hvis data1 < cmp gå til nc_FastSid
-    cmp #$F2
-    bcs nc_hoxs     // hvis data1 >= cmp gå til nc_FastSid
-    lda data2
-    bne nc_hoxs
-    // found         
-    lda #<sULTIsid 
-    ldy #>sULTIsid 
-    jsr $AB1E
-    jmp exit 
- // 00 19-19 00| Hoxs                           |
-nc_hoxs:
-    lda data2
-    cmp #$19
-    bne nc_Residfp6581d    
-    lda data3
-    bne nc_Residfp6581d
-    // found         
-    lda #<shoxs 
-    ldy #>shoxs 
-    jsr $AB1E
-    jmp exit 
-
-// 00 07-07 00| C64 Deb Vice 3.1 RESID-FP 6581 |
-nc_Residfp6581d:
-    lda data2
-    cmp #$07
-    bne nc_Fast6581d     // hvis data1 >= cmp gå til nc_FastSid
-    lda data3
-    bne nc_Fast6581d
-    // found         
-    lda #<sResidfp6581d 
-    ldy #>sResidfp6581d 
-    jsr $AB1E
-    jmp exit 
-
-// 05-05 00 00| C64 Deb Vice 3.1 fastSID 6581  |
-nc_Fast6581d:
-    lda data1
-    cmp #$05
-    bne nc_Resid6581d     // hvis data1 >= cmp gå til nc_FastSid
-    lda data2
-    bne nc_Resid6581d
-    // found         
-    lda #<sFast6581d 
-    ldy #>sFast6581d 
-    jsr $AB1E
-    jmp exit 
-// 00 03-03 00| C64 Deb Vice 3.1 RESID 6581    |
-nc_Resid6581d:
-    lda data2
-    cmp #$03
-    bne nc_Swinsidu     // hvis data1 >= cmp gå til nc_FastSid
-    lda data3
-    bne nc_Swinsidu
-    // found         
-    lda #<sResid6581d 
-    ldy #>sResid6581d 
-    jsr $AB1E
-    jmp exit 
-    
-// 00 16-18 00| Swinsid Ultimate               | done
-nc_Swinsidu:
-    lda data2
-    cmp #$16
-    bcc nc_FPGAsid     // hvis data1 < cmp gå til nc_FastSid
-    cmp #$19
-    bcs nc_FPGAsid     // hvis data1 >= cmp gå til nc_FastSid
-    lda data3
-    bne nc_FPGAsid
-    // found         
-    lda #<sSwinsidU 
-    ldy #>sSwinsidU 
-    jsr $AB1E
-    jmp exit 
-// 00 05-06 00| FPGAsid
-nc_FPGAsid:
-    lda data2
-    cmp #$05
-    bcc nc_Resid8580     // hvis data1 < $B4 gå til nc_FastSid
-    cmp #$07
-    bcs nc_Resid8580     // hvis data1 >= $B9 gå til nc_FastSid
-    lda data3
-    bne nc_Resid8580
-    // found         
-    lda #<sFPGAsid 
-    ldy #>sFPGAsid 
-    jsr $AB1E
-    jmp exit 
-// 00 98-98 00| Vice 3.3 RESID fast/ 8580
-nc_Resid8580: 
-    lda data2
-    cmp #$98
-    bne nc_Resid6581
-    lda data3
-    bne nc_Resid6581
-    lda #<sResid8580 
-    ldy #>sResid8580
-    jsr $AB1E 
-    jmp exit 
-// 00 01-01 00| Vice 3.3 RESID fast/ 6581
-nc_Resid6581: 
-    lda data2
-    cmp #$01
-    bne nc_FastSid     // hvis data1 < $B4 gå til nc_FastSid
-    lda data3
-    bne nc_FastSid
-    // found         
-    lda #<sResid6581 
-    ldy #>sResid6581 
-    jsr $AB1E 
-    jmp exit 
-// 02-05 00 00| Vice 3.3 FastSID 
-nc_FastSid:   
-    lda data1
-    cmp #$02
-    bcc nc_nextsid     // hvis data1 < $B4 gå til nc_FastSid
-    cmp #$05
-    bcs nc_nextsid     // hvis data1 >= $B9 gå til nc_FastSid
-    lda data2
-    bne nc_nextsid
-    // found         
-    lda #<sFastSid 
-    ldy #>sFastSid 
-    jsr $AB1E
-    jmp exit 
-nc_nextsid:   
-    jmp exit 
+nc_nextsid:
+    jmp exit
 
 nc_unknown:
     lda #<sunknown
@@ -8275,6 +8152,8 @@ sfx_oct_offset:      .byte 0     // octave shift added to $B0 value (0/4/8 = V1/
 dfx_preread:         .byte $FF   // raw $DF60 value at checkfmyam first read (debug/diagnostic)
 dfx_postread:        .byte $FF   // raw $DF60 value at checkfmyam second read (debug/diagnostic)
 midi_kind:           .byte 0     // 0=none 1=SEQ/Namesoft 2=DATEL 3=Passport 4=Maplin
+ecm_pri:             .byte 0     // emu_class_match: field under range test
+ecm_zro:             .byte 0     // emu_class_match: field that must read zero
 osc_base:            .byte 0     // candidate OSC3 sampled while nothing drives it;
                                  // both stereo mirror tests compare against this
                                  // instead of against 0 (CODE-REVIEW.md P0-5)

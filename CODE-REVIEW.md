@@ -786,6 +786,52 @@ Both walk the same ~10 signature checks in sequence (see P1-6). A table of
 `(field, lo, hi, string/page)` rows evaluated by one matcher removes the
 drift class entirely. Medium effort; only worth doing together with P1-6.
 
+#### DONE
+
+Both routines are now thin wrappers over one `emu_class_tab` + `emu_class_match`.
+
+The two trees turned out to share an invariant that makes the row narrower than
+the finding assumed: **every** rule is "one field within an inclusive range AND
+the *next* field zero" — `data1`-rules require `data2 = 0`, `data2`-rules
+require `data3 = 0`. That holds for all 11 rules in both trees, so a row does
+not have to name its second field, only which pair it uses. Row = 6 bytes:
+selector, lo, hi, info page, string pointer.
+
+`IP_SWINU` / `IP_FPGA8580` / `IP_ULTI` / `IP_VICE` / `IP_HOXS` / `IP_UNKNOWN`
+replace the bare page numbers both trees carried as comments. They are declared
+in the **top equates block**, not beside the table: `get_emu_page` is ~4000
+lines earlier in the file and KickAssembler cannot forward-reference a `.const`
+(same trap as `INFO_PAGE_COUNT`, recorded under *Attempted approaches*). The
+table carries an `.errorif` on its length so a hand-edited row that gains or
+loses a byte fails the build instead of silently shifting every later row.
+
+**Row order is load-bearing and must not be sorted.** The UNKNOWNSID row
+(`data1 $01-$02`) and the VICE FastSID row (`data1 $02-$04`) overlap at exactly
+`$02`; first-match-wins is what reproduces the old fall-through. There is a
+dedicated test pinning that case.
+
+**Measured:** main segment `$2400-$5926` → `$2400-$5826`, **256 bytes**.
+
+**Verified — this one did not have to rely on the sweep.** The decay classifier
+is a pure function of `(data1, data2, data3)`, so `tests/test_emu_classifier.py`
+parses `emu_class_tab` straight out of `siddetector.asm` and checks it against
+the original decision trees, transcribed from the pre-refactor source, for
+*both* consumers. Coverage is exhaustive rather than sampled: both trees compare
+`data3` only against `$02` and zero and never against anything else, so
+`data3 ∈ {$00, $02, other}` covers its entire behaviour, and `data1`/`data2` are
+swept over the full 0..255 — 196,608 cases, the whole input space.
+
+The test was then falsified to confirm it is not vacuous: narrowing the ULTIsid
+bound `$F1`→`$F0` was caught at `data1=$F1`, and moving the FastSID row above
+the UNKNOWNSID row was caught at `data1=$02` (page 10 instead of 16). Source
+restored byte-identical afterwards.
+
+Also ran: unit suite 46/46, MEMORYMAP 0 drift, variant sweep 30/30, host tests
+now 26. Worth noting the sweep is *weak* evidence here — the emulator variant
+cases mostly identify real chips through `checkrealsid` and never reach the
+decay classifier, which is exactly why the exhaustive host test was written
+instead of leaning on 30/30.
+
 ### P3-6 · `tests/` directory hygiene
 Generated artifacts (`*.prg/.dbg/.vs/.sym` for probes) are ignored, but
 `tests/hw_test_result_*.txt` reports are written into the repo tree at every

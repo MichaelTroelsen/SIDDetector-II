@@ -143,7 +143,7 @@ The .sid file header (126 bytes) is stripped; raw binary embedded directly. Loca
 | $3663 | `dbg_kbdloop` | Debug page 1 keyboard loop (JMP-patch target) |
 | $374B | `readme_kbdloop` | README screen keyboard loop |
 | $39A8 | `snd_kbdloop` | Sound test keyboard loop |
-| $3DF7 | `printscreen` | Blit static 25×40 UI to screen RAM $0400 |
+| $3D5A | `printscreen` | Blit static 25×40 UI to screen RAM $0400 |
 
 ### Detection Chain
 
@@ -154,39 +154,39 @@ The .sid file header (126 bytes) is stripped; raw binary embedded directly. Loca
 | ~$2400+ | `checkfpgasid` | FPGASID (magic-cookie $81/$65 + $F51D readback) |
 | ~$2400+ | `checkrealsid` | Real 6581/8580 (sawtooth $D41B readback) |
 | ~$2400+ | `checksecondsid` | Additional SIDs at D500/D600/D700/DE00/DF00 |
-| $4471 | `sidstereostart` | Prints stereo SID results to screen |
-| $5458 | `calc_start` | $D418 decay timing (emulator fingerprint) |
+| $43D4 | `sidstereostart` | Prints stereo SID results to screen |
+| $53BB | `calc_start` | $D418 decay timing (emulator fingerprint) |
 
 ### Embedded Variables and Tables (in code body)
 
 | Address | Label | Size | Description |
 |---------|-------|------|-------------|
-| $577A | `ultisid_str_lo` | 14 B | Lo/hi pointer table for UltiSID filter curve strings |
-| $58B5 | `armsid_major` | 1 B | ARMSID firmware major version (2=ARMSID, 3=ARM2SID) |
-| $58B6 | `armsid_minor` | 1 B | ARMSID firmware minor version (0–99) |
-| $58B7 | `armsid_cfgtest` | 1 B | D41B after config open ($4E='N' if working) |
-| $58B8 | `armsid_no_c` | 1 B | D41C after config entry (expect $4F='O') |
-| $58B9 | `armsid_ei_b` | 1 B | D41B after 'ei' cmd (expect $53='S') |
-| $58BA | `armsid_ei_c` | 1 B | D41C after 'ei' cmd (expect $57='W') |
-| $58BB | `armsid_ii_b` | 1 B | D41B after 'ii' cmd (2=ARM2SID, other=ARMSID) |
-| $58BC | `armsid_ii_c` | 1 B | D41C after 'ii' cmd ('L'/$4C or 'R'/$52 for ARM2SID) |
-| $58BD | `armsid_sid_type_h` | 1 B | D41B after 'fi' cmd ('6'=6581, '8'=8580 emulated) |
-| $58BE | `armsid_auto_sid` | 1 B | D41B after 'gi' cmd ('7'=$37 = auto-detected) |
-| $58BF | `armsid_emul_mode` | 1 B | D41B after 'mm' cmd (0=SID,1=SFX,2=SFX+SID; ARM2SID only) |
-| $58C0 | `armsid_map_l` | 1 B | D41B after 'lm' (slots 0+1 nibble-packed; ARM2SID only) |
-| $58C1 | `armsid_map_l2` | 1 B | D41C after 'lm' (slots 2+3 nibble-packed) |
-| $58C2 | `armsid_map_h` | 1 B | D41B after 'hm' (slots 4+5 nibble-packed) |
-| $58C3 | `armsid_map_h2` | 1 B | D41C after 'hm' (slots 6+7 nibble-packed) |
-| $58C4 | `is_u64` | 1 B | **1 = running on Ultimate64** (UCI $DF1F != $FF) |
-| $58C5 | `fpgasid_sid2_type` | 1 B | SID2 type from $82 magic ($3F=8580, $00=6581) |
-| $58C6 | `fpgasid_cpld_rev` | 1 B | FPGASID CPLD revision |
-| $58C7 | `fpgasid_fpga_rev` | 1 B | FPGASID FPGA revision |
-| $58C8 | `arm2sid_mapnames` | 20 B | 5 × 4-char slot labels: "----SIDLSIDRSFX-SID3" |
-| $58DC | `arm2sid_slot_d2` | 8 B | 2nd hex digit per slot ('4','4','5','5','E','E','F','F') |
-| $58ED | `backsid_d41f` | 1 B | D41F readback from checkbacksid ($42 = BackSID present) |
-| $58F7 | `MODE6581` | 16 B | $D418 decay mode table for 6581 identification |
-| $5907 | `MODE8580` | 16 B | $D418 decay mode table for 8580 identification |
-| $5917 | `MODEUNKN` | 16 B | $D418 decay mode table for unknown |
+| $5678 | `ultisid_str_lo` | 14 B | Lo/hi pointer table for UltiSID filter curve strings |
+| $57B3 | `armsid_major` | 1 B | ARMSID firmware major version (2=ARMSID, 3=ARM2SID) |
+| $57B4 | `armsid_minor` | 1 B | ARMSID firmware minor version (0–99) |
+| $57B5 | `armsid_cfgtest` | 1 B | D41B after config open ($4E='N' if working) |
+| $57B6 | `armsid_no_c` | 1 B | D41C after config entry (expect $4F='O') |
+| $57B7 | `armsid_ei_b` | 1 B | D41B after 'ei' cmd (expect $53='S') |
+| $57B8 | `armsid_ei_c` | 1 B | D41C after 'ei' cmd (expect $57='W') |
+| $57B9 | `armsid_ii_b` | 1 B | D41B after 'ii' cmd (2=ARM2SID, other=ARMSID) |
+| $57BA | `armsid_ii_c` | 1 B | D41C after 'ii' cmd ('L'/$4C or 'R'/$52 for ARM2SID) |
+| $57BB | `armsid_sid_type_h` | 1 B | D41B after 'fi' cmd ('6'=6581, '8'=8580 emulated) |
+| $57BC | `armsid_auto_sid` | 1 B | D41B after 'gi' cmd ('7'=$37 = auto-detected) |
+| $57BD | `armsid_emul_mode` | 1 B | D41B after 'mm' cmd (0=SID,1=SFX,2=SFX+SID; ARM2SID only) |
+| $57BE | `armsid_map_l` | 1 B | D41B after 'lm' (slots 0+1 nibble-packed; ARM2SID only) |
+| $57BF | `armsid_map_l2` | 1 B | D41C after 'lm' (slots 2+3 nibble-packed) |
+| $57C0 | `armsid_map_h` | 1 B | D41B after 'hm' (slots 4+5 nibble-packed) |
+| $57C1 | `armsid_map_h2` | 1 B | D41C after 'hm' (slots 6+7 nibble-packed) |
+| $57C2 | `is_u64` | 1 B | **1 = running on Ultimate64** (UCI $DF1F != $FF) |
+| $57C3 | `fpgasid_sid2_type` | 1 B | SID2 type from $82 magic ($3F=8580, $00=6581) |
+| $57C4 | `fpgasid_cpld_rev` | 1 B | FPGASID CPLD revision |
+| $57C5 | `fpgasid_fpga_rev` | 1 B | FPGASID FPGA revision |
+| $57C6 | `arm2sid_mapnames` | 20 B | 5 × 4-char slot labels: "----SIDLSIDRSFX-SID3" |
+| $57DA | `arm2sid_slot_d2` | 8 B | 2nd hex digit per slot ('4','4','5','5','E','E','F','F') |
+| $57EB | `backsid_d41f` | 1 B | D41F readback from checkbacksid ($42 = BackSID present) |
+| $57F7 | `MODE6581` | 16 B | $D418 decay mode table for 6581 identification |
+| $5807 | `MODE8580` | 16 B | $D418 decay mode table for 8580 identification |
+| $5817 | `MODEUNKN` | 16 B | $D418 decay mode table for unknown |
 | $9A67 | `screen` | 1000 B | **Static screen data** (25 rows × 40 cols, screencode_upper) |
 | $9E4F | `COLOUR` | 49 B | Colour wash palette table for COLWASH animation |
 | $9E7C+ | `check_uci_ultisid` | — | UCI UltiSID check subroutine |

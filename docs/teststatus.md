@@ -6,7 +6,7 @@
 Legend: 🟢 OK · 🔴 NO · ⚠️ fixed in the emulator, awaiting hardware re-test · ⬜ not tested
 
 **Emulator regression state at V1.5.08:** variant sweep **30/30**, unit suite
-**46/46**, 23 host-side Python tests. The last two sweep failures
+**46/46**, 26 host-side Python tests. The last two sweep failures
 (`stereo-D500-armsid`, `stereo-D500-swinu`) were closed by the P0-5 fix.
 
 ---
