@@ -54,18 +54,26 @@ fi
 # is both unstaged AND staged modifications — and `^??` drops untracked. The
 # result was empty for essentially every real working tree, so this guard has
 # never actually fired.
+#
+# An entry ending in '/' matches everything beneath that directory; anything
+# else must match the path exactly.  The goldens need the prefix form because
+# there is one file per variant case and the set grows whenever a case is added.
 RELEASE_PATHS=(
     siddetector.asm siddetector.prg siddetector.dbg siddetector.sym siddetector.vs
     Makefile README.md TODO.md
     docs/CHIPS.md docs/debug.md docs/teststatus.md docs/MEMORYMAP.md
     tests/test_suite.prg tests/test_suite.dbg tests/test_suite.sym tests/test_suite.vs
+    tests/variant_goldens/
     .version
 )
 
 is_release_path() {
     local candidate="$1" rp
     for rp in "${RELEASE_PATHS[@]}"; do
-        [ "$candidate" = "$rp" ] && return 0
+        case "$rp" in
+            */) [ "${candidate#"$rp"}" != "$candidate" ] && return 0 ;;
+            *)  [ "$candidate" = "$rp" ] && return 0 ;;
+        esac
     done
     return 1
 }
@@ -130,7 +138,12 @@ git add \
     docs/CHIPS.md \
     docs/debug.md \
     docs/teststatus.md \
-    docs/MEMORYMAP.md
+    docs/MEMORYMAP.md \
+    tests/variant_goldens
+
+# The goldens certify the detection output this release ships.  Leaving them
+# behind means a fresh clone fails `make ci-full` until someone regenerates
+# them — so they belong in the release commit, not in a follow-up.
 
 # Stage test outputs if they changed
 git add tests/test_suite.prg tests/test_suite.dbg \
