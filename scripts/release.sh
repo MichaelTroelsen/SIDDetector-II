@@ -8,9 +8,15 @@
 # Pipeline stages:
 #   1. Pre-flight  — branch check, working tree check
 #   2. Clean build — make clean + make all
-#   3. CI tests    — build and run test_suite in VICE; gate on pass count
+#   3. CI tests    — test_suite in VICE + host tests, then the MEMORYMAP
+#                    doc-drift gate.  Everything that can REJECT a release runs
+#                    here, before anything is mutated: an abort after stage 4
+#                    leaves a bumped-but-uncommitted tree, and re-running would
+#                    bump twice (that is how V1.5.07 was created and discarded).
 #   4. Bump version — increment patch in all files, add debug.md changelog row
-#   5. Final build  — rebuild siddetector.prg with new version string
+#   5. Final build  — rebuild siddetector.prg with new version string, then
+#                    regenerate docs/MEMORYMAP.md: the bump shifts every symbol
+#                    after it, so the map is stale by definition at this point
 #   6. Git release  — commit all changed files, tag, push
 #   7. GitHub release — create release on GitHub with siddetector.prg asset
 #                       (skipped if `gh` is not installed / not authenticated)
@@ -115,6 +121,15 @@ make all
 # ---- 3. CI tests -----------------------------------------------------------
 echo "=== RELEASE: run tests ==="
 bash scripts/ci_test.sh   # exits non-zero if any test fails
+make python_tests         # host-side tests; no emulator needed
+
+# Doc-drift gate runs HERE, before anything is mutated, so a failure aborts a
+# release that has not yet bumped or committed anything. Do not move it after
+# stage 4: aborting post-bump leaves a bumped-but-uncommitted tree, and
+# re-running this script would then bump a second time (that is how V1.5.07
+# was created and had to be discarded).
+echo "=== RELEASE: doc-drift gate ==="
+python scripts/check_memorymap.py --strict
 
 # ---- 4. Bump version -------------------------------------------------------
 echo "=== RELEASE: bump version ==="
@@ -126,6 +141,16 @@ echo "New version: $NEW_VER"
 # ---- 5. Final build (with new version string) ------------------------------
 echo "=== RELEASE: final build ==="
 make all
+
+# The bump changes code size, so symbols shift and the segment extents in the
+# MEMORYMAP header move with them. Regenerate here, after the final build and
+# before staging, or the release ships a stale map: V1.5.09 went out with three
+# rows drifted +3 bytes and a header two versions out of date, because nothing
+# between the bump and the commit ever looked. --fix is mechanical (it only
+# rewrites addresses the .sym/.dbg disagree with) and docs/ is already in
+# RELEASE_PATHS, so the result is staged with everything else.
+echo "=== RELEASE: refresh MEMORYMAP for the new build ==="
+python scripts/check_memorymap.py --fix
 
 # ---- 6. Git release --------------------------------------------------------
 echo "=== RELEASE: git commit, tag, push ==="
