@@ -182,12 +182,28 @@ git add tests/test_suite.prg tests/test_suite.dbg \
 # legitimately not exist at release time, so staging it must not abort the run.
 git add whats-next.md 2>/dev/null || true
 
+# Co-author trailer is opt-in.  This used to be a hardcoded
+# "Co-Authored-By: Claude Opus 4.7 (1M context)" line, which went onto every
+# release commit whether that model had been anywhere near the work or not —
+# and stage 6 is a mechanical version bump, so most of the time it credited
+# something that did not happen.  Attribution belongs to whoever runs it:
+#
+#   RELEASE_COAUTHOR='Some Name <someone@example.com>' \
+#       bash scripts/release.sh "Description"
+#
+# Unset (the default) means no trailer at all, which is the honest outcome for
+# a bump nobody co-authored.
+COAUTHOR_TRAILER=""
+if [ -n "${RELEASE_COAUTHOR:-}" ]; then
+    COAUTHOR_TRAILER="
+
+Co-Authored-By: ${RELEASE_COAUTHOR}"
+fi
+
 git commit -m "$(cat <<EOF
 release: ${NEW_VER}
 
-${DESCRIPTION}
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+${DESCRIPTION}${COAUTHOR_TRAILER}
 EOF
 )"
 

@@ -79,4 +79,20 @@ make hw_test SCENARIO=tests/hw/scenarios/custom.cfg   # explicit path
 ## Release
 
 ### `make release MSG="Description of changes"`
-Full release pipeline via `scripts/release.sh`: clean → build → CI → bump version → rebuild → git tag + push.
+Full release pipeline via `scripts/release.sh`: clean → build → CI + host tests
++ doc-drift gate → bump version → rebuild + refresh `docs/MEMORYMAP.md` → git
+tag + push → GitHub release.
+
+Everything that can reject a release runs *before* the bump. An abort after it
+leaves a bumped-but-uncommitted tree, and re-running would bump twice — that is
+how V1.5.07 came to exist and had to be discarded.
+
+Keep `MSG` to **28 characters or fewer**: it becomes the in-app readme scroller
+entry (`  Vx.y.zz DESCRIPTION`), which has to fit the C64's 40-column screen.
+
+**Co-author trailer is opt-in.** By default the release commit carries none,
+which is the honest outcome for a mechanical version bump. To add one:
+
+```bash
+RELEASE_COAUTHOR='Some Name <someone@example.com>' make release MSG="Description"
+```
