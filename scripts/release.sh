@@ -58,11 +58,14 @@ fi
 # An entry ending in '/' matches everything beneath that directory; anything
 # else must match the path exactly.  The goldens need the prefix form because
 # there is one file per variant case and the set grows whenever a case is added.
+# `docs/` uses it too: the tree holds the whole reference set (CHIPS, debug,
+# teststatus, MEMORYMAP, STORY, the proxy docs, images, …) and listing them
+# one by one meant every new document silently blocked the next release.
 RELEASE_PATHS=(
     siddetector.asm siddetector.prg siddetector.dbg siddetector.sym siddetector.vs
     Makefile README.md TODO.md
     CLAUDE.md CODE-REVIEW.md DOC-AUDIT.md whats-next.md
-    docs/CHIPS.md docs/debug.md docs/teststatus.md docs/MEMORYMAP.md
+    docs/
     tests/test_suite.prg tests/test_suite.dbg tests/test_suite.sym tests/test_suite.vs
     tests/variant_goldens/
     .version
@@ -139,10 +142,7 @@ git add \
     CLAUDE.md \
     CODE-REVIEW.md \
     DOC-AUDIT.md \
-    docs/CHIPS.md \
-    docs/debug.md \
-    docs/teststatus.md \
-    docs/MEMORYMAP.md \
+    docs \
     tests/variant_goldens
 
 # The goldens certify the detection output this release ships.  Leaving them
