@@ -1,8 +1,9 @@
 # Handoff — SID Detector II code review + fixes
 
-**Refreshed:** 2026-07-31 (post-V1.5.08) · **Repo:** `C:\Users\mit\claude\c64server\siddetector2`
-**Branch:** `master` · **HEAD:** `0e3d056` · **origin/master:** `0e3d056` (in sync)
-**Latest tag:** `v1.5.08` (`e82b4e2`) — **HEAD is 5 commits ahead of it**
+**Refreshed:** 2026-07-31 (post-V1.5.09) · **Repo:** `C:\Users\mit\claude\c64server\siddetector2`
+**Branch:** `master` · **HEAD:** `0962f4d` · **origin/master:** `0962f4d` (in sync)
+**Latest tag:** `v1.5.09` (`d9bc9b4`) — HEAD is 3 commits ahead, **all tooling and
+docs; `siddetector.prg` is unchanged since the tag, so nothing is pending release**
 **Working tree:** clean at the time this was written.
 **Baseline the review work started from:** `63659cd`
 
@@ -57,7 +58,16 @@ The original review pass (8 commits, `2f537af` … `99d214d`) is described in
 | `d3946cc` | **fix:** release.sh also left the project docs out of the release |
 | `61c350b` | **fix:** release.sh whitelist — add `DOC-AUDIT.md` |
 | `e5a9e8a` | **release:** cover the whole `docs/` tree in the release whitelist |
-| `0e3d056` | **refactor:** fold the seven duplicated ARM2SID appends into `a2spl_add` (P3-4) ← **HEAD** |
+| `0e3d056` | **refactor:** fold the seven duplicated ARM2SID appends into `a2spl_add` (P3-4) |
+| `09f80c7` | **docs:** refresh `whats-next.md` to the post-V1.5.08 state |
+| `69426eb` | **refactor:** drive both decay classifiers from one table (P3-5) |
+| `d9bc9b4` | **release:** V1.5.09 — table-driven classifiers ← **tag `v1.5.09` points here** |
+| `eb33279` | **fix:** MEMORYMAP header was the drift guard's blind spot |
+| `f7a11a1` | **fix:** release.sh shipped a stale MEMORYMAP every time |
+| `0962f4d` | **fix:** stop release.sh asserting a co-author that was not involved ← **HEAD** |
+
+The three commits after the `v1.5.09` tag are tooling and documentation only —
+`siddetector.prg` is unchanged since the tag, so there is nothing to release.
 
 ## P0-5 — FIXED and shipped in V1.5.08
 
@@ -166,13 +176,51 @@ state. Folding those in means restructuring control flow for roughly 20 bytes.
 The real win was not bytes: the P2-11 bounds guard now exists in **one** place in
 that routine instead of seven copies.
 
+## P3-5 done (`69426eb`) — both decay classifiers now share one table
+
+`checktypeandprint` (main screen) and `get_emu_page` (info page) were two
+hand-written decision trees over the same `(data1,data2,data3)` decay
+measurement. They had already drifted once — that was P1-6. Both are now thin
+wrappers over `emu_class_tab` + `emu_class_match`, so the drift class is gone
+rather than re-synchronised.
+
+The finding assumed a `(field, lo, hi, string/page)` row. The trees turned out to
+share a tighter invariant: **every rule is "one field within an inclusive range
+AND the *next* field zero"** — `data1`-rules need `data2=0`, `data2`-rules need
+`data3=0`, true for all 11 rules in both. So a row names only which pair it uses:
+selector, lo, hi, page, string pointer = 6 bytes.
+
+Saves **256 bytes**: `$2400-$5926` → `$2400-$5826`.
+
+Two things a future session must not undo:
+
+- **Row order is load-bearing.** The UNKNOWNSID row (`data1 $01-$02`) and the
+  VICE FastSID row (`data1 $02-$04`) overlap at exactly `$02`; first-match-wins
+  is what reproduces the old fall-through. Do not sort the table.
+  `tests/test_emu_classifier.py` pins that case specifically.
+- **`IP_*` and `EMUTAB_*` constants live in the top equates block**, not beside
+  the table, because `get_emu_page` is ~4000 lines earlier and KickAssembler
+  cannot forward-reference a `.const`. The table carries an `.errorif` on its
+  length so a hand-edited row that gains or loses a byte fails the build instead
+  of silently shifting every later row.
+
+**The variant sweep is weak evidence for this routine** — the emulator cases
+mostly identify real chips through `checkrealsid` and never reach the decay
+classifier at all. That is why `tests/test_emu_classifier.py` exists: it parses
+`emu_class_tab` out of the asm and checks it against both original trees
+(transcribed from the pre-refactor source) **exhaustively**. Both trees compare
+`data3` only against `$02` and zero, so `data3 ∈ {$00,$02,other}` covers its whole
+behaviour and `data1`/`data2` sweep 0..255 — 196,608 cases, the entire input
+space, not a sample. The test was then falsified to prove it is not vacuous
+(narrowing a bound, and reordering the table — both caught).
+
 ## Test results at HEAD
 
 | Check | Before the review | Now |
 |---|---|---|
 | Unit suite (VICE, `test_suite.asm`) | 43/43 | **46/46** |
-| Python host tests | none | **23** (`test_hw_snapshot` 4 + `test_variant_render` 8 + `test_c64screen` 11) |
-| MEMORYMAP drift | 0, dead symbols ignored | **0 drift, 0 dead symbols** (`--strict`) |
+| Python host tests | none | **26** (`test_hw_snapshot` 4 + `test_variant_render` 8 + `test_c64screen` 11 + `test_emu_classifier` 3) |
+| MEMORYMAP drift | 0, dead symbols ignored | **0 drift, 0 dead symbols, 0 header** (`--strict`) |
 | Variant sweep | 21/30 (permanently red) | **30/30** (30 goldens in `tests/variant_goldens/`) |
 
 ## Goldens
@@ -187,21 +235,30 @@ P0-3; three rows re-captured for the P0-5 fix in `49c01bf`.
 
 <work_remaining>
 
-## 1. Release V1.5.09 — the obvious next step
+## 1. Nothing is pending release
 
-**There are 5 unreleased commits on `master` since `v1.5.08`** (the four
-`release.sh` whitelist fixes plus the P3-4 refactor). The P3-4 one **changes the
-shipped binary**: `git rev-parse v1.5.08:siddetector.prg` and
-`HEAD:siddetector.prg` are different blobs, both 49187 bytes. So the binary
-attached to the published v1.5.08 GitHub release is *not* the binary at HEAD, and
-`siddetector.asm:2` at HEAD still says `v1.5.08`.
+**V1.5.09 is out** (tag `v1.5.09` at `d9bc9b4`, GitHub release published with
+`siddetector.prg` attached). It shipped P3-4, P3-5 and the release-script
+whitelist fixes. Unlike v1.5.08, `git rev-parse v1.5.09:siddetector.prg` and
+`HEAD:siddetector.prg` are the **same blob** — the published asset is the code on
+master.
 
-A V1.5.09 release would also be **the first end-to-end exercise of the fixed
-whitelist** — worth watching stage 1's output rather than assuming it.
+The three commits after the tag (`eb33279`, `f7a11a1`, `0962f4d`) are tooling and
+documentation only. `siddetector.prg` is unchanged since the tag, so there is
+nothing to cut a release for.
 
-`bash scripts/release.sh "<description>"` (or `make release`). It bumps the
-version itself — **do not bump manually first**, that is what created the
-skipped 1.5.07.
+When there is: `make release MSG="<description>"` (or
+`bash scripts/release.sh "<description>"`). Two things that have already cost a
+session each —
+
+- It **bumps the version itself**. Do not bump manually first; that is exactly
+  what created the skipped-and-discarded 1.5.07.
+- Keep `MSG` to **28 characters or fewer**. It becomes the in-app scroller line
+  `  Vx.y.zz DESCRIPTION`, which has to fit the C64's 40-column screen.
+
+The whitelist has now been exercised end to end: the V1.5.09 bump dirtied
+`docs/CHIPS.md`, `docs/debug.md` and `docs/teststatus.md`, and the `docs/` prefix
+staged all three. Stage 1 flagged nothing.
 
 ## 2. Hardware confirmation queue — three items, all blocked
 
@@ -227,12 +284,11 @@ confidence.
    **no emulator case covers it.** The sweep shows the covered path is unbroken,
    not that the uncovered one is.
 
-## 3. P3-5 — IN PROGRESS in a parallel session
+## 3. Every P0/P1/P2/P3 item in CODE-REVIEW.md is now closed
 
-Table-driving `checktypeandprint` / `get_emu_page`. **Being worked on right now
-in another session** — its outcome is unknown to this document. Do not pick it up
-as available work, and do not assume anything about whether it landed. Check
-`git log` and `CODE-REVIEW.md` before touching `siddetector.asm`.
+P3-5 landed in `69426eb`. The per-item status table in `CODE-REVIEW.md` is the
+authority; nothing there is left open. What remains below is new work, not
+review backlog.
 
 ## 4. Available cleanups, no blocker
 
@@ -243,12 +299,32 @@ as available work, and do not assume anything about whether it landed. Check
   all** — a test there would have exercised a transcription of `a2spl_add` rather
   than `a2spl_add` itself, so a before/after extraction of the slot→(lo,hi)
   mapping was done instead. **This is the highest-leverage testing improvement
-  available.**
-- **`docs/MEMORYMAP.md`'s header block is stale.** It still says
-  `**Version:** V1.4.44` and `**Build output:** code $2400–$594F, data
-  $6000–$911E, …`. `check_memorymap.py --fix` rewrites drifted *symbol rows*, so
-  `--strict` passes while the header lies. Either teach the script to rewrite the
-  header or correct it by hand.
+  available**, and it is a project rather than a session task.
+
+  Note the P3-5 work shows the alternative when a routine is a pure function:
+  `tests/test_emu_classifier.py` parses the real table out of `siddetector.asm`
+  and proves it exhaustively on the host. That pattern sidesteps the embedded-copy
+  problem entirely and is worth reaching for wherever it fits.
+
+### Recently closed, listed so they are not re-reported as open
+
+- ~~`docs/MEMORYMAP.md` header stale~~ — fixed in `eb33279`, and the *guard's
+  blind spot* was fixed with it: `check_memorymap.py` now derives the version
+  from the `SIDDETECTOR` screen title in `siddetector.asm` and the segment
+  extents from the `<Block>` START/END pairs in `siddetector.dbg` (KickAssembler's
+  own memory map, rewritten every build). Header drift now fails like address
+  drift and `--fix` rewrites it. The build line lists all ten segments, and an
+  unrecognised block start is reported as `segment @ $XXXX` rather than dropped.
+- ~~`release.sh` shipped a stale MEMORYMAP every release~~ — fixed in `f7a11a1`.
+  The bump shifts every symbol after it, and nothing between the bump and the
+  commit ever looked; V1.5.09 went out with three rows drifted +3 bytes. Stage 5
+  now regenerates the map after the final build, and stage 3 gained
+  `make python_tests` plus a `--strict` doc-drift gate. **Do not move that gate
+  after stage 4** — an abort post-bump leaves a bumped-but-uncommitted tree and
+  re-running would bump twice.
+- ~~`release.sh` hardcoded a co-author~~ — fixed in `0962f4d`. The trailer is now
+  opt-in via `RELEASE_COAUTHOR='Name <email>'`; unset means no trailer, which is
+  the honest outcome for a mechanical bump.
 
 ## Verification to run after ANY change
 
@@ -264,10 +340,11 @@ make all
 # 2+3+4. host tests + unit suite in VICE (must print 46 / 46) + MEMORYMAP drift
 make ci
 #    raw: python tests/test_hw_snapshot.py && python tests/test_variant_render.py \
-#           && python tests/test_c64screen.py
+#           && python tests/test_c64screen.py && python tests/test_emu_classifier.py
 #         bash scripts/ci_test.sh
 #         python scripts/check_memorymap.py --strict
-#    (if code size changed, run --fix first, then --strict)
+#    (if code size changed, run --fix first, then --strict — --fix now also
+#     rewrites the MEMORYMAP header, which is derived from siddetector.dbg)
 
 # 5. full golden sweep — REQUIRED to gate any siddetector.asm change (~10-16 min)
 make ci-full          # = make ci + the 30-case sweep
@@ -413,29 +490,31 @@ P0-5 fix produced two more. Fix pattern: invert the condition and use a `jmp`.
 
 ## Memory-space notes
 
-Segment map at HEAD (`0e3d056`). Main segment has **474 bytes of headroom** before
-`$5B00` — it was 373 before P3-4.
+Segment map at HEAD (`0962f4d`). Main segment has **730 bytes of headroom**
+before `$5B00` — it was 373 before P3-4, then 474 after it, and P3-5 freed
+another 256.
 
 ```
 $0801-$080a  BASIC stub          $5b00-$5cb4  tlr_sweep / dedupe
-$0a00-$0bea  TLR sid-detect2     $6000-$9115  tables + screen + strings
+$0a00-$0bea  TLR sid-detect2     $6000-$9120  tables + screen + strings
 $1800-$2387  Triangle Intro      $9200-$9f9e  tracker view
-$2400-$5926  main program        $a000-$b399  Delirious 9
+$2400-$5826  main program        $a000-$b399  Delirious 9
 $c020-$c25a  tune sel + ufs + sid_prov        $c300-$c821  Quality page
 ```
 
-`$2400-$5926` is measured (`CODE-REVIEW.md` § P3-4). The other extents are
-carried forward from the previous build and were cross-checked against the last
-label in each band in `siddetector.vs` — consistent, but only the main segment
-was re-measured. Re-derive from a build listing if it matters.
-(`docs/MEMORYMAP.md`'s header still quotes the pre-P0-5 `$594F` — see Work
-Remaining §4.)
+**Do not hand-maintain this map.** Every extent above is now generated into
+`docs/MEMORYMAP.md`'s header by `python scripts/check_memorymap.py --fix`, which
+reads the `<Block>` START/END pairs out of `siddetector.dbg` (KickAssembler's own
+memory map, rewritten on every build). `--strict` fails on header drift, and
+`release.sh` regenerates it after the bump. Read the figures from there rather
+than trusting this copy.
 
 Useful symbols (shift with code size — **resolve from `siddetector.vs`, field 2**,
-these are HEAD values):
-`s_s_arm_chk $44C8`, `s_s_arm_mir_test $452D`, `a2spl_add $4CCD`,
-`a2spl_add_full $4CE7`, `fll_refine $486E`, `osc_base $58F4`,
-`plot_x_save $58F5`, `u64_fingerprint_scan $C136`, `ufs_chk_u64 $C220`,
+these are HEAD values and P3-5 moved most of them):
+`s_s_arm_chk $442B`, `s_s_arm_mir_test $4490`, `fll_refine $47D1`,
+`emu_class_tab $541B`, `emu_class_match $545D`, `a2spl_add $4C30`,
+`a2spl_add_full $4C4A`, `ecm_pri $57F2`, `osc_base $57F4`,
+`plot_x_save $57F5`, `u64_fingerprint_scan $C136`, `ufs_chk_u64 $C220`,
 `sid_prov $C252`.
 </critical_context>
 
@@ -457,37 +536,42 @@ these are HEAD values):
 | P2-1..P2-11 | **All fixed** |
 | P3-1, P3-2, P3-3, P3-6 | **Fixed** |
 | P3-4 `sid_list_append` | **Partly done** — `a2spl_add` covers the 7 identical ARM2SID appends (101 bytes); 5 structurally-different sites stay inline with a documented reason. ⚠ wants ARM2SID/U64 rig |
-| P3-5 table-drive `checktypeandprint`/`get_emu_page` | **IN PROGRESS in a parallel session** — outcome unknown here |
-| `release.sh` whitelist | **Fixed** across 4 commits — untested end to end (no release run since) |
-| V1.5.09 release | **Not done** — 5 unreleased commits on master, one of which changes the binary |
+| P3-5 table-drive `checktypeandprint`/`get_emu_page` | **Done** (`69426eb`, shipped in V1.5.09) — one `emu_class_tab`, 256 bytes, exhaustive host test |
+| `release.sh` whitelist | **Fixed** across 4 commits, and **exercised end to end** by the V1.5.09 release |
+| `release.sh` MEMORYMAP + co-author | **Fixed** (`f7a11a1`, `0962f4d`) |
+| MEMORYMAP header + guard blind spot | **Fixed** (`eb33279`) — header is now generated from `siddetector.dbg` |
+| V1.5.09 release | **Done** — tag `v1.5.09`, GitHub release published, asset matches master |
 | `make hw_test` (all 3 items) | **Not run** — hardware unavailable |
+
+Every P0/P1/P2/P3 item in `CODE-REVIEW.md` is now closed.
 
 ## Repo state
 
-- `HEAD = 0e3d056`, `origin/master = 0e3d056`, in sync.
-- Working tree was clean when this was written. **A parallel session is editing
-  `siddetector.asm` and `tests/test_suite.asm` (P3-5) — expect the tree to be
-  dirty and re-read `git log` before doing anything.**
-- Latest tag `v1.5.08` = `e82b4e2`, **5 commits behind HEAD**.
-- `siddetector.prg` at HEAD is the build of `siddetector.asm` at HEAD, and
-  **differs from the blob attached to the v1.5.08 GitHub release**.
+- `HEAD = 0962f4d`, `origin/master = 0962f4d`, in sync, working tree clean.
+- Latest tag `v1.5.09` = `d9bc9b4`, 3 commits behind HEAD — all tooling and docs.
+- `siddetector.prg` at HEAD **is the same blob as the one attached to the
+  v1.5.09 GitHub release**, and is the build of `siddetector.asm` at HEAD.
+- One known tag-vs-master difference: the `v1.5.09` tag's
+  `docs/MEMORYMAP.md` still carries the 3 drifted rows and the old header that
+  `eb33279` corrected afterwards. Documentation only; not worth re-tagging.
 - No temporary changes, workarounds or stashes left behind by this work.
 
 ## Open questions for the user
 
-1. **Cut V1.5.09 now?** It would ship the P3-4 binary and would be the first real
-   test of the fixed release whitelist.
-2. **Are the three hardware confirmations worth the days of rig setup now**, or
+1. **Are the three hardware confirmations worth the days of rig setup now**, or
    do they wait for the next time those rigs are up? They gate confidence, not
-   the code.
-3. **Is the `docs/` prefix in the release whitelist the right trade-off?** It
+   the code — but all three now sit in a published build no rig has run.
+2. **Is the `docs/` prefix in the release whitelist the right trade-off?** It
    fixed a real problem but means anything under `docs/` is now staged into a
-   release commit silently.
+   release commit silently, so scratch files there would ship.
+3. **Is the `tests/test_suite.asm` embedded-copy rework worth starting?** It is
+   the highest-leverage testing improvement left and the root cause of P2-6, but
+   it is a project, not a session task.
 
 ## Sweep expectation for the next session
 
 `make ci-full` (or `python -u scripts/variant_smoke.py`) should report **30/30**
-as of V1.5.08. Anything failing is new and should be investigated *before* making
+as of V1.5.09. Anything failing is new and should be investigated *before* making
 changes. Two cases have been flaky under host load historically: `sidfx` (the
 retry star — now normalised away by `strip_retry_star()`) and
 `stereo-DE00-swinu` (fixed by raising `MIN_WAIT` to 22 s). A `D460 8580 FOUND`
