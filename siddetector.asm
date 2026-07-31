@@ -1,5 +1,5 @@
 // =============================================================================
-// SID Detector v1.5.06  -  Commodore 64 SID chip identification utility
+// SID Detector v1.5.08  -  Commodore 64 SID chip identification utility
 // by funfun/triangle 3532
 // =============================================================================
 // Identifies 24+ variants of SID chips and emulators by probing hardware
@@ -5191,29 +5191,38 @@ s_s_arm_chk:
        ldy #$12
        lda #$00
        sta (sptr_zp),y     // silence candidate voice 3 ctrl (clears stale state)
+       // Baseline, not zero (CODE-REVIEW.md P0-5).  Silencing voice 3 does NOT
+       // drive OSC3 to 0 — the register keeps the residue of whatever the
+       // oscillator last produced (u64_fingerprint_scan drives every $D5xx
+       // candidate before this scan runs).  Measured: A=$AA on one run and
+       // A=$D8 on another with X still $18, i.e. the very FIRST read, which is
+       // why a genuine ARMSID at $D500 was rejected here and the DIS probe that
+       // would name it was never reached.  Adding the ~1280-cycle settle that
+       // s_s_arm_mir_wait uses does NOT help — the residue is real, not write
+       // latency.  So sample the candidate here, while nothing is driving it,
+       // and below look for a CHANGE rather than for a zero.
+       //   Mirror      → primary's ramping accumulator shows through → changes.
+       //   Independent → nothing drives it → holds the baseline.
+       // The baseline read is placed BEFORE the primary is started, so the
+       // instruction sequence between "sta $D412" and the first candidate read
+       // is byte-for-byte what it was.  That window is timing-sensitive: in
+       // single-SID configs every $D4xx address mirrors $D400 and ~20 extra
+       // cycles here were measured to change WHICH mirror the scan reports
+       // ($D420 → $D460), which would be wrong on a real FPGASID.  Do not move
+       // work between those two points.
+       ldy #$1B
+       lda (sptr_zp),y     // baseline candidate OSC3 (undriven)
+       sta osc_base
        lda #$FF
        sta $D40F           // primary D400 voice 3 freq hi = max (fast ramp)
        lda #$21            // sawtooth + gate on primary D400 voice 3
        sta $D412
-       // NOTE (CODE-REVIEW.md P0-5): this loop rejects a genuine ARMSID at
-       // $D500 on its very first read, which is why the DIS probe that would
-       // name it is never reached.  Measured with a breakpoint here: A=$AA on
-       // one run and A=$D8 on another, X still $18 — a varying residual OSC3
-       // value, not a protocol byte.  Adding the ~1280-cycle settle that
-       // s_s_arm_mir_wait uses (for ResID's write batching) does NOT fix it, so
-       // this is not write latency: the candidate's OSC3 genuinely still holds
-       // residue from earlier oscillator activity on that slot, and the loop's
-       // premise — "an independent, silenced chip reads 0" — does not hold.
-       // Fixing it means making the test robust to residue (require several
-       // consecutive non-zero reads, or baseline OSC3 before driving the
-       // primary, or TEST-reset the candidate and wait for 0), which changes
-       // mirror detection for every stereo ARMSID path and so wants real
-       // MixSID hardware to validate.  Do not "fix" it from the emulator alone.
        ldy #$1B
        ldx #$18            // 24 read attempts (~2 accumulator wraps at freq=$FF00)
 s_s_arm_mlp:
        lda (sptr_zp),y     // read scan_addr+$1B (candidate OSC3)
-       bne s_s_arm_is_mirror // non-zero → shares primary oscillator → mirror → skip
+       cmp osc_base
+       bne s_s_arm_is_mirror // changed → shares primary oscillator → mirror → skip
        dex
        bne s_s_arm_mlp
        // All zeros → independent chip → fall through to detect
@@ -5264,7 +5273,8 @@ s_s_arm_mir_lp:
        cmp #$01
        beq s_s_arm_mir_test
        cmp #$02
-       bne s_s_arm_mir_nx
+       beq s_s_arm_mir_test
+       jmp s_s_arm_mir_nx      // long jump: the loop body exceeds branch range
 s_s_arm_mir_test:
        // Never test the candidate against ITSELF.  u64_fingerprint_scan may
        // already have listed this exact address (provisionally typed $01/$02),
@@ -5276,7 +5286,8 @@ s_s_arm_mir_test:
        bne s_s_arm_mir_go
        lda sid_list_l,x
        cmp sptr_zp
-       beq s_s_arm_mir_nx      // same address → not a meaningful comparison
+       bne s_s_arm_mir_go
+       jmp s_s_arm_mir_nx      // same address → not a meaningful comparison
 s_s_arm_mir_go:
        // Sawtooth at max freq on found_sid[x] voice3; read candidate+$1B 3×.
        // Sawtooth is reliable: with freq=$FF00 the OSC3 accumulator ramps to non-zero
@@ -5302,6 +5313,14 @@ s_s_arm_mir_go:
        sta s_s_arm_mir_en+2
        sta s_s_arm_mir_cl+2
        sta s_s_arm_mir_cl2+2
+       // Baseline the candidate's OSC3 before SID[x] is driven — same reason as
+       // in s_s_arm_chk above: a silenced/idle SID does not read 0 at +$1B, so
+       // "non-zero means mirror" rejects independent chips that hold residue.
+       // Sampled here, before the first self-modified store, so the sequence
+       // from "sta found_sid[x]+$12" to the first candidate read is unchanged.
+       ldy #$1B
+       lda (sptr_zp),y        // baseline candidate OSC3 (undriven)
+       sta osc_base
        lda #$FF
 s_s_arm_mir_fh:  sta $D40F   // self-mod → found_sid[x]+$0F (freq_hi = max)
        lda #$21               // sawtooth + gate
@@ -5316,10 +5335,13 @@ s_s_arm_mir_wait: dey
        bne s_s_arm_mir_wait
        ldy #$1B
        lda (sptr_zp),y        // read candidate+$1B (OSC3) — 3 attempts
+       cmp osc_base
+       bne s_s_arm_mir_hit    // changed since baseline → mirror of SID[x]
+       lda (sptr_zp),y
+       cmp osc_base
        bne s_s_arm_mir_hit
        lda (sptr_zp),y
-       bne s_s_arm_mir_hit
-       lda (sptr_zp),y
+       cmp osc_base
        bne s_s_arm_mir_hit
        // not a mirror: cleanup found_sid[x] voice3 and continue checking
        // not a mirror: cleanup found_sid[x] voice3 and continue checking
@@ -8273,6 +8295,9 @@ sfx_oct_offset:      .byte 0     // octave shift added to $B0 value (0/4/8 = V1/
 dfx_preread:         .byte $FF   // raw $DF60 value at checkfmyam first read (debug/diagnostic)
 dfx_postread:        .byte $FF   // raw $DF60 value at checkfmyam second read (debug/diagnostic)
 midi_kind:           .byte 0     // 0=none 1=SEQ/Namesoft 2=DATEL 3=Passport 4=Maplin
+osc_base:            .byte 0     // candidate OSC3 sampled while nothing drives it;
+                                 // both stereo mirror tests compare against this
+                                 // instead of against 0 (CODE-REVIEW.md P0-5)
 plot_x_save:         .byte 0     // X saved across jsr $E50C (KERNAL PLOT) by the
                                  // result-print dispatch in start:; replaces the
                                  // old txs/tsx stack-pointer parking trick
@@ -9185,7 +9210,7 @@ PNP:    .byte 4,0,0,0,0
 screen:
          //0123456789012345678901234567890123456789
     .encoding "screencode_upper"
-    .text "SIDDETECTOR V1.5.06 FUNFUN/TRIANGLE 3532" //0  (compact title)
+    .text "SIDDETECTOR V1.5.08 FUNFUN/TRIANGLE 3532" //0  (compact title)
     .text "                                        " //1
     .text "ARMSID.....:                            " //2  (was row 4)
     .text "SWINSID....:                            " //3  (was row 5)
@@ -9540,7 +9565,7 @@ info_nav_hint:
 // Debug page string labels
 // ============================================================
 dbg_s_title:
-    .text "    SID DETECTOR - DEBUG INFO   V1.5.06 "
+    .text "    SID DETECTOR - DEBUG INFO   V1.5.08 "
     .byte 13, 13, 0
 dbg_s_machine:
     .text "MCH:"
@@ -10346,7 +10371,7 @@ ip_fmyam:
 
 readme_text:
     .byte $05
-    .text "SIDDETECTOR V1.5.06 README"
+    .text "SIDDETECTOR V1.5.08 README"
     .byte 13
     .byte 13
     .byte $05
@@ -10509,6 +10534,9 @@ readme_text:
     .text "  CSDB:      RELEASE #176909"
     .byte 13
     .byte $9E
+    .text "  V1.5.08 D5XX ARMSID NAMING FIX"
+    .byte 13
+    .byte $9E
     .text "  V1.5.06 ULTISID FIX + CODE REVIEW"
     .byte 13
     .byte $9E
@@ -10519,9 +10547,6 @@ readme_text:
     .byte 13
     .byte $9E
     .text "  V1.5.03 Q PAGE STACK + ZP FIX"
-    .byte 13
-    .byte $9E
-    .text "  V1.5.02 QUALITY FINGERPRINT Q"
     .byte 13
     .byte 13
     .byte 0                         // null terminator

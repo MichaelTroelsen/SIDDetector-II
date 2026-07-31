@@ -1,9 +1,13 @@
 # SID Detector — Test Status
 
-**Last updated:** 2026-07-30  
-**Build:** `$2400–$596A` (code) `$6000–$911C` (data) `$C300–$C821` (Q-page)  
-**Version:** V1.5.06  
-Legend: 🟢 OK · 🔴 NO · ⬜ not tested
+**Last updated:** 2026-07-31  
+**Build:** `$2400–$598B` (code) `$6000–$911C` (data) `$C300–$C821` (Q-page)  
+**Version:** V1.5.08  
+Legend: 🟢 OK · 🔴 NO · ⚠️ fixed in the emulator, awaiting hardware re-test · ⬜ not tested
+
+**Emulator regression state at V1.5.08:** variant sweep **30/30**, unit suite
+**46/46**, 23 host-side Python tests. The last two sweep failures
+(`stereo-D500-armsid`, `stereo-D500-swinu`) were closed by the P0-5 fix.
 
 ---
 
@@ -19,7 +23,7 @@ Legend: 🟢 OK · 🔴 NO · ⬜ not tested
 | 6 | Replacement | ARMSID | `ARMSID Vx.xx` | 🟢 | Debug: CFG=4E4F EI=5357 II=02?? |
 | 7 | Replacement | ARM2SID (left ch.) | `ARM2SID V3.xx` | 🟢 | Debug: CFG=4E4F EI=5357 II=024C |
 | 8 | Replacement | ARM2SID (right ch.) | `ARM2SID V3.xx` | 🟢 | Debug: CFG=4E4F EI=5357 II=0252 |
-| 9 | Replacement | ARM2SID stereo D400+D500 | both channels shown | 🔴 | stereo ARMSID mirror issue — D5xx triggers D400 chip |
+| 9 | Replacement | ARM2SID stereo D400+D500 | both channels shown | ⚠️ | stereo ARMSID mirror issue — D5xx triggered the D400 chip. V1.5.08 fixes the mirror-test premise (baseline instead of zero compare); needs hardware re-test |
 | 10 | Replacement | FPGASID 8580 mode | `FPGASID 8580` | 🟢 | stereo row fixed: pre-populate D400 with type $06 |
 | 11 | Replacement | FPGASID 6581 mode | `FPGASID 6581` | 🟢 | stereo row correct: type $07 |
 | 12 | Replacement | Swinsid Nano | `SWINSID NANO` | 🟢 | D41B cnt test: freq=$FFFF noise waveform, 3-retry Stage 1 (reject if all cnt=7), Stage 2 at 62ms (cnt≥3). Step 0.25 real-SID pre-check prevents 6581 false positive. |
@@ -97,8 +101,8 @@ Legend: 🟢 OK · 🔴 FAIL · ⬜ not tested · ⚠️ known limitation
 | C22 | 6581 | 8580 | `6581 Rx` + `8580` at D500 | ⬜ | |
 | C23 | 8580 | 6581 | `8580` + `6581` at D500 | ⬜ | |
 | C24 | 8580 | 8580 | `8580` + `8580` at D500 | ⬜ | |
-| C25 | ARMSID | 6581 | `ARMSID` + `6581` at D500 | 🔴 | Mirror issue: ARMSID primary skips D5xx stereo scan |
-| C26 | ARMSID | 8580 | `ARMSID` + `8580` at D500 | 🔴 | Mirror issue: same as C25 |
+| C25 | ARMSID | 6581 | `ARMSID` + `6581` at D500 | ⚠️ | Mirror issue: ARMSID primary skipped the D5xx stereo scan. V1.5.08 fixes the cause (both stereo mirror tests compared OSC3 against 0 instead of against a baseline, so a candidate holding oscillator residue rejected itself); emulator now names D5xx ARMSID/SwinSID U. **Needs re-test on hardware before this goes 🟢.** |
+| C26 | ARMSID | 8580 | `ARMSID` + `8580` at D500 | ⚠️ | Mirror issue: same as C25 — V1.5.08 fix pending hardware re-test |
 | C27 | 6581 | ARMSID | `6581 Rx` + `ARMSID` at D500 | ⬜ | |
 | C28 | 8580 | ARMSID | `8580` + `ARMSID` at D500 | ⬜ | |
 | C29 | SwinSID Ultimate | 6581 | `SWINSID ULTIMATE` + `6581` at D500 | ⬜ | SwinSID U echo test may trigger at D500 — risk of wrong-address detection |
@@ -152,7 +156,7 @@ Note: SIDFX D41E reports hosted chip types as 6581/8580/UNKN. Secondary probed i
 
 ## Unit Tests (`make ci`)
 
-Last result: **43 / 43** ✅ (2026-05-28 — `$2B` at `$07E8` via `make ci`; V1.5.05)
+Last result: **46 / 46** ✅ (2026-07-31 — pass count vs the suite's own `TEST_TOTAL` at `$07E9`; V1.5.08)
 
 | # | Test | Input | Expected | Result |
 |---|------|-------|----------|--------|

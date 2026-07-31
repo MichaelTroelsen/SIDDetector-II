@@ -6,6 +6,7 @@ Program is stable and working. All known crash bugs are resolved.
 
 | Version | Key changes |
 |---------|-------------|
+| V1.5.08  | D5xx ARMSID naming fix |
 | V1.5.06  | ULTISID fix + code review |
 | V1.5.05  | SHARED CHIP TABLE + DOCS |
 | V1.5.04  | CHIP TABLE + DBG SWAP FIX |

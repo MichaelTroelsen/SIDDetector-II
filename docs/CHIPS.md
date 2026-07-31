@@ -1,6 +1,6 @@
 # SID Chips and Replacements — Complete Reference
 
-Reference for every SID variant detected by SID Detector v1.5.06, plus chips with placeholder screen rows. Covers the original hardware, all known clones and emulators, and how the detection code identifies each one.
+Reference for every SID variant detected by SID Detector v1.5.08, plus chips with placeholder screen rows. Covers the original hardware, all known clones and emulators, and how the detection code identifies each one.
 
 > **Note on links:** Retro hardware websites move frequently. All links were current at time of writing — verify before purchasing.
 
